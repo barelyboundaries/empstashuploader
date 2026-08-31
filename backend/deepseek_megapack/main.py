@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from .config import get_settings
 from .models import (
@@ -57,6 +58,31 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+_ALLOWED_HOSTS = {"127.0.0.1", "localhost", "::1", "[::1]", "testserver"}
+
+
+@app.middleware("http")
+async def restrict_host_header(request: Request, call_next):
+    """Reject (403) requests whose Host header hostname is not loopback —
+    blocks DNS-rebinding and cross-origin simple requests from reading
+    /health or /api/fs/exists. The port is stripped before comparison
+    (IPv6 bracket form included). A MISSING Host header (HTTP/1.0) is
+    allowed: browsers always send Host, so it is not a rebinding vector.
+    """
+    host = request.headers.get("host")
+    if host is not None:
+        hostname = host.lower()
+        if hostname.startswith("["):
+            end = hostname.find("]")
+            hostname = hostname[: end + 1] if end != -1 else hostname
+        elif ":" in hostname:
+            hostname = hostname.rsplit(":", 1)[0]
+        if hostname not in _ALLOWED_HOSTS:
+            return JSONResponse(
+                status_code=403, content={"detail": "Untrusted Host header"}
+            )
+    return await call_next(request)
 
 
 @app.post("/api/token", response_model=TokenCreateResponse)
