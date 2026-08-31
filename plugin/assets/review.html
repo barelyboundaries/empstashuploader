@@ -1,0 +1,1204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DeepSeek Megapack Review</title>
+  <style>
+    :root {
+      --bg-dark: #121416;
+      --card-bg: #1c1f24;
+      --panel-bg: #16181b;
+      --card-border: #2c323b;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    header {
+      padding: 12px 20px;
+      background-color: #181b1f;
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .header-title {
+      font-size: 1.15rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .main-layout {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      /* Without this a flex item refuses to shrink below its content height,
+         so the panels below would grow instead of scrolling. */
+      min-height: 0;
+    }
+
+    .scene-list-panel {
+      flex: 1.2;
+      padding: 16px;
+      overflow-y: auto;
+      min-height: 0;
+      border-right: 1px solid var(--card-border);
+    }
+
+    .options-panel {
+      flex: 0.8;
+      padding: 16px;
+      overflow-y: auto;
+      min-height: 0;
+      background-color: var(--panel-bg);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .scene-card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 12px;
+      margin-bottom: 12px;
+      display: flex;
+      gap: 12px;
+      cursor: grab;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .scene-card.dragging {
+      opacity: 0.5;
+      border-color: var(--accent);
+    }
+
+    .scene-card:hover {
+      border-color: #4b5563;
+    }
+
+    .scene-thumb {
+      width: 120px;
+      height: 70px;
+      border-radius: 4px;
+      object-fit: cover;
+      background-color: #000;
+    }
+
+    .scene-info {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .scene-title {
+      font-size: 0.95rem;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .scene-meta {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .scene-specs {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      display: flex;
+      column-gap: 12px;
+      row-gap: 4px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 2px;
+    }
+
+    .scene-specs .spec-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+      white-space: nowrap;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 6px;
+      font-size: 0.75rem;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+
+    .badge-success { background-color: rgba(16, 185, 129, 0.2); color: var(--success); }
+    .badge-warning { background-color: rgba(245, 158, 11, 0.2); color: var(--warning); }
+    .badge-danger { background-color: rgba(239, 68, 68, 0.2); color: var(--danger); }
+    .badge-info { background-color: rgba(59, 130, 246, 0.2); color: var(--accent); }
+
+    .badge-superior {
+      background-color: rgba(16, 185, 129, 0.2);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.35);
+    }
+
+    .collision-banner {
+      background-color: rgba(239, 68, 68, 0.12);
+      border: 1px solid var(--danger);
+      border-radius: 8px;
+      padding: 12px 16px;
+      margin-bottom: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .collision-banner-text {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 0.85rem;
+    }
+
+    .collision-banner-text strong {
+      color: var(--danger);
+      font-size: 0.95rem;
+    }
+
+    .collision-banner-text span {
+      color: var(--text-main);
+      line-height: 1.4;
+    }
+
+    .collision-banner-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .scene-card--duplicate {
+      border-left: 4px solid var(--danger) !important;
+      background: rgba(239, 68, 68, 0.06);
+    }
+
+    .scene-card--duplicate:hover {
+      border-color: var(--danger);
+    }
+
+    .scene-keep-btn {
+      align-self: flex-start;
+      padding: 4px 8px;
+      font-size: 0.8rem;
+      line-height: 1;
+      color: #10b981;
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 500;
+      transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+    }
+
+    .scene-keep-btn:hover, .scene-keep-btn:focus {
+      color: #ffffff;
+      background-color: var(--success);
+      border-color: var(--success);
+    }
+
+    .scene-remove-btn {
+      align-self: flex-start;
+      padding: 4px 8px;
+      font-size: 0.8rem;
+      line-height: 1;
+      color: var(--text-muted);
+      background: transparent;
+      border: 1px solid var(--card-border);
+      border-radius: 4px;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+    }
+
+    .scene-remove-btn:hover, .scene-remove-btn:focus {
+      color: var(--danger);
+      border-color: var(--danger);
+      background-color: rgba(239, 68, 68, 0.1);
+    }
+
+    .btn-active {
+      background-color: var(--accent) !important;
+      color: #fff !important;
+      border-color: var(--accent-hover) !important;
+    }
+
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .form-label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .form-input, .form-textarea, .form-select {
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      color: var(--text-main);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+    }
+
+    .form-input:focus, .form-textarea:focus, .form-select:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .btn {
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: background 0.15s;
+    }
+
+    .btn-primary {
+      background-color: var(--accent);
+      color: white;
+    }
+    .btn-primary:hover {
+      background-color: var(--accent-hover);
+    }
+
+    .btn-secondary {
+      background-color: #2c323b;
+      color: var(--text-main);
+    }
+    .btn-secondary:hover {
+      background-color: #3b424d;
+    }
+
+    .btn-success {
+      background-color: var(--success);
+      color: white;
+    }
+    .btn-success:hover {
+      background-color: #059669;
+    }
+
+    .btn-close-header {
+      background-color: transparent;
+      color: var(--text-muted);
+      border: 1px solid var(--card-border);
+      padding: 6px 12px;
+      font-size: 0.85rem;
+    }
+    .btn-close-header:hover {
+      background-color: #dc3545;
+      color: white;
+      border-color: #dc3545;
+    }
+
+    .progress-bar-container {
+      background-color: #2c323b;
+      border-radius: 8px;
+      height: 12px;
+      width: 100%;
+      overflow: hidden;
+      margin-top: 10px;
+      display: none;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #3b82f6, #10b981);
+      transition: width 0.3s ease;
+    }
+
+    .status-text {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      margin-top: 6px;
+      display: none;
+    }
+
+    .bbcode-box {
+      background-color: #0e1012;
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      padding: 10px;
+      font-family: monospace;
+      font-size: 0.8rem;
+      color: #a7f3d0;
+      max-height: 150px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+    }
+
+    .artifact-summary {
+      background-color: #1a221e;
+      border: 1px solid #059669;
+      border-radius: 6px;
+      padding: 10px;
+      display: none;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 0.85rem;
+      /* A release with a full gallery lists a dozen-plus image URLs. Cap the
+         box and let it scroll internally so the pre-flight checklist and the
+         upload button are never pushed out of the panel. */
+      max-height: 60vh;
+      overflow-y: auto;
+      flex-shrink: 0;
+    }
+
+    /* Collapsed by default: the URLs are for spot-checking, not the main event. */
+    .handoff-images {
+      margin-top: 2px;
+    }
+
+    .handoff-images > summary {
+      cursor: pointer;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      user-select: none;
+    }
+
+    .handoff-images > summary:hover {
+      color: var(--text-main);
+    }
+
+    .handoff-image-list {
+      list-style: none;
+      padding-left: 0;
+      margin: 4px 0 0 0;
+      font-size: 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      max-height: 160px;
+      overflow-y: auto;
+    }
+
+    .handoff-image-list li {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    /* Make the scroll affordance visible; the default overlay scrollbar on a
+       dark panel reads as "there is nothing more below". */
+    .options-panel::-webkit-scrollbar,
+    .artifact-summary::-webkit-scrollbar,
+    .handoff-image-list::-webkit-scrollbar {
+      width: 10px;
+    }
+
+    .options-panel::-webkit-scrollbar-thumb,
+    .artifact-summary::-webkit-scrollbar-thumb,
+    .handoff-image-list::-webkit-scrollbar-thumb {
+      background-color: #4b5563;
+      border-radius: 5px;
+    }
+
+    .options-panel::-webkit-scrollbar-thumb:hover,
+    .artifact-summary::-webkit-scrollbar-thumb:hover,
+    .handoff-image-list::-webkit-scrollbar-thumb:hover {
+      background-color: #6b7280;
+    }
+
+    .btn:disabled, button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed !important;
+      pointer-events: none;
+    }
+
+    .preview-gate-alert {
+      background-color: #3b181e;
+      border: 1px solid #dc3545;
+      color: #fca5a5;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-size: 0.8rem;
+      line-height: 1.4;
+      margin-top: 4px;
+      margin-bottom: 4px;
+    }
+
+    .category-reminder {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-style: italic;
+      margin-top: 2px;
+      margin-bottom: 4px;
+    }
+
+    /* Directory Browser Modal */
+    .dir-modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background-color: rgba(0, 0, 0, 0.7);
+      z-index: 9999;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      backdrop-filter: blur(2px);
+    }
+
+    .dir-modal-container {
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      width: 90%;
+      max-width: 650px;
+      height: 80vh;
+      max-height: 550px;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      overflow: hidden;
+    }
+
+    .dir-modal-header {
+      padding: 12px 16px;
+      background-color: #181b1f;
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .dir-modal-title {
+      font-size: 1.05rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .dir-modal-close {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 1.4rem;
+      cursor: pointer;
+      line-height: 1;
+      padding: 0 4px;
+    }
+
+    .dir-modal-close:hover {
+      color: var(--danger);
+    }
+
+    .dir-modal-toolbar {
+      padding: 10px 16px;
+      background-color: var(--panel-bg);
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .dir-list-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 8px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      background-color: #121416;
+    }
+
+    .dir-entry {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      background-color: var(--card-bg);
+      border: 1px solid transparent;
+      transition: background-color 0.15s, border-color 0.15s;
+      user-select: none;
+    }
+
+    .dir-entry:hover {
+      background-color: #262a30;
+      border-color: #3b424d;
+    }
+
+    .dir-entry:focus,
+    .dir-entry:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: -1px;
+      background-color: #262a30;
+    }
+
+    .dir-entry.selected {
+      background-color: rgba(59, 130, 246, 0.2);
+      border-color: var(--accent);
+      color: #93c5fd;
+    }
+
+    .dir-entry-icon {
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+
+    .dir-entry-name {
+      flex: 1;
+      font-size: 0.9rem;
+      word-break: break-all;
+    }
+
+    .dir-status-bar {
+      padding: 6px 16px;
+      font-size: 0.8rem;
+      color: var(--danger);
+      background-color: rgba(239, 68, 68, 0.1);
+      border-top: 1px solid rgba(239, 68, 68, 0.2);
+    }
+
+    .dir-modal-footer {
+      padding: 12px 16px;
+      background-color: #181b1f;
+      border-top: 1px solid var(--card-border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .dir-selected-label {
+      font-size: 0.85rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+    }
+
+    .mode-switcher {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      background-color: #121416;
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 0.85rem;
+      margin-left: 12px;
+    }
+
+    .mode-toggle-option {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      user-select: none;
+      color: var(--text-main);
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+
+    .mode-toggle-option input[type="radio"] {
+      cursor: pointer;
+      accent-color: var(--accent);
+    }
+
+    .mode-toggle-option.disabled {
+      opacity: 0.45;
+      cursor: not-allowed !important;
+    }
+
+    .mode-toggle-option.disabled input[type="radio"] {
+      cursor: not-allowed !important;
+      pointer-events: none;
+    }
+
+    .helper-text {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      margin-top: 4px;
+      line-height: 1.35;
+    }
+
+    /* Destination Collision Resolution Dialog */
+    .dest-collision-container {
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      width: 90%;
+      max-width: 860px;
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      overflow: hidden;
+    }
+
+    .dest-collision-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      background-color: var(--bg-dark);
+    }
+
+    .dest-collision-card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-left: 4px solid var(--warning);
+      border-radius: 8px;
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .dest-collision-card-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .dest-collision-columns {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .dest-collision-col {
+      flex: 1;
+      min-width: 260px;
+      border: 1px solid var(--card-border);
+      border-radius: 6px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      background-color: var(--panel-bg);
+    }
+
+    .dest-collision-col-header {
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: var(--text-muted);
+    }
+
+    .dest-collision-col--incoming .dest-collision-col-header { color: var(--accent); }
+    .dest-collision-col--existing .dest-collision-col-header { color: var(--warning); }
+
+    .dest-collision-filename {
+      font-size: 0.9rem;
+      font-weight: 600;
+      word-break: break-all;
+    }
+
+    .dest-collision-spec {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 0.8rem;
+    }
+
+    .dest-collision-spec-label { color: var(--text-muted); }
+    .dest-collision-spec-value { font-weight: 500; text-align: right; word-break: break-all; }
+
+    .dest-collision-unknown {
+      font-size: 0.8rem;
+      color: var(--warning);
+      font-style: italic;
+    }
+
+    .dest-collision-unknown-note {
+      font-size: 0.75rem;
+      color: var(--warning);
+      line-height: 1.4;
+    }
+
+    .dest-collision-samescene-note {
+      font-size: 0.75rem;
+      color: var(--accent);
+      line-height: 1.4;
+    }
+
+    .dest-collision-scene-link {
+      font-size: 0.8rem;
+      color: var(--accent);
+      text-decoration: none;
+      align-self: flex-start;
+    }
+
+    .dest-collision-scene-link:hover,
+    .dest-collision-scene-link:focus {
+      text-decoration: underline;
+    }
+
+    .dest-collision-choices {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      border-top: 1px solid var(--card-border);
+      padding-top: 8px;
+    }
+
+    .dest-collision-choice {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+
+    .dest-collision-choice input[type="radio"] {
+      cursor: pointer;
+      accent-color: var(--accent);
+      margin-top: 2px;
+      flex-shrink: 0;
+    }
+
+    .dest-collision-choice--disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+
+    .dest-collision-choice--disabled input[type="radio"] {
+      cursor: not-allowed;
+    }
+
+    .dest-collision-choice-label { font-weight: 600; }
+
+    .dest-collision-consequence {
+      display: block;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      line-height: 1.35;
+    }
+
+    .dest-collision-choice--replace .dest-collision-consequence { color: var(--danger); }
+    .dest-collision-choice--keepboth .dest-collision-consequence { color: var(--warning); }
+
+    .dest-collision-footer {
+      flex-wrap: wrap;
+    }
+
+    .dest-rename-option {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      color: var(--text-main);
+    }
+
+    .dest-rename-option input[type="checkbox"] {
+      cursor: pointer;
+      accent-color: var(--accent);
+    }
+
+    /* Wizard stage rail (todo 8): Setup -> Locations -> Scenes -> Actions.
+       Soft-focus stages: every stage's content stays rendered and
+       interactable; the current stage is emphasized and the others are
+       de-emphasized (opacity only — never display:none, so the scene list,
+       build tooltips, and status text remain usable from any stage). The
+       gates live on the Next button, not on visibility. */
+    .stage-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 16px;
+      background-color: #181b1f;
+      border-bottom: 1px solid var(--card-border);
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+
+    .stage-rail {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .stage-rail-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 10px;
+      border-radius: 6px;
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: default;
+      user-select: none;
+      transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+    }
+
+    .stage-rail-item.reached {
+      cursor: pointer;
+      color: var(--text-main);
+    }
+
+    .stage-rail-item.reached:hover {
+      background-color: var(--card-bg);
+      border-color: var(--card-border);
+    }
+
+    .stage-rail-item.stage-current {
+      background-color: rgba(59, 130, 246, 0.15);
+      border-color: var(--accent);
+      color: var(--text-main);
+    }
+
+    .stage-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background-color: var(--card-border);
+      color: var(--text-main);
+      font-size: 0.7rem;
+      flex-shrink: 0;
+    }
+
+    .stage-rail-item.stage-current .stage-num {
+      background-color: var(--accent);
+      color: #ffffff;
+    }
+
+    .stage-check {
+      display: none;
+      color: var(--success);
+      font-weight: 700;
+    }
+
+    .stage-rail-item.stage-completed .stage-check {
+      display: inline;
+    }
+
+    .stage-nav {
+      display: flex;
+      gap: 8px;
+    }
+
+    .stage-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      padding: 10px;
+      opacity: 0.55;
+      transition: opacity 0.2s, border-color 0.2s, background-color 0.2s;
+    }
+
+    .stage-panel.stage-current {
+      opacity: 1;
+      border-color: var(--card-border);
+      background-color: rgba(59, 130, 246, 0.04);
+    }
+
+    /* The Scenes stage IS the existing scene-list panel: highlight it in
+       place on stage 3; never dim it (it is primary content on every
+       stage). */
+    .scene-list-panel.stage-current {
+      border-right-color: var(--accent);
+      box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.35);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-title">
+      <span id="header-logo">📦</span>
+      <span id="header-modal-title">DeepSeek Megapack Builder</span>
+    </div>
+    <div style="display: flex; gap: 8px; align-items: center;">
+      <button id="btn-header-close" class="btn btn-close-header" title="Close Review Modal">✕ Close</button>
+    </div>
+  </header>
+
+  <!-- Wizard stage rail (todo 8): Setup -> Locations -> Scenes -> Actions.
+       Navigation state lives in review.js (plain JS, no storage); the rail
+       highlights the current stage, checkmarks completed ones, and allows
+       click-to-jump only to already-reached stages — forward movement always
+       goes through Next's per-stage validation. -->
+  <div class="stage-bar" id="stage-bar">
+    <nav class="stage-rail" id="stage-rail" aria-label="Pack builder stages">
+      <button type="button" class="stage-rail-item stage-current reached" id="stage-item-1" data-stage="1">
+        <span class="stage-num">1</span>
+        <span class="stage-label">Setup</span>
+        <span class="stage-check" aria-hidden="true">✓</span>
+      </button>
+      <button type="button" class="stage-rail-item" id="stage-item-2" data-stage="2">
+        <span class="stage-num">2</span>
+        <span class="stage-label">Locations</span>
+        <span class="stage-check" aria-hidden="true">✓</span>
+      </button>
+      <button type="button" class="stage-rail-item" id="stage-item-3" data-stage="3">
+        <span class="stage-num">3</span>
+        <span class="stage-label">Scenes</span>
+        <span class="stage-check" aria-hidden="true">✓</span>
+      </button>
+      <button type="button" class="stage-rail-item" id="stage-item-4" data-stage="4">
+        <span class="stage-num">4</span>
+        <span class="stage-label">Actions</span>
+        <span class="stage-check" aria-hidden="true">✓</span>
+      </button>
+    </nav>
+    <div class="stage-nav">
+      <button type="button" id="btn-stage-back" class="btn btn-secondary" disabled>← Back</button>
+      <button type="button" id="btn-stage-next" class="btn btn-primary">Next →</button>
+    </div>
+  </div>
+
+  <div class="main-layout">
+    <!-- Left Panel: Scene Ordering & Probing. This panel IS stage 3 (Scenes)
+         of the wizard: it carries data-stage-panel="3" so the stage rail can
+         highlight it in place; its content is unchanged. -->
+    <div class="scene-list-panel" data-stage-panel="3">
+      <div id="collision-banner" class="collision-banner" style="display: none;">
+        <div class="collision-banner-text">
+          <strong id="collision-headline">⚠️ Duplicate Filenames Detected</strong>
+          <span id="collision-detail"></span>
+        </div>
+        <div class="collision-banner-actions">
+          <button type="button" id="btn-keep-first" class="btn btn-secondary">Keep first, remove rest</button>
+          <button type="button" id="btn-filter-conflicts" class="btn btn-secondary">Show only conflicts</button>
+        </div>
+      </div>
+      <div id="scene-list">
+        <div id="loading-state" style="text-align: center; padding: 40px; color: var(--text-muted);">
+          Loading selected scenes from Stash...
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Panel: Pack Configuration & BBCode Preview, organized into the
+         wizard's stage containers (todo 8). Existing controls keep their IDs;
+         non-current stages are de-emphasized, never hidden. -->
+    <div class="options-panel">
+      <!-- Stage 1: Setup — what the post is. The mode switcher moved here
+           from the header (same IDs); all controls keep their IDs. -->
+      <div class="stage-panel stage-current" id="stage-panel-1" data-stage-panel="1">
+        <div class="mode-switcher" id="mode-switcher">
+          <label id="label-mode-megapack" class="mode-toggle-option" title="Megapack mode">
+            <input type="radio" name="upload-mode" id="mode-megapack" value="megapack" checked>
+            <span>📦 Megapack</span>
+          </label>
+          <label id="label-mode-single" class="mode-toggle-option" title="Single Scene mode">
+            <input type="radio" name="upload-mode" id="mode-single" value="single">
+            <span>🎬 Single Scene</span>
+          </label>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="pack-title" id="label-pack-title">Pack Title</label>
+          <input type="text" id="pack-title" class="form-input" value="">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="pack-notes">Pack Notes / Description</label>
+          <textarea id="pack-notes" class="form-textarea" rows="3" placeholder="Additional notes or credits..."></textarea>
+        </div>
+
+        <div class="form-group" style="display: flex; align-items: center; gap: 8px;">
+          <input type="checkbox" id="opt-upload-previews" style="cursor: pointer;">
+          <label class="form-label" for="opt-upload-previews" style="margin-bottom: 0; cursor: pointer;">Upload preview images to image host (HamsterImg)</label>
+        </div>
+
+        <!-- Cover Image Section -->
+        <div class="form-group" id="group-cover-image">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+            <label class="form-label" style="margin-bottom: 0;">Cover Image</label>
+            <button type="button" id="btn-remove-cover" class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem; display: none;">Remove</button>
+          </div>
+          <div id="cover-paste-zone" tabindex="0" class="cover-paste-zone" style="border: 2px dashed #4b5563; border-radius: 6px; padding: 10px; text-align: center; cursor: pointer; background: rgba(255, 255, 255, 0.02); transition: border-color 0.2s, background-color 0.2s;">
+            <div id="cover-paste-prompt" style="font-size: 0.85rem; color: #9ca3af;">
+              Click here and press Ctrl+V to paste a cover image<br>
+              <span style="font-size: 0.75rem; color: #6b7280;">or drag and drop an image, or <a href="#" id="link-choose-cover" style="color: #60a5fa; text-decoration: underline;">Choose file...</a></span>
+            </div>
+            <input type="file" id="cover-file-input" accept="image/*" style="display: none;">
+            <div id="cover-preview-container" style="display: none; margin-top: 6px;">
+              <img id="cover-preview" src="" alt="Cover Preview" style="max-width: 100%; max-height: 180px; border-radius: 4px; object-fit: contain;">
+            </div>
+          </div>
+          <div id="cover-status" class="status-text" style="font-size: 0.8rem; margin-top: 4px; display: none;"></div>
+        </div>
+      </div>
+
+      <!-- Stage 2: Locations — where the torrent root and the generated
+           artifacts live. -->
+      <div class="stage-panel" id="stage-panel-2" data-stage-panel="2">
+        <div class="form-group">
+          <label class="form-label" for="output-dir" id="label-output-dir">Seed Directory — torrent is built here</label>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <input type="text" id="output-dir" class="form-input" style="flex: 1;" value="" placeholder="e.g. D:\Media\Packs">
+            <button type="button" id="btn-browse-dir" class="btn btn-secondary" title="Browse Server Filesystem">📁 Browse...</button>
+          </div>
+          <div id="output-dir-helper" class="helper-text">The torrent is built over this directory. Pack files inside it are included as-is; unrelated files are left untouched. Missing pack files can be moved in via Consolidate.</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="scratch-dir" id="label-scratch-dir">Scratch Directory</label>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <input type="text" id="scratch-dir" class="form-input" style="flex: 1;" value="">
+            <button type="button" id="btn-browse-scratch" class="btn btn-secondary" title="Browse Server Filesystem">📁 Browse...</button>
+          </div>
+          <div id="scratch-dir-helper" class="helper-text">Generated artifacts (previews, thumbnails, torrent, BBCode, manifest) are written here under a per-pack subfolder — never into the seed directory. Prefilled from the backend config.</div>
+        </div>
+      </div>
+
+      <!-- Stage 3 (Scenes) is the scene-list panel to the left; it carries
+           data-stage-panel="3" and is highlighted in place by the rail. -->
+
+      <!-- Stage 4: Actions — probe, consolidate, build, handoff. -->
+      <div class="stage-panel" id="stage-panel-4" data-stage-panel="4">
+        <div class="form-group" id="group-build-actions">
+          <label class="form-label">Build</label>
+          <div style="display: flex; gap: 8px;">
+            <button id="btn-probe" class="btn btn-secondary" style="flex: 1;">🔍 Probe Filesystem</button>
+            <button id="btn-build" class="btn btn-primary" style="flex: 1;">🚀 Build Megapack</button>
+          </div>
+        </div>
+
+        <div class="form-group" id="group-consolidate">
+          <label class="form-label">Consolidate</label>
+          <button id="btn-consolidate" class="btn btn-secondary" style="width: 100%;">📁 Consolidate Files via Stash GraphQL</button>
+        </div>
+
+        <!-- Artifact Delivery Notification -->
+        <div class="artifact-summary" id="artifact-summary">
+          <div style="font-weight: 600; color: #10b981;">🎉 Build Complete!</div>
+          <div id="artifact-details"></div>
+        </div>
+
+        <!-- BBCode Preview -->
+        <div class="form-group">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label class="form-label">BBCode Preview</label>
+            <button id="btn-copy-bbcode" class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;">📋 Copy</button>
+          </div>
+          <div id="presentation-size-line" class="status-text" style="display: none; font-size: 0.8rem; margin-bottom: 6px;"></div>
+          <div id="bbcode-warning" class="status-text" style="display: none; color: #f59e0b; font-size: 0.8rem; margin-bottom: 6px;"></div>
+          <div class="bbcode-box" id="bbcode-preview">[b]Megapack Preview[/b]</div>
+        </div>
+      </div>
+
+      <!-- Build Progress Section. Deliberately OUTSIDE the stage containers:
+           showStatus reports stage-gate reasons and task progress from every
+           stage, so it must never be de-emphasized or out of reach. -->
+      <div id="progress-section" style="margin-top: 10px;">
+        <div class="progress-bar-container" id="progress-container">
+          <div class="progress-bar" id="progress-bar"></div>
+        </div>
+        <div class="status-text" id="status-text">Preparing task...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Directory Browser Modal Dialog -->
+  <div id="dir-browser-modal" class="dir-modal-overlay" style="display: none;">
+    <div class="dir-modal-container">
+      <div class="dir-modal-header">
+        <div class="dir-modal-title">📁 Browse Server Directory</div>
+        <button type="button" id="btn-close-dir-modal" class="dir-modal-close" title="Close (Esc)">&times;</button>
+      </div>
+      <div class="dir-modal-toolbar">
+        <button type="button" id="btn-dir-up" class="btn btn-secondary" title="Up to Parent Folder" style="padding: 6px 10px;">⬆️ Up</button>
+        <button type="button" id="btn-dir-roots" class="btn btn-secondary" title="Available Drives / Roots" style="padding: 6px 10px;">💽 Drives</button>
+        <button type="button" id="btn-dir-refresh" class="btn btn-secondary" title="Refresh" style="padding: 6px 10px;">🔄</button>
+        <input type="text" id="dir-current-path" class="form-input" style="flex: 1; font-family: monospace; font-size: 0.85rem;" placeholder="Current directory path...">
+        <button type="button" id="btn-dir-go" class="btn btn-primary" style="padding: 6px 12px;">Go</button>
+      </div>
+      <div id="dir-browser-list" class="dir-list-container">
+        <!-- Directory entries populated dynamically -->
+      </div>
+      <div id="dir-browser-status" class="dir-status-bar" style="display: none;"></div>
+      <div class="dir-modal-footer">
+        <div class="dir-selected-label">
+          <span style="color: var(--text-muted);">Selected: </span>
+          <span id="dir-selected-display" style="font-family: monospace; font-weight: 600; word-break: break-all;"></span>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" id="btn-cancel-dir" class="btn btn-secondary">Cancel</button>
+          <button type="button" id="btn-select-dir" class="btn btn-success">Select Folder</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Destination Collision Resolution Dialog (records choices only; the
+       consolidation flow executes them) -->
+  <div id="dest-collision-modal" class="dir-modal-overlay" style="display: none;">
+    <div class="dest-collision-container" role="dialog" aria-modal="true" aria-labelledby="dest-collision-title">
+      <div class="dir-modal-header">
+        <div class="dir-modal-title" id="dest-collision-title">⚠️ Destination Collisions</div>
+        <button type="button" id="btn-close-dest-collision" class="dir-modal-close" title="Cancel (Esc)">&times;</button>
+      </div>
+      <div id="dest-collision-list" class="dest-collision-list"></div>
+      <div class="dir-modal-footer dest-collision-footer">
+        <label class="dest-rename-option" for="opt-dest-rename" title="Allow saving the incoming file under the next free 'name (N).ext' name when the destination name is taken">
+          <input type="checkbox" id="opt-dest-rename">
+          <span>Allow renaming on collision</span>
+        </label>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" id="btn-cancel-dest-collision" class="btn btn-secondary">Cancel</button>
+          <button type="button" id="btn-confirm-dest-collision" class="btn btn-primary">Confirm Choices</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="review.js"></script>
+</body>
+</html>

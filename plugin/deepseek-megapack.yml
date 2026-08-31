@@ -1,0 +1,39 @@
+name: DeepSeek Megapack Generator
+description: In-Stash Megapack Builder and Empornium Uploader
+version: "1.0.0"
+exec:
+  - "python"
+  - "{pluginDir}/task.py"
+interface: raw
+
+ui:
+  javascript:
+    - main.js
+  css:
+    - style.css
+  assets:
+    /: assets/
+  csp:
+    connect-src:
+      - http://127.0.0.1:9941
+      - http://localhost:9941
+
+
+tasks:
+  - name: ProbeFiles
+    description: "Probe filesystem for Win32 creation times, hardlink compatibility, and file collisions"
+    defaultArgs:
+      mode: probe
+  - name: BuildMegapack
+    description: "Build megapack torrent, contact sheets, and BBCode"
+    defaultArgs:
+      mode: build
+  - name: BuildSingleScene
+    description: "Build a single-scene torrent, contact sheet, and BBCode (no consolidation)"
+    defaultArgs:
+      mode: single
+  - name: UploadCoverImage
+    description: "Upload a pasted cover image to HamsterImg and return its URL"
+    defaultArgs:
+      mode: upload_cover
+

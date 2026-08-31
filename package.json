@@ -1,0 +1,9 @@
+{
+  "name": "deepseek-stash-qa",
+  "private": true,
+  "scripts": {},
+  "devDependencies": {
+    "@playwright/test": "1.62.1",
+    "graphql": "^17.0.2"
+  }
+}

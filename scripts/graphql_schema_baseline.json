@@ -1,0 +1,7 @@
+{
+  "_comment": "Known-accepted GraphQL schema violations. Each entry is a PRE-EXISTING bug that is tolerated because a runtime fallback covers it. Shrink this list; never grow it without a written reason. Regenerate with `node scripts/check_graphql_schema.mjs --update-baseline`.",
+  "accepted": [
+    "review.js::FindScenes::Value \"IN_LIST\" does not exist in \"CriterionModifier\" enum.",
+    "review.js::FindScenes::Variable \"$ids\" of type \"[Int!]\" used in position expecting type \"Int!\"."
+  ]
+}

@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>DeepSeek Megapack — DOM harness</title>
+<script>
+  var harnessMode = new URLSearchParams(location.search).get("mode") || "pinned";
+  var connectSource = harnessMode === "cspmismatch"
+    ? "http://127.0.0.1:9941"
+    : "http://127.0.0.1:9941 http://localhost:9941";
+  document.write('<meta http-equiv="Content-Security-Policy" content="connect-src ' + connectSource + '">');
+</script>
+<script>
+  (function () {
+    var mode = new URLSearchParams(location.search).get("mode") || "pinned";
+    var bundle = mode === "missing" || mode === "missing-bundle"
+      ? null
+      : (mode === "mismatch" || mode === "changed-bundle" ? "index-CHANGED.js" : "index-DJtDEPdl.js");
+    if (!bundle) return;
+    var marker = document.createElement("link");
+    marker.rel = "modulepreload";
+    marker.href = "/assets/" + bundle;
+    document.head.appendChild(marker);
+  })();
+</script>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 20px; }
+  #status { background: #111; color: #0f0; padding: 12px; font-family: monospace; white-space: pre; min-height: 200px; }
+  .list-operations { border: 1px dashed #888; padding: 8px; margin: 12px 0; }
+  .list-operations button { margin-right: 6px; }
+  table { border-collapse: collapse; margin-top: 12px; }
+  td { border: 1px solid #ccc; padding: 4px 8px; }
+</style>
+</head>
+<body>
+<h1>DOM harness — Scenes list (mock of verified v0.31.1 markup)</h1>
+<p>Simulates the native selected-scenes overflow toggle, a lazy body-portaled
+menu, React-style replacement, duplicate checked rows, and the selection
+signal. It loads the real <code>plugin/main.js</code>.</p>
+
+<div class="list-operations dropdown btn-group" id="toolbar">
+  <button class="btn btn-secondary">Play</button>
+  <button class="btn btn-secondary" id="more-menu" type="button" aria-haspopup="true" aria-expanded="false">…</button>
+</div>
+
+<div id="status">HARNESS READY mode=pinned
+</div>
+
+<table>
+  <tbody>
+    <tr data-scene-id="7"><td><input type="checkbox" class="sel" data-id="7"><a href="/scenes/7">scene 7</a></td></tr>
+    <tr data-scene-id="12"><td><input type="checkbox" class="sel" data-id="12"><a href="/scenes/12">scene 12</a></td></tr>
+    <tr data-scene-id="55"><td><input type="checkbox" class="sel" data-id="55"><a href="/scenes/55">scene 55</a></td></tr>
+    <tr data-deepseek-duplicate="7" data-scene-id="7"><td><input type="checkbox" class="sel" data-id="7"><a href="/scenes/7">duplicate scene 7</a></td></tr>
+  </tbody>
+</table>
+
+<script src="/plugin/main.js"></script>
+<script>
+(function () {
+  "use strict";
+  var status = document.getElementById("status");
+  var toolbar = document.getElementById("toolbar");
+  var toggle = document.getElementById("more-menu");
+  var mode = new URLSearchParams(location.search).get("mode") || "pinned";
+  var menuRoot = ".scene-list-operations-dropdown.dropdown-menu.show";
+  var pluginItemId = "deepseek-empornium-uploader-action";
+  var legacyButtonId = "deepseek-megapack-action";
+  var pluginMutations = [];
+
+  status.textContent = "HARNESS READY mode=" + mode + "\n";
+  function log(line) { status.textContent += line + "\n"; }
+  function assertHarness(label, condition, details) {
+    var suffix = details ? " (" + details + ")" : "";
+    log((condition ? "PASS" : "FAIL") + " - " + label + suffix);
+    return condition;
+  }
+  function menuElement() {
+    return document.querySelector(menuRoot);
+  }
+  function createMenu() {
+    var menu = document.createElement("div");
+    menu.className = "bg-secondary text-white scene-list-operations-dropdown dropdown-menu show";
+    var nativeItem = document.createElement("a");
+    nativeItem.className = "dropdown-item";
+    nativeItem.href = "#native-scene-action";
+    nativeItem.textContent = "Native scene action";
+    menu.appendChild(nativeItem);
+    return menu;
+  }
+  function mountMenu() {
+    var menu = createMenu();
+    document.body.appendChild(menu);
+    toggle.setAttribute("aria-expanded", "true");
+    return menu;
+  }
+  function closeMenu() {
+    document.querySelectorAll(menuRoot).forEach(function (menu) { menu.remove(); });
+    toggle.setAttribute("aria-expanded", "false");
+  }
+  function ensureSelectionSignal() {
+    var signal = toolbar.querySelector(".edit-existing-button");
+    if (signal) return signal;
+    signal = document.createElement("button");
+    signal.className = "edit-existing-button btn btn-secondary";
+    signal.textContent = "Edit";
+    toolbar.appendChild(signal);
+    return signal;
+  }
+  function setSelection(on) {
+    document.querySelectorAll(".sel").forEach(function (checkbox) {
+      checkbox.checked = on && checkbox.dataset.id !== "55";
+    });
+    if (on) ensureSelectionSignal();
+    else toolbar.querySelector(".edit-existing-button")?.remove();
+  }
+  function setNoIdSelection() {
+    setSelection(false);
+    document.querySelectorAll("a[href*='/scenes/']").forEach(function (link) {
+      link.setAttribute("href", "/not-a-scene/" + link.closest("tr").dataset.sceneId);
+    });
+    document.querySelector('tr[data-scene-id="7"] input.sel').checked = true;
+    ensureSelectionSignal();
+  }
+  function replaceMenu() {
+    var oldMenu = menuElement();
+    if (oldMenu) oldMenu.replaceWith(createMenu());
+    toggle.setAttribute("aria-expanded", "true");
+  }
+  function pluginMutation(node) {
+    return node.nodeType === Node.ELEMENT_NODE && (node.id === pluginItemId || node.id === legacyButtonId || node.querySelector("#" + pluginItemId));
+  }
+  function cspProbe() {
+    return fetch("http://localhost:9941/health", { cache: "no-store" })
+      .then(function (response) { return { allowed: response.ok, status: response.status }; })
+      .catch(function (error) { return { allowed: false, error: String(error) }; });
+  }
+
+  toggle.addEventListener("click", function () {
+    if (menuElement()) closeMenu();
+    else mountMenu();
+  });
+  window.__deepseekOpened = null;
+  window.open = function (url) { window.__deepseekOpened = String(url); return null; };
+  new MutationObserver(function (mutations) {
+    mutations.forEach(function (mutation) {
+      var nodes = Array.prototype.slice.call(mutation.addedNodes).concat(Array.prototype.slice.call(mutation.removedNodes));
+      if (nodes.some(pluginMutation)) pluginMutations.push(mutation.type);
+    });
+  }).observe(document.body, { childList: true, subtree: true });
+
+  window.__deepseekHarness = {
+    mode: mode,
+    ready: true,
+    assert: assertHarness,
+    setSelection: setSelection,
+    setNoIdSelection: setNoIdSelection,
+    clearSelection: function () { setSelection(false); },
+    replaceMenu: replaceMenu,
+    closeMenu: closeMenu,
+    probeCsp: cspProbe,
+    checkedFixtureIds: function () {
+      return Array.prototype.map.call(document.querySelectorAll(".sel:checked"), function (checkbox) { return checkbox.dataset.id; });
+    },
+    pluginMutations: function () { return pluginMutations.slice(); },
+    snapshot: function () {
+      var menu = menuElement();
+      return {
+        mode: mode,
+        menuCount: document.querySelectorAll(menuRoot).length,
+        menuParent: menu ? menu.parentElement?.tagName || null : null,
+        toggleCount: document.querySelectorAll("div.list-operations.dropdown.btn-group > button#more-menu").length,
+        toggleExpanded: toggle.getAttribute("aria-expanded"),
+        itemCount: document.querySelectorAll(menuRoot + " > a.dropdown-item").length,
+        pluginItemCount: document.querySelectorAll("#" + pluginItemId).length,
+        legacyButtonCount: document.querySelectorAll("#" + legacyButtonId).length,
+        checkedIds: this.checkedFixtureIds(),
+        pluginMutations: pluginMutations.slice()
+      };
+    }
+  };
+})();
+</script>
+</body>
+</html>
