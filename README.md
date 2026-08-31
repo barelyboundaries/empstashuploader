@@ -44,7 +44,7 @@ older DeepSeek project docs.
 ### Option A: from the Stash plugin source
 
 1. In Stash, go to **Settings → Plugins → Add Source** and enter
-   `<PAGES-URL-PLACEHOLDER>`.
+   `https://ccoggle-ui.github.io/deepseek-megapack/index.yml`.
 
    The placeholder is the URL of this repository's GitHub Pages `index.yml`.
    It is a literal placeholder because the Pages URL only exists after the
