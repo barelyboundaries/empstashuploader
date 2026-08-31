@@ -24,8 +24,10 @@ const __dirname = path.dirname(__filename);
 const ASSET_RECORD = {
   // review.js: the dist scaffold renamed the wizard-stage constants (a pure
   // identifier rename) to keep the distribution leak-grep clean; behavior is
-  // unchanged and this record pins the renamed bytes.
-  'review.js': 'ff51fbdf274fa88a1f309171efa5b27b77040349834a5299b533b8ecbf4611d0',
+  // unchanged and this record pins the renamed bytes. 2026-08-31: reworded
+  // the leftover-file warning to match the build's actual behavior
+  // (unrelated files are ignored and excluded from the torrent, not refused).
+  'review.js': 'ef9e88d7bbb0835763ddc7b0a899dffc9b45164154d00295429740c7754f4402',
   'review.html': 'a4670a4f854b6984e73f7a3d9506629905139062363fb995e593ba9555940fea',
 };
 

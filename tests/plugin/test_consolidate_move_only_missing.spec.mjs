@@ -307,7 +307,7 @@ test.describe("consolidateFiles — move-only-missing into the seed dir", () => 
 
     // Default resolution: Keep existing -> no mutation for that file.
     await page.click("#btn-confirm-dest-collision");
-    await expect(page.locator("#status-text")).toContainText("foreign files");
+    await expect(page.locator("#status-text")).toContainText("Build ignores them and excludes them from the torrent");
 
     expect(wire.moves).toHaveLength(0);
     expect(wire.deletes).toHaveLength(0);

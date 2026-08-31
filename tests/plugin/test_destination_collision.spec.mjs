@@ -487,7 +487,7 @@ test.describe("DeepSeek Review — destination collision dialog", () => {
       "deletes the existing file from disk and Stash; the emptied scene remains in Stash"
     );
     await expect(card.locator(".dest-collision-choice--keepboth .dest-collision-consequence")).toHaveText(
-      "the old copy stays in the destination; Build will refuse it as a foreign file until resolved"
+      "the old copy stays in the destination; Build ignores it and keeps it out of the torrent — the file stays on disk until you remove it"
     );
 
     await page.click("#btn-cancel-dest-collision");
@@ -989,7 +989,7 @@ test.describe("DeepSeek Review — consolidation execution engine (destination-c
     // Keep existing is the default radio — confirm as-is.
     await page.click("#btn-confirm-dest-collision");
 
-    await expect(page.locator("#status-text")).toContainText("foreign files");
+    await expect(page.locator("#status-text")).toContainText("Build ignores them and excludes them from the torrent");
 
     const moves = wire.log.filter((e) => e.kind === "moveFiles");
     expect(moves).toHaveLength(1);
@@ -1004,7 +1004,7 @@ test.describe("DeepSeek Review — consolidation execution engine (destination-c
     // Persistent warning names the leftover destination file.
     const status = await page.locator("#status-text").innerText();
     expect(status).toContain("C:\\Packs\\b.mp4");
-    expect(status).toContain("foreign files");
+    expect(status).toContain("Build ignores them and excludes them from the torrent");
   });
 
   test("(d) Replace -> deleteFiles(existing id) BEFORE moveFiles(incoming id), inside the explicit confirm flow", async ({ page }) => {
@@ -1068,7 +1068,7 @@ test.describe("DeepSeek Review — consolidation execution engine (destination-c
     await modal.locator(".dest-collision-card").first().locator("input[value='keepboth']").check();
     await page.click("#btn-confirm-dest-collision");
 
-    await expect(page.locator("#status-text")).toContainText("foreign files");
+    await expect(page.locator("#status-text")).toContainText("Build ignores them and excludes them from the torrent");
 
     const moveCalls = wire.log.filter((e) => e.kind === "moveFiles");
     expect(moveCalls).toHaveLength(2);
@@ -1118,7 +1118,7 @@ test.describe("DeepSeek Review — consolidation execution engine (destination-c
     // Default Keep-existing stands.
     await page.click("#btn-confirm-dest-collision");
 
-    await expect(page.locator("#status-text")).toContainText("foreign files");
+    await expect(page.locator("#status-text")).toContainText("Build ignores them and excludes them from the torrent");
 
     const moves = wire.log.filter((e) => e.kind === "moveFiles");
     expect(moves).toHaveLength(1);

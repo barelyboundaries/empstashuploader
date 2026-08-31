@@ -9,6 +9,19 @@ const FULL_CHUNKED_BBCODE =
   "[quote]Special Unicode: ★★★★★ — Performer 桜井[/quote]";
 
 function serveAssets(page) {
+  // REMOTE_COVER must actually resolve for the thumbnail <img> to get a
+  // bounding box: left as a live request the fixture 404s and toBeVisible
+  // degrades into a broken-image-rendering coin flip. Fulfill it locally.
+  page.route(REMOTE_COVER, (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "image/png",
+      body: Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAoAAAAKCAYAAACNMs+9AAAAFUlEQVR42mP8z8BQz0AEYBxVSF+FABJADveWkH6oAAAAAElFTkSuQmCC",
+        "base64"
+      ),
+    })
+  );
   page.route("**/plugin*/**/main.js*", (route) =>
     route.fulfill({ status: 200, contentType: "application/javascript", body: fs.readFileSync(path.resolve("plugin/main.js"), "utf8") })
   );

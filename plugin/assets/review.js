@@ -601,7 +601,7 @@
   const DEST_COLLISION_CONSEQUENCES = {
     keep: "the scene stays unconsolidated; Build stays disabled until it is removed or resolved",
     replace: "deletes the existing file from disk and Stash; the emptied scene remains in Stash",
-    keepboth: "the old copy stays in the destination; Build will refuse it as a foreign file until resolved",
+    keepboth: "the old copy stays in the destination; Build ignores it and keeps it out of the torrent — the file stays on disk until you remove it",
     useexisting: "the pack uses the copy already in the destination; nothing is moved or deleted"
   };
 
@@ -2241,7 +2241,7 @@
         renamePairs.push({ plan, newName });
       }
       if (renamePairs.length > 0) {
-        const renameMsg = `Rename and keep both? The following files will be moved under new names:\n\n${renamePairs.map((p) => `${p.plan.item.path} → ${p.newName}`).join("\n")}\n\nThe old copy stays in the pack subfolder; Build will refuse it as a foreign file until resolved.`;
+        const renameMsg = `Rename and keep both? The following files will be moved under new names:\n\n${renamePairs.map((p) => `${p.plan.item.path} → ${p.newName}`).join("\n")}\n\nThe old copy stays in the pack subfolder; Build ignores it and excludes it from the torrent — it is not deleted.`;
         if (!confirm(renameMsg)) {
           throw new Error("rename cancelled by user");
         }
@@ -2285,7 +2285,8 @@
       await loadScenes();
 
       // Persistent warning for every resolution that leaves a file behind in
-      // the destination: Build refuses those as foreign files until resolved.
+      // the destination: Build ignores those files — they are excluded from
+      // the torrent and NOT deleted, so they remain on disk until resolved.
       const leftoverPaths = [];
       for (const ch of keptChoices) {
         const model = modelByFileId.get(String(ch.incomingFileId));
@@ -2295,7 +2296,7 @@
         if (pair.plan.model && pair.plan.model.existingPath) leftoverPaths.push(pair.plan.model.existingPath);
       }
       if (leftoverPaths.length > 0) {
-        showStatus(`Warning: ${leftoverPaths.length} file(s) remain in '${destinationFolder}' and were not replaced: ${leftoverPaths.join(", ")}. Build will refuse them as foreign files until resolved.`, 0, true);
+        showStatus(`Warning: ${leftoverPaths.length} file(s) remain in '${destinationFolder}' and were not replaced: ${leftoverPaths.join(", ")}. Build ignores them and excludes them from the torrent; the files stay on disk until you remove or resolve them.`, 0, true);
       }
     } catch (err) {
       patchConsolidatedPaths(finalPaths);
