@@ -30,7 +30,7 @@ export default defineConfig({
     'test_task_failure_detection.spec.mjs',
     'test_result_sentinel_handoff.spec.mjs',
     'test_modal_mount_scroll.spec.mjs',
-    '    test_sanitize_name_parity.spec.mjs',
+    'test_sanitize_name_parity.spec.mjs',
     'test_empify_parity.spec.mjs',
     'test_defect_fixes_ux.spec.mjs',
     'test_presentation_budget.spec.mjs'
