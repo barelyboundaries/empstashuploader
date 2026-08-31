@@ -1,0 +1,51 @@
+# Publishes the plugin zip + index.yml to GitHub Pages.
+# After the first successful deploy, the index URL becomes:
+#   https://<owner>.github.io/<repo>/index.yml
+# (Pages must be enabled in repo Settings → Pages → Source: GitHub Actions)
+
+name: Deploy Plugin Source to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "plugin/**"
+      - "backend/deepseek_megapack/**"
+      - "scripts/build_plugin_zip.mjs"
+      - ".github/workflows/pages.yml"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Build plugin zip and index
+        run: node scripts/build_plugin_zip.mjs
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@v4
