@@ -1,7 +1,7 @@
 # Publishes the plugin zip + index.yml to GitHub Pages.
 # After the first successful deploy, the index URL becomes:
 #   https://<owner>.github.io/<repo>/index.yml
-# (Pages must be enabled in repo Settings → Pages → Source: GitHub Actions)
+# (Pages is enabled via build_type=workflow (was: repo Settings → Pages → Source: GitHub Actions)
 
 name: Deploy Plugin Source to GitHub Pages
 
