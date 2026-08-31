@@ -72,11 +72,12 @@ class TestPayloadAndStringBoundaries:
         assert _extract_scene_paths({"file_paths": ["/a/d.mp4", "/a/e.mp4"]}) == ["/a/d.mp4", "/a/e.mp4"]
         assert _extract_scene_paths({"files": [{"path": "/a/f.mp4"}]}) == ["/a/f.mp4"]
 
-    def test_payload_with_missing_optional_fields(self, media_factory, tmp_path):
+    def test_payload_with_missing_optional_fields(self, media_factory, tmp_path, consolidated_pack_dir):
         """Build operates cleanly when optional fields (performers, tags, notes, trackers) are absent."""
         out_dir = tmp_path / "minimal_out"
         out_dir.mkdir()
-        f1 = media_factory("minimal_scene", ".mp4", 65536, target_dir=out_dir)
+        pack_dir = consolidated_pack_dir(out_dir, "Minimal Payload Pack")
+        f1 = media_factory("minimal_scene", ".mp4", 65536, target_dir=pack_dir)
 
         payload = {
             "pack_title": "Minimal Payload Pack",
@@ -106,11 +107,12 @@ class TestMediaFormatsAndExtensions:
         ".m4v",
         ".mp4",
     ])
-    def test_all_video_extensions_preserved(self, media_factory, tmp_path, ext):
+    def test_all_video_extensions_preserved(self, media_factory, tmp_path, ext, consolidated_pack_dir):
         """Every supported video extension is preserved in the generated torrent."""
         out_dir = tmp_path / f"pack_{ext[1:]}"
         out_dir.mkdir()
-        f = media_factory(f"video_test_{ext[1:]}", ext, 65536, target_dir=out_dir)
+        pack_dir = consolidated_pack_dir(out_dir, f"Format Pack {ext}")
+        f = media_factory(f"video_test_{ext[1:]}", ext, 65536, target_dir=pack_dir)
 
         payload = {
             "pack_title": f"Format Pack {ext}",
@@ -121,12 +123,13 @@ class TestMediaFormatsAndExtensions:
         t = torf.Torrent.read(res["torrent_path"])
         assert any(str(f_entry).endswith(ext) for f_entry in t.files)
 
-    def test_multi_dot_and_multi_extension_files(self, media_factory, tmp_path):
+    def test_multi_dot_and_multi_extension_files(self, media_factory, tmp_path, consolidated_pack_dir):
         """Filenames with multiple dots (e.g. scene.1080p.x264.mkv) preserve exact extension."""
         name = "Studio.Alpha.Scene.01.1080p.HEVC"
         out_dir = tmp_path / "multi_dot_out"
         out_dir.mkdir()
-        f = media_factory(name, ".mkv", 65536, target_dir=out_dir)
+        pack_dir = consolidated_pack_dir(out_dir, "Multi Dot Pack")
+        f = media_factory(name, ".mkv", 65536, target_dir=pack_dir)
 
         payload = {
             "pack_title": "Multi Dot Pack",
@@ -158,11 +161,12 @@ class TestFileSizeAndPieceBoundaries:
         """calculate_piece_size correctly computes piece sizes across byte magnitudes."""
         assert calculate_piece_size(size_bytes) == expected_piece_size
 
-    def test_single_byte_file_in_torrent(self, media_factory, tmp_path):
+    def test_single_byte_file_in_torrent(self, media_factory, tmp_path, consolidated_pack_dir):
         """A 1-byte file creates a valid torrent with 1 piece."""
         out_dir = tmp_path / "one_byte_out"
         out_dir.mkdir()
-        f1 = media_factory("one_byte", ".mp4", 1, target_dir=out_dir)
+        pack_dir = consolidated_pack_dir(out_dir, "OneBytePack")
+        f1 = media_factory("one_byte", ".mp4", 1, target_dir=pack_dir)
 
         payload = {
             "pack_title": "OneBytePack",
@@ -182,11 +186,12 @@ class TestFileSizeAndPieceBoundaries:
 class TestDirectoryPathsAndNesting:
     """Path depth, slash styles, and relative path handling."""
 
-    def test_deeply_nested_source_media_path(self, media_factory, tmp_path):
+    def test_deeply_nested_source_media_path(self, media_factory, tmp_path, consolidated_pack_dir):
         """Media consolidated inside output directory is discovered and processed."""
         out_dir = tmp_path / "deep_out"
         out_dir.mkdir()
-        f1 = media_factory("deep_clip", ".mp4", 65536, target_dir=out_dir)
+        pack_dir = consolidated_pack_dir(out_dir, "Deep Nested Pack")
+        f1 = media_factory("deep_clip", ".mp4", 65536, target_dir=pack_dir)
 
         payload = {
             "pack_title": "Deep Nested Pack",
@@ -196,11 +201,12 @@ class TestDirectoryPathsAndNesting:
         res = run_build_megapack(payload)
         assert Path(res["torrent_path"]).exists()
 
-    def test_output_dir_with_trailing_slashes_and_backslashes(self, media_factory, tmp_path):
+    def test_output_dir_with_trailing_slashes_and_backslashes(self, media_factory, tmp_path, consolidated_pack_dir):
         """Output directory specified with mixed trailing slashes is normalized safely."""
         out_dir = tmp_path / "slash_out"
         out_dir.mkdir()
-        f1 = media_factory("slash_clip", ".mp4", 65536, target_dir=out_dir)
+        pack_dir = consolidated_pack_dir(out_dir, "Slash Pack")
+        f1 = media_factory("slash_clip", ".mp4", 65536, target_dir=pack_dir)
         out_dir_str = str(out_dir) + "//"
 
         payload = {
@@ -218,11 +224,12 @@ class TestDirectoryPathsAndNesting:
 class TestLockfileConcurrencyCorners:
     """Expired lockfiles, dead PIDs, and active concurrency."""
 
-    def test_lockfile_with_expired_timestamp_is_reclaimed(self, media_factory, tmp_path):
+    def test_lockfile_with_expired_timestamp_is_reclaimed(self, media_factory, tmp_path, consolidated_pack_dir):
         """Lockfile older than 3600 seconds is treated as stale and reclaimed."""
         out_dir = tmp_path / "stale_lock_dir"
         out_dir.mkdir()
-        f1 = media_factory("clip_stale", ".mp4", 65536, target_dir=out_dir)
+        pack_dir = consolidated_pack_dir(out_dir, "StaleLockPack")
+        f1 = media_factory("clip_stale", ".mp4", 65536, target_dir=pack_dir)
         title = "StaleLockPack"
         lock_file = out_dir / f".{sanitize_name(title)}.lock"
         two_hours_ago = time.time() - 7200
@@ -239,11 +246,12 @@ class TestLockfileConcurrencyCorners:
         assert Path(res["torrent_path"]).exists()
         assert "Reclaiming stale lockfile" in stderr_buf.getvalue()
 
-    def test_lockfile_with_dead_pid_is_reclaimed(self, media_factory, tmp_path):
+    def test_lockfile_with_dead_pid_is_reclaimed(self, media_factory, tmp_path, consolidated_pack_dir):
         """Lockfile referencing a non-existent PID is reclaimed."""
         out_dir = tmp_path / "dead_pid_dir"
         out_dir.mkdir()
-        f1 = media_factory("clip_deadpid", ".mp4", 65536, target_dir=out_dir)
+        pack_dir = consolidated_pack_dir(out_dir, "DeadPidPack")
+        f1 = media_factory("clip_deadpid", ".mp4", 65536, target_dir=pack_dir)
         title = "DeadPidPack"
         lock_file = out_dir / f".{sanitize_name(title)}.lock"
         lock_file.write_text(f"pid=999999\nstarted={time.time()}\npack={title}\n", encoding="utf-8")
@@ -263,12 +271,13 @@ class TestLockfileConcurrencyCorners:
 class TestSceneCountAndPreviewNamingCorners:
     """Single scene vs multi-scene naming conventions."""
 
-    def test_single_scene_preview_named_without_index(self, media_factory, tmp_path):
+    def test_single_scene_preview_named_without_index(self, media_factory, tmp_path, consolidated_pack_dir):
         """Single scene megapack names preview image {pack_title}_preview.jpg without numeric suffix."""
         out_dir = tmp_path / "solo_out"
         out_dir.mkdir()
-        f1 = media_factory("solo_scene", ".mp4", 65536, target_dir=out_dir)
         title = "SoloScenePack"
+        pack_dir = consolidated_pack_dir(out_dir, title)
+        f1 = media_factory("solo_scene", ".mp4", 65536, target_dir=pack_dir)
 
         payload = {
             "pack_title": title,
@@ -279,13 +288,14 @@ class TestSceneCountAndPreviewNamingCorners:
         expected_cs = out_dir / f"{title}_preview.jpg"
         assert expected_cs.exists()
 
-    def test_multi_scene_preview_named_with_index(self, media_factory, tmp_path):
+    def test_multi_scene_preview_named_with_index(self, media_factory, tmp_path, consolidated_pack_dir):
         """Multi scene megapack names preview images {pack_title}_preview_1.jpg, _preview_2.jpg."""
         out_dir = tmp_path / "multi_cs_out"
         out_dir.mkdir()
-        f1 = media_factory("multi1", ".mp4", 65536, target_dir=out_dir)
-        f2 = media_factory("multi2", ".mp4", 65536, target_dir=out_dir)
         title = "MultiScenePack"
+        pack_dir = consolidated_pack_dir(out_dir, title)
+        f1 = media_factory("multi1", ".mp4", 65536, target_dir=pack_dir)
+        f2 = media_factory("multi2", ".mp4", 65536, target_dir=pack_dir)
 
         payload = {
             "pack_title": title,

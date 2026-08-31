@@ -359,11 +359,12 @@ class TestFeature6NativeStashIntegration:
         assert mode == "build"
         assert parsed["pack_title"] == "WrappedPack"
 
-    def test_f6_04_pid_lockfile_lifecycle(self, tmp_path, media_factory):
+    def test_f6_04_pid_lockfile_lifecycle(self, tmp_path, media_factory, consolidated_pack_dir):
         """6.4 PID lockfile is created during execution and cleaned up on normal exit."""
         out_dir = tmp_path / "lock_lifecycle_test"
         out_dir.mkdir()
-        f1 = media_factory("s1", ".mp4", 65536, target_dir=out_dir)
+        pack_dir = consolidated_pack_dir(out_dir, "LifecyclePack")
+        f1 = media_factory("s1", ".mp4", 65536, target_dir=pack_dir)
         title = "LifecyclePack"
         lock_file = out_dir / f".{sanitize_name(title)}.lock"
 
@@ -440,11 +441,12 @@ class TestFeature7PillowFallbackDegradeAndContinue:
         assert len(urls) == 1
         assert urls[0].startswith("file:///")
 
-    def test_f7_05_build_completes_end_to_end_with_fallback_images(self, media_factory, tmp_path):
+    def test_f7_05_build_completes_end_to_end_with_fallback_images(self, media_factory, tmp_path, consolidated_pack_dir):
         """7.5 Entire megapack build finishes successfully even when using Pillow fallbacks."""
         out_dir = tmp_path / "degraded_pack"
         out_dir.mkdir()
-        f1 = media_factory("corrupted_video", ".mp4", 1024, target_dir=out_dir)
+        pack_dir = consolidated_pack_dir(out_dir, "Degraded Megapack")
+        f1 = media_factory("corrupted_video", ".mp4", 1024, target_dir=pack_dir)
 
         payload = {
             "pack_title": "Degraded Megapack",
@@ -546,11 +548,12 @@ class TestFeature9StagingSubsystemDeletion:
         f1 = media_factory("vol_scene", ".mp4", 65536)
         assert f1.exists()
 
-    def test_f9_05_clean_directory_state_after_build(self, media_factory, tmp_path):
+    def test_f9_05_clean_directory_state_after_build(self, media_factory, tmp_path, consolidated_pack_dir):
         """9.5 Build leaves no tempfiles or leftover lockfiles in output directory."""
         out_dir = tmp_path / "clean_dir"
         out_dir.mkdir()
-        f1 = media_factory("clean_state", ".mp4", 65536, target_dir=out_dir)
+        pack_dir = consolidated_pack_dir(out_dir, "CleanPack")
+        f1 = media_factory("clean_state", ".mp4", 65536, target_dir=pack_dir)
 
         payload = {
             "pack_title": "CleanPack",
@@ -897,7 +900,10 @@ class TestFeature15E2EOpaqueBoxSuite:
         """15.3 Generated .torrent file is standard Bencoded data readable by torf."""
         res = run_build_megapack(sample_scenes_payload)
         t = torf.Torrent.read(res["torrent_path"])
-        assert t.name == os.path.basename(sample_scenes_payload["output_dir"])
+        # Current contract (seed/scratch separation, task.py legacy branch):
+        # the torrent is built over the consolidated pack folder, so its name
+        # is the pack folder's basename == sanitize_name(pack_title).
+        assert t.name == sanitize_name(sample_scenes_payload["pack_title"])
         assert t.size > 0
 
     def test_f15_04_generated_manifest_schema(self, sample_scenes_payload):
@@ -930,11 +936,12 @@ class TestFeature16AdversarialHardening:
         assert "\\" not in safe
         assert Path(safe).name == safe
 
-    def test_f16_02_unicode_and_emoji_handling(self, media_factory, tmp_path):
+    def test_f16_02_unicode_and_emoji_handling(self, media_factory, tmp_path, consolidated_pack_dir):
         """16.2 Unicode titles with emojis (🎬 🚀 日本語) and characters execute cleanly."""
         out_dir = tmp_path / "unicode_pack"
         out_dir.mkdir()
-        f1 = media_factory("scene_emoji", ".mp4", 65536, target_dir=out_dir)
+        pack_dir = consolidated_pack_dir(out_dir, "Megapack 🎬 🚀 日本語 [2026]")
+        f1 = media_factory("scene_emoji", ".mp4", 65536, target_dir=pack_dir)
 
         payload = {
             "pack_title": "Megapack 🎬 🚀 日本語 [2026]",
@@ -944,7 +951,7 @@ class TestFeature16AdversarialHardening:
         res = run_build_megapack(payload)
         assert Path(res["torrent_path"]).exists()
 
-    def test_f16_03_zero_byte_corrupt_lockfile_recovery(self, tmp_path, media_factory):
+    def test_f16_03_zero_byte_corrupt_lockfile_recovery(self, tmp_path, media_factory, consolidated_pack_dir):
         """16.3 Zero-byte or corrupt lockfile is safely reclaimed and does not crash build."""
         out_dir = tmp_path / "corrupt_lock"
         out_dir.mkdir()
@@ -952,7 +959,8 @@ class TestFeature16AdversarialHardening:
         lock_file = out_dir / f".{sanitize_name(title)}.lock"
         lock_file.write_bytes(b"")
 
-        f1 = media_factory("s_lock", ".mp4", 65536, target_dir=out_dir)
+        pack_dir = consolidated_pack_dir(out_dir, title)
+        f1 = media_factory("s_lock", ".mp4", 65536, target_dir=pack_dir)
         payload = {
             "pack_title": title,
             "output_dir": str(out_dir),

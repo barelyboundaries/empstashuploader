@@ -19,18 +19,19 @@ from task import (
 class TestRealWorldApplicationScenarios:
     """Realistic end-to-end user journeys and production workload simulations."""
 
-    def test_scenario_01_standard_studio_megapack_workflow(self, media_factory, tmp_path):
+    def test_scenario_01_standard_studio_megapack_workflow(self, media_factory, tmp_path, consolidated_pack_dir):
         """
         Scenario 1: Standard 5-scene studio megapack.
         Complete lifecycle: probing -> building -> torrent verification -> manifest -> BBCode.
         """
         out_dir = tmp_path / "Studio_Pack_Output"
         out_dir.mkdir()
+        pack_dir = consolidated_pack_dir(out_dir, "Studio Alpha Best of 2026")
 
         # Create 5 simulated studio scenes
         scenes = []
         for i in range(1, 6):
-            f = media_factory(f"StudioAlpha_Scene_0{i}_1080p", ".mp4", 32768 * i, target_dir=out_dir)
+            f = media_factory(f"StudioAlpha_Scene_0{i}_1080p", ".mp4", 32768 * i, target_dir=pack_dir)
             scenes.append({
                 "id": 100 + i,
                 "title": f"Studio Alpha Scene 0{i}",
@@ -74,13 +75,14 @@ class TestRealWorldApplicationScenarios:
         assert "Studio Alpha Best of 2026" in bbcode
         assert "Performer Lead" in bbcode
 
-    def test_scenario_02_heterogeneous_multi_codec_library_pack(self, media_factory, tmp_path):
+    def test_scenario_02_heterogeneous_multi_codec_library_pack(self, media_factory, tmp_path, consolidated_pack_dir):
         """
         Scenario 2: Heterogeneous library pack mixing .mkv, .avi, .wmv, .webm, .mp4.
         Ensures all media extensions and basenames are preserved without any forced .mp4 conversion.
         """
         out_dir = tmp_path / "MultiCodec_Output"
         out_dir.mkdir()
+        pack_dir = consolidated_pack_dir(out_dir, "Heterogeneous Media Archive")
 
         formats = [
             ("Retro_Classic", ".avi", 16384),
@@ -92,7 +94,7 @@ class TestRealWorldApplicationScenarios:
 
         scenes = []
         for name, ext, size in formats:
-            f = media_factory(name, ext, size, target_dir=out_dir)
+            f = media_factory(name, ext, size, target_dir=pack_dir)
             scenes.append({"id": len(scenes) + 1, "path": str(f), "title": name})
 
         payload = {
@@ -108,17 +110,18 @@ class TestRealWorldApplicationScenarios:
         for name, ext, size in formats:
             assert any(f.endswith(ext) for f in files_in_torrent), f"Missing extension {ext} in torrent"
 
-    def test_scenario_03_large_collection_25_scenes_monotonic_progress(self, media_factory, tmp_path):
+    def test_scenario_03_large_collection_25_scenes_monotonic_progress(self, media_factory, tmp_path, consolidated_pack_dir):
         """
         Scenario 3: 25-scene megapack stress test.
         Verifies progress monotonicity, piece calculation, and manifest fidelity.
         """
         out_dir = tmp_path / "Large_Collection_Output"
         out_dir.mkdir()
+        pack_dir = consolidated_pack_dir(out_dir, "Massive 25 Scene Pack")
 
         scenes = []
         for i in range(1, 26):
-            f = media_factory(f"Collection_Scene_{i:02d}", ".mp4", 16384, target_dir=out_dir)
+            f = media_factory(f"Collection_Scene_{i:02d}", ".mp4", 16384, target_dir=pack_dir)
             scenes.append({"id": 200 + i, "path": str(f)})
 
         payload = {
@@ -146,17 +149,18 @@ class TestRealWorldApplicationScenarios:
         for i in range(1, len(progress_history)):
             assert progress_history[i] >= progress_history[i - 1] - 0.001  # small float tolerance
 
-    def test_scenario_04_offline_degrade_and_continue_full_pack(self, media_factory, tmp_path):
+    def test_scenario_04_offline_degrade_and_continue_full_pack(self, tmp_path, consolidated_pack_dir):
         """
         Scenario 4: Complete offline build with unavailable external binaries and services.
         Pillow fallback triggers, file:/// URLs generated, full pack artifacts successfully written.
         """
         out_dir = tmp_path / "Offline_Output"
         out_dir.mkdir()
+        pack_dir = consolidated_pack_dir(out_dir, "Offline Degraded Pack")
 
         # Non-video files to trigger fallback
-        f1 = out_dir / "offline_scene1.mp4"
-        f2 = out_dir / "offline_scene2.mp4"
+        f1 = pack_dir / "offline_scene1.mp4"
+        f2 = pack_dir / "offline_scene2.mp4"
         f1.write_bytes(b"\x00" * 4096)
         f2.write_bytes(b"\x00" * 8192)
 
@@ -180,7 +184,7 @@ class TestRealWorldApplicationScenarios:
         assert Path(res["manifest_path"]).exists()
         assert Path(res["bbcode_path"]).exists()
 
-    def test_scenario_05_collision_recovery_workflow(self, media_factory, tmp_path):
+    def test_scenario_05_collision_recovery_workflow(self, tmp_path, consolidated_pack_dir):
         """
         Scenario 5: Complete collision resolution user journey.
         1. Probing identifies duplicate basename 'scene.mp4' -> consolidation gated.
@@ -212,11 +216,12 @@ class TestRealWorldApplicationScenarios:
         assert probe_2["duplicate_count"] == 0
         assert (probe_2["duplicate_count"] == 0) is True  # Consolidation unlocked
 
-        # Step 4: Move/consolidate files into destination and build
+        # Step 4: Move/consolidate files into the pack folder and build
         out_dir = tmp_path / "Resolved_Pack"
         out_dir.mkdir()
-        f1_cons = out_dir / "Scene.mp4"
-        f2_cons = out_dir / "Scene_02.mp4"
+        pack_dir = consolidated_pack_dir(out_dir, "Collision Resolved Pack")
+        f1_cons = pack_dir / "Scene.mp4"
+        f2_cons = pack_dir / "Scene_02.mp4"
         f1.rename(f1_cons)
         f2_resolved.rename(f2_cons)
 
@@ -228,13 +233,14 @@ class TestRealWorldApplicationScenarios:
         res = run_build_megapack(payload)
         assert Path(res["torrent_path"]).exists()
 
-    def test_scenario_06_contact_sheets_included_in_torrent_flag(self, media_factory, tmp_path):
+    def test_scenario_06_contact_sheets_included_in_torrent_flag(self, media_factory, tmp_path, consolidated_pack_dir):
         """
         Scenario 6: Build with include_contact_sheets=True bundles Contact Sheets/ subfolder into torrent.
         """
         out_dir = tmp_path / "bundled_cs_out"
         out_dir.mkdir()
-        f1 = media_factory("feature_clip", ".mp4", 65536, target_dir=out_dir)
+        pack_dir = consolidated_pack_dir(out_dir, "Bundled CS Pack")
+        f1 = media_factory("feature_clip", ".mp4", 65536, target_dir=pack_dir)
 
         payload = {
             "pack_title": "Bundled CS Pack",

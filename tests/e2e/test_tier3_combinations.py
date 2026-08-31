@@ -34,18 +34,19 @@ from task import (
 class TestCrossFeatureCombinations:
     """Pairwise and multi-way feature interaction test suite."""
 
-    def test_comb_01_multi_extension_media_with_in_place_seeding_and_pillow_fallback(self, media_factory, tmp_path):
+    def test_comb_01_multi_extension_media_with_in_place_seeding_and_pillow_fallback(self, media_factory, tmp_path, consolidated_pack_dir):
         """
         Combination 1: Heterogeneous extensions (.mkv, .avi, .wmv, .mp4)
         + Pillow fallback on corrupted video + Direct torrent seeding verification.
         """
         out_dir = tmp_path / "comb1_out"
         out_dir.mkdir()
+        pack_dir = consolidated_pack_dir(out_dir, "Heterogeneous InPlace Pack")
 
-        f_mkv = media_factory("feature_01", ".mkv", 65536, target_dir=out_dir)
-        f_avi = media_factory("feature_02", ".avi", 32768, target_dir=out_dir)
-        f_wmv = media_factory("feature_03", ".wmv", 49152, target_dir=out_dir)
-        f_mp4 = media_factory("feature_04", ".mp4", 16384, target_dir=out_dir)
+        f_mkv = media_factory("feature_01", ".mkv", 65536, target_dir=pack_dir)
+        f_avi = media_factory("feature_02", ".avi", 32768, target_dir=pack_dir)
+        f_wmv = media_factory("feature_03", ".wmv", 49152, target_dir=pack_dir)
+        f_mp4 = media_factory("feature_04", ".mp4", 16384, target_dir=pack_dir)
 
         payload = {
             "pack_title": "Heterogeneous InPlace Pack",
@@ -73,14 +74,15 @@ class TestCrossFeatureCombinations:
         assert any(f.endswith(".mp4") for f in file_entries)
         assert t.size == (65536 + 32768 + 49152 + 16384)
 
-    def test_comb_02_offline_file_urls_with_private_trackers_and_manifest(self, media_factory, tmp_path):
+    def test_comb_02_offline_file_urls_with_private_trackers_and_manifest(self, media_factory, tmp_path, consolidated_pack_dir):
         """
         Combination 2: Offline preview generation (file:/// URLs)
         + Private announce trackers + Manifest serialization.
         """
         out_dir = tmp_path / "comb2_out"
         out_dir.mkdir()
-        f1 = media_factory("scene_offline", ".mp4", 65536, target_dir=out_dir)
+        pack_dir = consolidated_pack_dir(out_dir, "Offline Private Pack")
+        f1 = media_factory("scene_offline", ".mp4", 65536, target_dir=pack_dir)
 
         trackers = ["https://tracker.example.com:2710/announce"]
         payload = {
@@ -88,13 +90,17 @@ class TestCrossFeatureCombinations:
             "output_dir": str(out_dir),
             "scenes": [{"id": 1, "path": str(f1)}],
             "announce": trackers,
+            "allow_custom_announce": True,
             "upload_previews": False,
         }
 
         res = run_build_megapack(payload)
         manifest = json.loads(Path(res["manifest_path"]).read_text(encoding="utf-8"))
-        assert len(manifest["uploaded_urls"]) == 1
-        assert manifest["uploaded_urls"][0].startswith("file:///")
+        # Current contract: uploaded_urls = one entry per contact sheet PLUS one
+        # per thumbnail (task.py ordered_paths) — 2 for a single-scene megapack.
+        # Offline mode must still produce only local file:/// URLs.
+        assert len(manifest["uploaded_urls"]) == 2
+        assert all(url.startswith("file:///") for url in manifest["uploaded_urls"])
 
         t = torf.Torrent.read(res["torrent_path"])
         assert t.private is True
@@ -152,16 +158,17 @@ class TestCrossFeatureCombinations:
         # Ensure no lockfile remains lingering
         assert not lock_file.exists()
 
-    def test_comb_05_progress_streaming_with_bbcode_escaping_and_manifest(self, media_factory, tmp_path):
+    def test_comb_05_progress_streaming_with_bbcode_escaping_and_manifest(self, media_factory, tmp_path, consolidated_pack_dir):
         """
         Combination 5: Progress streaming during hashing + BBCode escaping of untrusted titles
         + Manifest validation.
         """
         out_dir = tmp_path / "comb5_out"
         out_dir.mkdir()
-        f1 = media_factory("scene_xss", ".mp4", 65536, target_dir=out_dir)
-
         untrusted_title = "Pack [b]Bold[/b] & [url]Link[/url] <2026>"
+        pack_dir = consolidated_pack_dir(out_dir, untrusted_title)
+        f1 = media_factory("scene_xss", ".mp4", 65536, target_dir=pack_dir)
+
         payload = {
             "pack_title": untrusted_title,
             "output_dir": str(out_dir),
@@ -181,14 +188,15 @@ class TestCrossFeatureCombinations:
         bbcode = Path(res["bbcode_path"]).read_text(encoding="utf-8")
         assert Path(res["manifest_path"]).exists()
 
-    def test_comb_06_plugin_value_input_dispatch_to_in_place_build(self, media_factory, tmp_path):
+    def test_comb_06_plugin_value_input_dispatch_to_in_place_build(self, media_factory, tmp_path, consolidated_pack_dir):
         """
         Combination 6: Raw Stash PluginArgInput shape -> parse_input_payload
         -> run_build_megapack -> fully verified output torrent.
         """
         out_dir = tmp_path / "ipc_out"
         out_dir.mkdir()
-        f1 = media_factory("ipc_scene", ".mp4", 65536, target_dir=out_dir)
+        pack_dir = consolidated_pack_dir(out_dir, "IPC Dispatch Pack")
+        f1 = media_factory("ipc_scene", ".mp4", 65536, target_dir=pack_dir)
 
         raw_payload = {
             "pack_title": "IPC Dispatch Pack",

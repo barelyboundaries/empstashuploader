@@ -23,6 +23,8 @@ if str(PLUGIN_DIR) not in sys.path:
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
+from task import sanitize_name
+
 
 def resolve_domain():
     """
@@ -77,16 +79,39 @@ def media_factory(tmp_path):
 
 
 @pytest.fixture
-def sample_scenes_payload(media_factory, tmp_path):
+def consolidated_pack_dir():
     """
-    Returns a standard realistic multi-scene build payload with dummy media consolidated into output_dir.
+    Creates the pack folder the legacy build contract requires:
+    <output_dir>/<sanitize_name(pack_title)>/ — the post-consolidation state
+    the Consolidate step produces. run_build_megapack's legacy preflight
+    (plugin/task.py) refuses to build unless this directory already exists
+    and contains every declared scene file.
+
+    Usage: pack_dir = consolidated_pack_dir(out_dir, pack_title)
+    """
+    def _make(out_dir, pack_title):
+        pack_dir = Path(out_dir) / sanitize_name(pack_title)
+        pack_dir.mkdir(parents=True, exist_ok=True)
+        return pack_dir
+
+    return _make
+
+
+@pytest.fixture
+def sample_scenes_payload(media_factory, tmp_path, consolidated_pack_dir):
+    """
+    Returns a standard realistic multi-scene build payload with dummy media
+    consolidated into <output_dir>/<pack title>/ (the post-consolidation
+    pack folder the build preflight requires).
     """
     output_dir = tmp_path / "Output_Megapack"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    f1 = media_factory("Scene_Alpha", ".mp4", 65536, target_dir=output_dir)
-    f2 = media_factory("Scene_Beta", ".mkv", 131072, target_dir=output_dir)
-    f3 = media_factory("Scene_Gamma", ".avi", 98304, target_dir=output_dir)
+    pack_dir = consolidated_pack_dir(output_dir, "Test Studio Megapack Vol 1")
+
+    f1 = media_factory("Scene_Alpha", ".mp4", 65536, target_dir=pack_dir)
+    f2 = media_factory("Scene_Beta", ".mkv", 131072, target_dir=pack_dir)
+    f3 = media_factory("Scene_Gamma", ".avi", 98304, target_dir=pack_dir)
 
     return {
         "pack_title": "Test Studio Megapack Vol 1",
