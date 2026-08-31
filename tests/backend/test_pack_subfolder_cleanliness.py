@@ -151,7 +151,7 @@ def test_torrent_root_name_equals_pack_title_and_contact_sheets_inside_pack_dir(
     # OLD→NEW: unchanged. Contact sheets ON still copy into the pack dir's
     # "Contact Sheets" subfolder; under presence validation those copies are the
     # extras_expected set and must exist — they do, so this still passes.
-    output_dir = tmp_path / "D_232_Cuck_Emma"
+    output_dir = tmp_path / "D_Synthetic_Parent"
     output_dir.mkdir()
 
     pack_title = "Emma Megapack Vol 1"
@@ -175,7 +175,7 @@ def test_torrent_root_name_equals_pack_title_and_contact_sheets_inside_pack_dir(
     assert result["status"] == "success"
 
     t = torf.Torrent.read(result["torrent_path"])
-    # Release is named after the pack title, NOT parent folder D_232_Cuck_Emma
+    # Release is named after the pack title, NOT parent folder D_Synthetic_Parent
     assert t.name == pack_title
 
     # Contact sheets must land inside pack_dir / Contact Sheets

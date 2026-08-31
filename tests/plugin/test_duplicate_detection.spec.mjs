@@ -1979,8 +1979,8 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
         date: "2026-01-15",
         paths: { screenshot: "http://localhost:9999/shot4318.jpg" },
         files: [
-          { id: 4602, path: "D:\\232\\Cuck\\Emma\\emmassecretlife52-cdzDk65D.mp4", size: 20377486, height: 1080, width: 1920, duration: 61.39, video_codec: "h264" },
-          { id: 29361, path: "D:\\240\\Tina Mang\\OF Videos\\emmassecretlife52-cdzDk65D.mp4", size: 47950206, height: 1080, width: 1920, duration: 61.39, video_codec: "h264" }
+          { id: 4602, path: "D:\\Movies\\SyntheticA\\synthetic_clip_01.mp4", size: 20377486, height: 1080, width: 1920, duration: 61.39, video_codec: "h264" },
+          { id: 29361, path: "D:\\Movies\\SyntheticB\\synthetic_clip_01.mp4", size: 47950206, height: 1080, width: 1920, duration: 61.39, video_codec: "h264" }
         ],
         performers: [{ id: 10, name: "Emma" }],
         tags: [{ id: 1, name: "Solo" }],
@@ -1992,8 +1992,8 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
         date: "2026-01-16",
         paths: { screenshot: "http://localhost:9999/shot4319.jpg" },
         files: [
-          { id: 4603, path: "D:\\232\\Cuck\\Emma\\emmassecretlife53-RqA1FzTr.mp4", size: 47334851, height: 1440, width: 1920, duration: 108.07, video_codec: "h264" },
-          { id: 29359, path: "D:\\240\\Tina Mang\\OF Videos\\emmassecretlife53-RqA1FzTr.mp4", size: 88970750, height: 1440, width: 1920, duration: 108.07, video_codec: "h264" }
+          { id: 4603, path: "D:\\Movies\\SyntheticA\\synthetic_clip_02.mp4", size: 47334851, height: 1440, width: 1920, duration: 108.07, video_codec: "h264" },
+          { id: 29359, path: "D:\\Movies\\SyntheticB\\synthetic_clip_02.mp4", size: 88970750, height: 1440, width: 1920, duration: 108.07, video_codec: "h264" }
         ],
         performers: [{ id: 10, name: "Emma" }],
         tags: [{ id: 1, name: "Solo" }],
