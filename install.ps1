@@ -1,12 +1,27 @@
 # install.ps1 - DeepSeek Megapack: one-command plugin environment setup (Windows).
 #
 # Verifies Python >= 3.12 (backend/pyproject.toml: requires-python = ">=3.12"),
-# creates .venv INSIDE plugin\, installs plugin\requirements.txt into it, probes
-# for ffmpeg, and prints next steps. Writes nothing outside the plugin folder.
+# creates a .venv inside the plugin folder, installs requirements.txt into it,
+# probes for ffmpeg, and prints next steps. Writes nothing outside the plugin
+# folder. Layout auto-detected (F3-1 fix): repo checkouts keep the plugin tree
+# in a plugin\ subfolder beside this script; the shipped zip is FLAT (plugin
+# files at the root beside this script).
 
 $ErrorActionPreference = 'Stop'
 
-$pluginDir    = Join-Path $PSScriptRoot 'plugin'   # resolved from THIS script's location, never CWD
+# Layout detection (F3-1 fix): resolved from THIS script's location, never CWD.
+# Repo checkout: plugin tree lives in a plugin\ subfolder beside this script.
+# Shipped zip:   plugin files sit at the root BESIDE this script (flat layout).
+# Detected by manifest presence, not by convention.
+$repoPluginDir = Join-Path $PSScriptRoot 'plugin'
+if (Test-Path (Join-Path $repoPluginDir 'deepseek-megapack.yml')) {
+    $pluginDir = $repoPluginDir
+    $layoutLabel = 'repo (plugin\ subfolder beside install.ps1)'
+}
+else {
+    $pluginDir = $PSScriptRoot
+    $layoutLabel = 'flat (plugin files beside install.ps1 - shipped zip layout)'
+}
 $requirements = Join-Path $pluginDir 'requirements.txt'
 $venvDir      = Join-Path $pluginDir '.venv'
 $venvPython   = Join-Path $venvDir 'Scripts\python.exe'
@@ -69,11 +84,15 @@ function Find-LauncherPython {
 
 if (-not (Test-Path $requirements)) {
     Write-Host "ERROR: $requirements not found." -ForegroundColor Red
-    Write-Host "Run this script from the distribution root, next to the plugin\ folder."
+    Write-Host "Expected the plugin files (requirements.txt, task.py, deepseek-megapack.yml)"
+    Write-Host "either beside this script (shipped zip layout) or in a plugin\ subfolder"
+    Write-Host "beside it (repo checkout). Re-run from the distribution root or the"
+    Write-Host "extracted zip folder."
     exit 1
 }
 
 Write-Host "DeepSeek Megapack - plugin environment installer"
+Write-Host "Layout: $layoutLabel"
 Write-Host "Plugin folder: $pluginDir"
 
 # --- 1/5 Python >= 3.12 -----------------------------------------------------
@@ -120,7 +139,7 @@ if (-not $pyExe) {
 Info "Using: $pyLabel"
 
 # --- 2/5 venv inside plugin\ ------------------------------------------------
-Step "2/5 Creating virtual environment in plugin\.venv"
+Step "2/5 Creating virtual environment in $venvDir"
 if (Test-Path $venvPython) {
     Info "already exists - reusing"
 }
@@ -197,7 +216,7 @@ Step "5/5 Next steps"
 Write-Host @"
    1. Copy the plugin folder into Stash (or symlink it), then:
       Stash -> Settings -> Plugins -> Reload (or restart Stash).
-   2. Run a Megapack task from the scene tools - plugin\task.py re-execs
+   2. Run a Megapack task from the scene tools - task.py re-execs
       into this .venv on its own; no manual activation needed.
    3. Optional review-UI sidecar: start the backend with the start script
       from the full distribution; it binds 127.0.0.1 only.

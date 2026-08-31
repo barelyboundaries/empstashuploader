@@ -181,7 +181,7 @@ try {
     join(stage, "INSTALL.txt"),
     [
       "DeepSeek Megapack - quick start",
-      "1. Run install.ps1 (Windows) or install.sh (Linux/macOS) from this folder; it creates plugin/.venv and installs the Python dependencies.",
+      "1. Run install.ps1 (Windows) or install.sh (Linux/macOS) from this folder; it creates a .venv beside the plugin files and installs the Python dependencies.",
       "2. Full instructions: see README.md at the root of the deepseek-megapack repository.",
       "",
     ].join("\n"),
