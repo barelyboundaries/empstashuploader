@@ -44,8 +44,8 @@ from empornium_megapack.config import get_settings
 
 
 def test_manifest_registers_build_single_scene_task():
-    """BuildSingleScene is registered in deepseek-megapack.yml with defaultArgs: {mode: single}."""
-    manifest_path = PLUGIN_DIR / "deepseek-megapack.yml"
+    """BuildSingleScene is registered in empornium-megapack.yml with defaultArgs: {mode: single}."""
+    manifest_path = PLUGIN_DIR / "empornium-megapack.yml"
     assert manifest_path.exists(), f"Manifest not found at {manifest_path}"
 
     content = manifest_path.read_text(encoding="utf-8")

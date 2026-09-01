@@ -520,11 +520,11 @@ class TestProgressProtocolConformance:
 
 
 # ============================================================================
-# 5. MANIFEST ENTRYPOINT CONTRACT (deepseek-megapack.yml exec + task.py)
+# 5. MANIFEST ENTRYPOINT CONTRACT (empornium-megapack.yml exec + task.py)
 # ============================================================================
 
 def _manifest_exec(yml_path):
-    """Parse the top-level `exec:` list from deepseek-megapack.yml.
+    """Parse the top-level `exec:` list from empornium-megapack.yml.
 
     Tiny block parser (no pyyaml dependency): the exec block is the list of
     `  - "..."` items immediately following the `exec:` key, ending at the
@@ -554,15 +554,15 @@ class TestDispatcherExecution:
     """
 
     def test_manifest_exec_is_python_task_py(self):
-        """deepseek-megapack.yml exec is exactly ["python", "{pluginDir}/task.py"]."""
-        yml_path = PLUGIN_DIR / "deepseek-megapack.yml"
+        """empornium-megapack.yml exec is exactly ["python", "{pluginDir}/task.py"]."""
+        yml_path = PLUGIN_DIR / "empornium-megapack.yml"
         assert yml_path.exists(), f"missing plugin manifest: {yml_path}"
         exec_value = _manifest_exec(yml_path)
         assert exec_value == ["python", "{pluginDir}/task.py"]
 
     def test_manifest_exec_target_exists(self):
         """The exec target resolves to a real file beside the manifest (plugin/task.py)."""
-        yml_path = PLUGIN_DIR / "deepseek-megapack.yml"
+        yml_path = PLUGIN_DIR / "empornium-megapack.yml"
         exec_value = _manifest_exec(yml_path)
         target = exec_value[-1]
         assert target.startswith("{pluginDir}/"), (
