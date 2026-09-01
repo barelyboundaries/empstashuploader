@@ -24,7 +24,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
 import task
-from deepseek_megapack.metadata import (
+from empornium_megapack.metadata import (
     resolution_for,
     format_duration,
     join_names,

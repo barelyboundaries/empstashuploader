@@ -4,7 +4,7 @@ Covers:
 Tier 1: DEEPSEEK_BACKEND_DIR environment variable
 Tier 2: Active environment / site-packages (importlib.util.find_spec)
 Tier 3: Git repository checkout (CURRENT_DIR.parent / "backend")
-Tier 4: Vendored fallback directory (CURRENT_DIR / "deepseek_megapack")
+Tier 4: Vendored fallback directory (CURRENT_DIR / "empornium_megapack")
 Tier 5: Fallback when package is not found anywhere
 """
 
@@ -53,7 +53,7 @@ def test_tier2_discovery_via_site_packages(monkeypatch):
 
     stderr_buf = io.StringIO()
     with patch.object(sys.stderr, "write", stderr_buf.write):
-        mod = task.resolve_backend("deepseek_megapack")
+        mod = task.resolve_backend("empornium_megapack")
 
     assert mod is not None
     logs = stderr_buf.getvalue()
@@ -68,7 +68,7 @@ def test_tier3_discovery_via_repo_checkout(tmp_path, monkeypatch):
     with patch("importlib.util.find_spec", return_value=None):
         stderr_buf = io.StringIO()
         with patch.object(sys.stderr, "write", stderr_buf.write):
-            mod = task.resolve_backend("deepseek_megapack")
+            mod = task.resolve_backend("empornium_megapack")
 
         assert mod is not None
         logs = stderr_buf.getvalue()

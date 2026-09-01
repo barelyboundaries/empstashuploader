@@ -24,7 +24,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
 import task
-from deepseek_megapack.metadata import resolution_for, format_duration
+from empornium_megapack.metadata import resolution_for, format_duration
 
 
 def test_stage4b_widened_scene_payload_in_manifest(tmp_path):

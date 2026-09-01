@@ -1,5 +1,5 @@
 import pytest
-from deepseek_megapack.build import sanitize_name
+from empornium_megapack.build import sanitize_name
 
 CORPUS = [
     ("", "Untitled"),

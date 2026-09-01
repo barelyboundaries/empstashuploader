@@ -58,7 +58,7 @@
     return "run-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
   }
 
-  // Mirrors metadata.empify() in backend/deepseek_megapack/metadata.py exactly:
+  // Mirrors metadata.empify() in backend/empornium_megapack/metadata.py exactly:
   // Unicode-aware strip of non [letter/digit/_/./space/-] (removed chars are NOT
   // separators), separator runs -> ".", trim edge dots, 32-char cap.
   // Parity-pinned by plugin/tests/test_empify_parity.spec.mjs.

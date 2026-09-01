@@ -47,7 +47,7 @@ from task import (
     validate_pack_files_present,
     sanitize_name,
 )
-from deepseek_megapack.torrents import (
+from empornium_megapack.torrents import (
     piece_size_for,
     calculate_piece_size,
     create_torrent,

@@ -25,10 +25,10 @@ if str(PLUGIN_DIR) not in sys.path:
     sys.path.insert(0, str(PLUGIN_DIR))
 
 import task
-from deepseek_megapack.config import get_settings
-from deepseek_megapack.torrents import create_torrent, TorrentError
-from deepseek_megapack.images import generate_contact_sheet as domain_generate_cs, ContactSheetError
-from deepseek_megapack.build import sanitize_name, write_manifest
+from empornium_megapack.config import get_settings
+from empornium_megapack.torrents import create_torrent, TorrentError
+from empornium_megapack.images import generate_contact_sheet as domain_generate_cs, ContactSheetError
+from empornium_megapack.build import sanitize_name, write_manifest
 
 
 # ---------------------------------------------------------------------------

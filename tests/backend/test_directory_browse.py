@@ -1,6 +1,6 @@
 import pytest
-from deepseek_megapack.config import Settings
-from deepseek_megapack.gql import StashClient, StashError
+from empornium_megapack.config import Settings
+from empornium_megapack.gql import StashClient, StashError
 
 
 def test_list_directory_success(monkeypatch):

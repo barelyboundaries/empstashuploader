@@ -25,10 +25,10 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
 import task
-from deepseek_megapack.images import make_thumbnail, fit_presentation_budget
-from deepseek_megapack.metadata import THUMB_WIDTH, THUMB_RENDER_WIDTH
-from deepseek_megapack.build import verify_preflight_checklist
-from deepseek_megapack.config import get_settings
+from empornium_megapack.images import make_thumbnail, fit_presentation_budget
+from empornium_megapack.metadata import THUMB_WIDTH, THUMB_RENDER_WIDTH
+from empornium_megapack.build import verify_preflight_checklist
+from empornium_megapack.config import get_settings
 
 
 def test_make_thumbnail_resize_preserve_aspect_ratio(tmp_path):

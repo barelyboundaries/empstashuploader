@@ -8,7 +8,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // plugin/assets/ is the SINGLE source of the review UI: it is served by Stash
-// via ui.assets, and the backend/deepseek_megapack/static/ copies that used to
+// via ui.assets, and the backend/empornium_megapack/static/ copies that used to
 // be parity-checked against it were deleted in the release audit (T4). There
 // is no second copy to diff against anymore, so this guard pins each file's
 // exact content as a hash-of-record instead.

@@ -53,7 +53,7 @@ from task import (
 
 def _get_domain():
     try:
-        import deepseek_megapack as dm
+        import empornium_megapack as dm
         return dm
     except ImportError:
         import app as dm
@@ -70,8 +70,8 @@ class TestFeature1PackagingAndDiscovery:
         """1.1 DEEPSEEK_BACKEND_DIR environment variable is honored when set."""
         fake_backend = tmp_path / "custom_backend"
         fake_backend.mkdir()
-        (fake_backend / "deepseek_megapack").mkdir()
-        (fake_backend / "deepseek_megapack" / "__init__.py").write_text("# fake pkg", encoding="utf-8")
+        (fake_backend / "empornium_megapack").mkdir()
+        (fake_backend / "empornium_megapack" / "__init__.py").write_text("# fake pkg", encoding="utf-8")
 
         monkeypatch.setenv("DEEPSEEK_BACKEND_DIR", str(fake_backend))
         assert os.environ.get("DEEPSEEK_BACKEND_DIR") == str(fake_backend)
@@ -104,7 +104,7 @@ class TestFeature1PackagingAndDiscovery:
 
 
 # ============================================================================
-# FEATURE 2: Package Rename to deepseek_megapack (Step 1B) (5 tests)
+# FEATURE 2: Package Rename to empornium_megapack (Step 1B) (5 tests)
 # ============================================================================
 class TestFeature2PackageRename:
     """Feature 2: Domain package importability, modules, and namespaces."""

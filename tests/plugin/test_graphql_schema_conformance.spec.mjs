@@ -13,7 +13,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // pre-check against a live Stash (verified on v0.31.1-160-gc1fa78e0).
 // The correct selection is the alias `oshash: fingerprint(type: "oshash")`,
 // which keeps the downstream `file.oshash` shape unchanged.
-// The backend/deepseek_megapack/static/ copy was deleted in the release audit
+// The backend/empornium_megapack/static/ copy was deleted in the release audit
 // (T4) — plugin/assets/review.js is the single source of the review UI.
 const SOURCES = [path.resolve(__dirname, '../../plugin/assets/review.js')];
 

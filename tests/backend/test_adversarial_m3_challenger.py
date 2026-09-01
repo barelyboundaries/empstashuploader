@@ -35,8 +35,8 @@ from plugin.task import (
     run_build_megapack,
     parse_input_payload,
 )
-from deepseek_megapack.paths import oshash_file, PathMapper, verify_same_file
-from deepseek_megapack.metadata import (
+from empornium_megapack.paths import oshash_file, PathMapper, verify_same_file
+from empornium_megapack.metadata import (
     resolution_for,
     format_duration,
     join_names,
@@ -52,7 +52,7 @@ from deepseek_megapack.metadata import (
     normalize_meta_input,
     ImagePlaceholderError,
 )
-from deepseek_megapack.torrents import (
+from empornium_megapack.torrents import (
     piece_size_for,
     source_for_announce,
     validate_announce_url,
@@ -62,15 +62,15 @@ from deepseek_megapack.torrents import (
     MIN_PIECE_SIZE,
     MAX_PIECE_EXPONENT,
 )
-from deepseek_megapack.images import (
+from empornium_megapack.images import (
     sha256_file,
     enforce_size_limit,
     _retry_delay,
     _retry_after_seconds,
     ContactSheetError,
 )
-from deepseek_megapack.build import unique_names, make_bundle, stage_payload, BuildError
-from deepseek_megapack.config import Settings
+from empornium_megapack.build import unique_names, make_bundle, stage_payload, BuildError
+from empornium_megapack.config import Settings
 
 
 

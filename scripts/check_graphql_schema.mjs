@@ -68,7 +68,7 @@ const saveSchema = flag('--save-schema');
 const url = flag('--url') || process.env.STASH_URL || 'http://127.0.0.1:9999/graphql';
 
 // plugin/assets/review.js is the single source of the review UI: the
-// backend/deepseek_megapack/static/ mirror was deleted in the release audit
+// backend/empornium_megapack/static/ mirror was deleted in the release audit
 // (T4), so there is no second served copy to keep byte-identical anymore.
 const DEFAULT_FILES = [
   'plugin/assets/review.js',

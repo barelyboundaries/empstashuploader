@@ -25,8 +25,8 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
 import task
-from deepseek_megapack.config import Settings
-from deepseek_megapack.images import ContactSheetError
+from empornium_megapack.config import Settings
+from empornium_megapack.images import ContactSheetError
 
 
 def test_stage5b_all_remote_urls_clears_preview_gate(tmp_path, capsys):
@@ -57,8 +57,8 @@ def test_stage5b_all_remote_urls_clears_preview_gate(tmp_path, capsys):
         "https://hamsterimg.net/images/2026/08/23/thumb2.jpg",
     ]
 
-    with patch("deepseek_megapack.config.get_settings", return_value=fake_settings), \
-         patch("deepseek_megapack.images.upload_hamster", side_effect=remote_urls):
+    with patch("empornium_megapack.config.get_settings", return_value=fake_settings), \
+         patch("empornium_megapack.images.upload_hamster", side_effect=remote_urls):
         result = task.run_build_megapack(payload)
 
     assert result["status"] == "success"
@@ -136,8 +136,8 @@ def test_stage5b_mixed_urls_triggers_preview_gate(tmp_path, capsys):
             return remote_url1
         raise ContactSheetError("Network timeout during upload")
 
-    with patch("deepseek_megapack.config.get_settings", return_value=fake_settings), \
-         patch("deepseek_megapack.images.upload_hamster", side_effect=side_effect_upload):
+    with patch("empornium_megapack.config.get_settings", return_value=fake_settings), \
+         patch("empornium_megapack.images.upload_hamster", side_effect=side_effect_upload):
         result = task.run_build_megapack(payload)
 
     assert result["status"] == "success"

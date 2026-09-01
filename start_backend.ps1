@@ -41,5 +41,5 @@ if ($ffmpegDir -and (Test-Path (Join-Path $ffmpegDir "ffmpeg.exe"))) {
 
 # --- launch ---
 # Propagate uvicorn's exit code (bind failure previously surfaced as exit 0).
-& $python -m uvicorn deepseek_megapack.main:app --host 127.0.0.1 --port 9941 --app-dir $appDir
+& $python -m uvicorn empornium_megapack.main:app --host 127.0.0.1 --port 9941 --app-dir $appDir
 exit $LASTEXITCODE

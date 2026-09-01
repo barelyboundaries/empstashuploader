@@ -19,7 +19,7 @@ def find_config_local() -> Path:
 
     Search order: repo root first (dev checkout, unchanged behavior), then
     the package's parent dir — which is the plugin dir when the package is
-    vendored at ~/.stash/plugins/deepseek-megapack/deepseek_megapack/.
+    vendored at ~/.stash/plugins/deepseek-megapack/empornium_megapack/.
     """
     for candidate in (CONFIG_LOCAL, PACKAGE_DIR / CONFIG_LOCAL_NAME):
         if candidate.exists():

@@ -47,7 +47,7 @@ from task import (
 
 def _resolve_domain():
     try:
-        import deepseek_megapack as dm
+        import empornium_megapack as dm
         return dm
     except ImportError:
         import app as dm
@@ -283,7 +283,7 @@ class TestConsolidationCoreAcceptanceCriteria:
         assert len(list(out_dir.glob("*_bbcode.txt"))) == 0
 
     # ------------------------------------------------------------------------
-    # CRITERION 7: Clean importability of deepseek_megapack / domain package
+    # CRITERION 7: Clean importability of empornium_megapack / domain package
     # ------------------------------------------------------------------------
     def test_criterion_7_clean_importability_from_arbitrary_cwd(self, tmp_path):
         """Clean importability of domain package from arbitrary working directories."""

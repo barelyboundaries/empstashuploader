@@ -2,8 +2,8 @@ import time
 from fastapi.testclient import TestClient
 import pytest
 
-from deepseek_megapack.main import app
-from deepseek_megapack.token_store import TokenStore, token_store
+from empornium_megapack.main import app
+from empornium_megapack.token_store import TokenStore, token_store
 
 
 @pytest.fixture(autouse=True)

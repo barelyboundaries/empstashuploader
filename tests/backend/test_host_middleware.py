@@ -8,7 +8,7 @@ because Starlette's TestClient sends it on every request.
 
 from fastapi.testclient import TestClient
 
-from deepseek_megapack.main import app
+from empornium_megapack.main import app
 
 client = TestClient(app)
 

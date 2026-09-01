@@ -1,7 +1,7 @@
 import pytest
 
-from deepseek_megapack.config import Settings
-from deepseek_megapack.paths import PathMapper, oshash_file, verify_same_file
+from empornium_megapack.config import Settings
+from empornium_megapack.paths import PathMapper, oshash_file, verify_same_file
 
 
 

@@ -3,7 +3,7 @@ import json
 import pytest
 import torf
 
-from deepseek_megapack.torrents import (
+from empornium_megapack.torrents import (
     TorrentError,
     _exact_exclude_globs,
     _fnmatch_escape,

@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from deepseek_megapack.main import app
+from empornium_megapack.main import app
 
 client = TestClient(app)
 

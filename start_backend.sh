@@ -41,5 +41,5 @@ if [ -n "$FFMPEG_DIR" ]; then
 fi
 
 # --- launch ---
-exec "$PYTHON" -m uvicorn deepseek_megapack.main:app \
+exec "$PYTHON" -m uvicorn empornium_megapack.main:app \
     --host 127.0.0.1 --port 9941 --app-dir "$APP_DIR"

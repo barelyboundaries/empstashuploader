@@ -63,7 +63,7 @@ def emit_progress(progress: float, message: Optional[str] = None):
 def check_dependencies():
     """Validate required packages and system binaries before starting."""
     # Python 3.12+ ships tomllib in the stdlib and the backend package
-    # (deepseek_megapack.config) hard-requires it, so older interpreters
+    # (empornium_megapack.config) hard-requires it, so older interpreters
     # cannot run this task at all.
     try:
         import tomllib  # noqa: F401
@@ -114,7 +114,7 @@ def ensure_python_env():
     Re-exec this script into a sibling venv when the current interpreter cannot
     import the heavy dependencies.
 
-    Trigger: 'import deepseek_megapack' OR 'import torf' fails.
+    Trigger: 'import empornium_megapack' OR 'import torf' fails.
     Interpreter search order:
       1. DEEPSEEK_VENV environment variable
       2. A venv directory beside the plugin
@@ -127,7 +127,7 @@ def ensure_python_env():
     candidate qualifies, fall through: check_dependencies() reports the exact
     problem with an actionable message.
     """
-    for mod_name in ("deepseek_megapack", "torf"):
+    for mod_name in ("empornium_megapack", "torf"):
         try:
             __import__(mod_name)
         except ImportError:
@@ -174,7 +174,7 @@ ensure_python_env()
 check_dependencies()
 
 
-def resolve_backend(package_name: str = "deepseek_megapack"):
+def resolve_backend(package_name: str = "empornium_megapack"):
     """
     4-Tier Ordered Discovery Protocol:
     1. DEEPSEEK_BACKEND_DIR env var
@@ -243,10 +243,10 @@ resolve_backend()
 
 import urllib.parse
 import torf
-from deepseek_megapack import images as _domain_images
-from deepseek_megapack import config as _domain_config
-from deepseek_megapack import torrents as _domain_torrents
-from deepseek_megapack.torrents import (
+from empornium_megapack import images as _domain_images
+from empornium_megapack import config as _domain_config
+from empornium_megapack import torrents as _domain_torrents
+from empornium_megapack.torrents import (
     create_torrent,
     calculate_piece_size,
     piece_size_for,
@@ -255,16 +255,16 @@ from deepseek_megapack.torrents import (
     source_for_announce,
     TorrentError,
 )
-from deepseek_megapack.images import generate_contact_sheet as _domain_generate_contact_sheet
-from deepseek_megapack.images import (
+from empornium_megapack.images import generate_contact_sheet as _domain_generate_contact_sheet
+from empornium_megapack.images import (
     extract_screens as _domain_extract_screens,
     fetch_stash_image as _domain_fetch_stash_image,
     probe_duration as _domain_probe_duration,
     make_thumbnail as _domain_make_thumbnail,
     fit_presentation_budget as _domain_fit_presentation_budget,
 )
-from deepseek_megapack.build import sanitize_name, write_manifest, verify_preflight_checklist
-from deepseek_megapack.metadata import (
+from empornium_megapack.build import sanitize_name, write_manifest, verify_preflight_checklist
+from empornium_megapack.metadata import (
     bbcode_escape,
     resolution_for,
     format_duration,
@@ -481,7 +481,7 @@ def generate_contact_sheet(
     total_scenes: int = 1,
 ) -> str:
     """
-    Generates a contact sheet using deepseek_megapack.images.generate_contact_sheet.
+    Generates a contact sheet using empornium_megapack.images.generate_contact_sheet.
     Falls back gracefully to Pillow placeholder on failure, timeout, or error.
     """
     grid_layout = normalize_grid_layout(layout)
@@ -694,7 +694,7 @@ def get_win32_creation_time(file_path: str) -> float:
     try:
         if sys.platform == "win32":
             try:
-                from deepseek_megapack.review import _os_creation_time
+                from empornium_megapack.review import _os_creation_time
                 ct = _os_creation_time(str_path)
                 if ct is not None and ct > 0:
                     return ct
@@ -721,7 +721,7 @@ def get_volume_serial_number(path_str: str) -> Optional[int]:
             return None
     try:
         try:
-            from deepseek_megapack.review import get_volume_serial_number as _app_vol
+            from empornium_megapack.review import get_volume_serial_number as _app_vol
             v = _app_vol(path_str)
             if v is not None:
                 return v

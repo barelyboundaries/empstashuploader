@@ -28,7 +28,7 @@ if str(PLUGIN_DIR) not in sys.path:
     sys.path.insert(0, str(PLUGIN_DIR))
 
 import task
-from deepseek_megapack.torrents import (
+from empornium_megapack.torrents import (
     TorrentError,
     create_torrent,
     piece_size_for,
@@ -37,7 +37,7 @@ from deepseek_megapack.torrents import (
     validate_announce_url,
     sanitize_announce_url,
 )
-from deepseek_megapack.build import sanitize_name, write_manifest
+from empornium_megapack.build import sanitize_name, write_manifest
 
 
 ANNOUNCE_URL = "http://tracker.empornium.sx:2710/aaaaaaaa/bbbbbbbb/announce"

@@ -20,9 +20,9 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.append(str(REPO_ROOT))
 
 import task
-from deepseek_megapack import config as _domain_config
-from deepseek_megapack.config import Settings
-from deepseek_megapack.images import ContactSheetError
+from empornium_megapack import config as _domain_config
+from empornium_megapack.config import Settings
+from empornium_megapack.images import ContactSheetError
 
 
 # ============================================================================
@@ -49,7 +49,7 @@ def test_upload_previews_shrinks_oversize_image_before_upload(tmp_path, monkeypa
         call_size = Path(p).stat().st_size
         return "https://hamsterimg.net/shrunk.jpg"
 
-    monkeypatch.setattr("deepseek_megapack.images.upload_hamster", mock_upload)
+    monkeypatch.setattr("empornium_megapack.images.upload_hamster", mock_upload)
 
     urls = task.upload_previews([str(img_path)], {"upload_previews": True})
 
@@ -71,7 +71,7 @@ def test_upload_previews_under_cap_is_byte_identical(tmp_path, monkeypatch):
     settings = _domain_config.get_settings()
     monkeypatch.setattr(settings, "upload_image_max_bytes", original_size + 10000)
     monkeypatch.setattr(settings, "hamster_api_key", "test_key")
-    monkeypatch.setattr("deepseek_megapack.images.upload_hamster", lambda p, settings=None: "https://hamsterimg.net/small.jpg")
+    monkeypatch.setattr("empornium_megapack.images.upload_hamster", lambda p, settings=None: "https://hamsterimg.net/small.jpg")
 
     urls = task.upload_previews([str(img_path)], {"upload_previews": True})
 
@@ -168,7 +168,7 @@ def test_run_upload_cover_success_png_with_alpha(tmp_path, monkeypatch):
         uploaded_path = str(p)
         return "https://hamsterimg.net/images/pasted_cover_001.jpg"
 
-    monkeypatch.setattr("deepseek_megapack.images.upload_hamster", mock_upload)
+    monkeypatch.setattr("empornium_megapack.images.upload_hamster", mock_upload)
 
     payload = {
         "run_id": "cover-test-rgba-001",
@@ -239,7 +239,7 @@ def test_build_payload_with_cover_image_url_override(tmp_path, monkeypatch):
     }
 
     mock_fetch = MagicMock(return_value=None)
-    monkeypatch.setattr("deepseek_megapack.images.fetch_stash_image", mock_fetch)
+    monkeypatch.setattr("empornium_megapack.images.fetch_stash_image", mock_fetch)
 
     result = task.run_build_megapack(payload)
 

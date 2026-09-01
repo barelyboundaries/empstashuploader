@@ -5,7 +5,7 @@ import zipfile
 import pytest
 import torf
 
-from deepseek_megapack.build import (
+from empornium_megapack.build import (
     BuildError,
     CONTACT_SHEETS_DIR,
     _same_volume,
@@ -15,11 +15,11 @@ from deepseek_megapack.build import (
     stage_payload,
     unique_names,
 )
-from deepseek_megapack.images import ContactSheetError
-from deepseek_megapack.metadata import ImagePlaceholderError, finalize_description
-from deepseek_megapack.models import BuildRequest, PackMetaInput, ReviewRequest, SceneMetaInput
-from deepseek_megapack.review import PackService
-from deepseek_megapack.torrents import piece_size_for, TorrentError
+from empornium_megapack.images import ContactSheetError
+from empornium_megapack.metadata import ImagePlaceholderError, finalize_description
+from empornium_megapack.models import BuildRequest, PackMetaInput, ReviewRequest, SceneMetaInput
+from empornium_megapack.review import PackService
+from empornium_megapack.torrents import piece_size_for, TorrentError
 from test_images import _big_jpeg, fake_upload, no_backoff, settings_with, stub_vcsi, vcstub
 from test_review import FakeStash, make_file, make_scene
 
@@ -95,7 +95,7 @@ def test_stage_payload_copies_sheets_and_dedupes_names(tmp_path, build_settings)
 def test_stage_payload_copies_when_volume_differs(tmp_path, build_settings, monkeypatch):
     sheet = tmp_path / "s.jpg"
     _big_jpeg(sheet)
-    monkeypatch.setattr("deepseek_megapack.build._same_volume", lambda source, staging: False)
+    monkeypatch.setattr("empornium_megapack.build._same_volume", lambda source, staging: False)
     staged = _staged(tmp_path, build_settings, (_video(tmp_path, "a.mp4"), str(sheet), _video(tmp_path, "b.mp4"), str(sheet)))
     assert staged[0].linked is False
     assert not os.path.samefile(staged[0].staged_path, tmp_path / "a.mp4")
@@ -354,7 +354,7 @@ def test_pack_build_rolls_back_staging_and_artifacts(tmp_path, build_settings, v
     def boom(payload_dir, announce_url, out_path, **kwargs):
         raise BuildError("torrent generation needs 6 more MiB")
 
-    monkeypatch.setattr("deepseek_megapack.review.create_torrent", boom)
+    monkeypatch.setattr("empornium_megapack.review.create_torrent", boom)
     with pytest.raises(BuildError, match="6 more MiB"):
         svc.build(BuildRequest(scene_ids=["1"]))
     assert not (build_settings.staging_dir / "packs").exists() or not any((build_settings.staging_dir / "packs").iterdir())
@@ -470,7 +470,7 @@ def test_build_mapped_oshash_matches_is_usable(tmp_path):
         empornium_announce_url=ANNOUNCE,
         path_mappings=[["/media", str(tmp_path)]],
     )
-    from deepseek_megapack.paths import oshash_file
+    from empornium_megapack.paths import oshash_file
 
     osh = oshash_file(real)
     scenes = {"1": make_scene("1", [make_file("f1", "/media/right.mp4", size=4096)], title="Mapped")}

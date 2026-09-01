@@ -25,5 +25,5 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["deepseek_megapack*"]
+include = ["empornium_megapack*"]
 exclude = ["tests*"]

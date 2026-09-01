@@ -1,7 +1,7 @@
 """Tier 5 Domain Adversarial Test Suite.
 
 Comprehensive white-box adversarial stress tests covering all domain modules in
-`backend/deepseek_megapack/`:
+`backend/empornium_megapack/`:
 - models.py
 - config.py
 - paths.py
@@ -31,7 +31,7 @@ import pydantic
 import pytest
 import torf
 
-from deepseek_megapack.build import (
+from empornium_megapack.build import (
     BuildError,
     CONTACT_SHEETS_DIR,
     PACK_ROOT_NAME,
@@ -48,9 +48,9 @@ from deepseek_megapack.build import (
     unique_names,
     write_manifest,
 )
-from deepseek_megapack.config import CONFIG_LOCAL, CONFIG_LOCAL_NAME, Settings, get_settings
-from deepseek_megapack.gql import SCENE_QUERY, MOVE_FILES_MUTATION, StashClient, StashError
-from deepseek_megapack.images import (
+from empornium_megapack.config import CONFIG_LOCAL, CONFIG_LOCAL_NAME, Settings, get_settings
+from empornium_megapack.gql import SCENE_QUERY, MOVE_FILES_MUTATION, StashClient, StashError
+from empornium_megapack.images import (
     HAMSTER_IMAGE_EXT,
     HAMSTER_IMAGE_MIME,
     HAMSTER_UPLOAD_URL,
@@ -65,7 +65,7 @@ from deepseek_megapack.images import (
     sha256_file,
     upload_hamster,
 )
-from deepseek_megapack.metadata import (
+from empornium_megapack.metadata import (
     MAX_NOTES_LEN,
     MAX_TAGS,
     MAX_TITLE_LEN,
@@ -85,7 +85,7 @@ from deepseek_megapack.metadata import (
     scene_title_default,
     tag_sources_for_scene,
 )
-from deepseek_megapack.models import (
+from empornium_megapack.models import (
     ApplyRequest,
     ApplyResponse,
     BuildRequest,
@@ -113,14 +113,14 @@ from deepseek_megapack.models import (
     SceneReview,
     WarningItem,
 )
-from deepseek_megapack.paths import (
+from empornium_megapack.paths import (
     OSHASH_CHUNK,
     PathMapper,
     _key,
     oshash_file,
     verify_same_file,
 )
-from deepseek_megapack.review import (
+from empornium_megapack.review import (
     PackService,
     _epoch,
     _needs_copy,
@@ -128,7 +128,7 @@ from deepseek_megapack.review import (
     _os_creation_time,
     _scene_id_key,
 )
-from deepseek_megapack.torrents import (
+from empornium_megapack.torrents import (
     CREATED_BY,
     MAX_PIECE_EXPONENT,
     MIN_PIECE_SIZE,
@@ -284,7 +284,7 @@ class TestConfigAdversarial:
         toml_file = tmp_path / CONFIG_LOCAL_NAME
         toml_file.write_bytes(toml_content)
 
-        monkeypatch.setattr("deepseek_megapack.config.CONFIG_LOCAL", toml_file)
+        monkeypatch.setattr("empornium_megapack.config.CONFIG_LOCAL", toml_file)
         get_settings.cache_clear()
         try:
             s = get_settings()
@@ -647,12 +647,12 @@ class TestImagesAdversarial:
         monkeypatch.setattr("shutil.which", lambda name: None)
         cove_mock = tmp_path / "cove_ffmpeg.exe"
         cove_mock.touch()
-        monkeypatch.setattr("deepseek_megapack.images._COVE_FFMPEG", cove_mock)
+        monkeypatch.setattr("empornium_megapack.images._COVE_FFMPEG", cove_mock)
         assert resolve_ffmpeg(s2) == str(cove_mock)
 
         # Priority 4: None
-        monkeypatch.setattr("deepseek_megapack.images._COVE_FFMPEG", tmp_path / "nonexistent.exe")
-        monkeypatch.setattr("deepseek_megapack.images.Path.home", classmethod(lambda cls: tmp_path))
+        monkeypatch.setattr("empornium_megapack.images._COVE_FFMPEG", tmp_path / "nonexistent.exe")
+        monkeypatch.setattr("empornium_megapack.images.Path.home", classmethod(lambda cls: tmp_path))
         assert resolve_ffmpeg(s2) is None
 
     def test_vcsi_command_resolution_and_missing_error(self, tmp_path, monkeypatch):
@@ -706,7 +706,7 @@ class TestImagesAdversarial:
             return False
 
         monkeypatch.setattr(
-            "deepseek_megapack.images.generate_contact_sheet",
+            "empornium_megapack.images.generate_contact_sheet",
             failing_gen,
         )
         with pytest.raises(ContactSheetError, match="generation failed"):

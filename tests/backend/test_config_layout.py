@@ -8,7 +8,7 @@ local settings file and runtime dirs) and a vendored plugin dir under
 
 from pathlib import Path
 
-from deepseek_megapack.config import (
+from empornium_megapack.config import (
     CONFIG_LOCAL_NAME,
     Settings,
     find_config_local,
@@ -30,7 +30,7 @@ class TestDevCheckoutRuntimeDefaults:
     def test_defaults_under_repo_root_when_backend_and_plugin_exist(self, tmp_path, monkeypatch):
         """backend/ + plugin/ siblings mark a dev checkout → REPO_ROOT/runtime."""
         fake_root = _make_checkout(tmp_path / "checkout")
-        monkeypatch.setattr("deepseek_megapack.config.REPO_ROOT", fake_root)
+        monkeypatch.setattr("empornium_megapack.config.REPO_ROOT", fake_root)
 
         s = Settings()
 
@@ -48,7 +48,7 @@ class TestVendoredRuntimeDefaults:
         fake_root.mkdir()
         fake_home = tmp_path / "home"
         fake_home.mkdir()
-        monkeypatch.setattr("deepseek_megapack.config.REPO_ROOT", fake_root)
+        monkeypatch.setattr("empornium_megapack.config.REPO_ROOT", fake_root)
         monkeypatch.setattr(Path, "home", lambda: fake_home)
 
         s = Settings()
@@ -64,7 +64,7 @@ class TestVendoredRuntimeDefaults:
         fake_root.mkdir(parents=True)
         fake_home = tmp_path / "home"
         fake_home.mkdir()
-        monkeypatch.setattr("deepseek_megapack.config.REPO_ROOT", fake_root)
+        monkeypatch.setattr("empornium_megapack.config.REPO_ROOT", fake_root)
         monkeypatch.setattr(Path, "home", lambda: fake_home)
 
         s = Settings()
@@ -94,9 +94,9 @@ class TestConfigLocalSearchOrder:
         (fake_root / CONFIG_LOCAL_NAME).write_bytes(b"[backend]\nport = 9997\n")
         (fake_pkg_parent / CONFIG_LOCAL_NAME).write_bytes(b"[backend]\nport = 9998\n")
         monkeypatch.setattr(
-            "deepseek_megapack.config.CONFIG_LOCAL", fake_root / CONFIG_LOCAL_NAME
+            "empornium_megapack.config.CONFIG_LOCAL", fake_root / CONFIG_LOCAL_NAME
         )
-        monkeypatch.setattr("deepseek_megapack.config.PACKAGE_DIR", fake_pkg_parent)
+        monkeypatch.setattr("empornium_megapack.config.PACKAGE_DIR", fake_pkg_parent)
 
         assert find_config_local() == fake_root / CONFIG_LOCAL_NAME
 
@@ -113,9 +113,9 @@ class TestConfigLocalSearchOrder:
         fake_pkg_parent.mkdir()
         (fake_pkg_parent / CONFIG_LOCAL_NAME).write_bytes(b"[backend]\nport = 9998\n")
         monkeypatch.setattr(
-            "deepseek_megapack.config.CONFIG_LOCAL", fake_root / CONFIG_LOCAL_NAME
+            "empornium_megapack.config.CONFIG_LOCAL", fake_root / CONFIG_LOCAL_NAME
         )
-        monkeypatch.setattr("deepseek_megapack.config.PACKAGE_DIR", fake_pkg_parent)
+        monkeypatch.setattr("empornium_megapack.config.PACKAGE_DIR", fake_pkg_parent)
 
         assert find_config_local() == fake_pkg_parent / CONFIG_LOCAL_NAME
 
@@ -131,8 +131,8 @@ class TestConfigLocalSearchOrder:
         fake_pkg_parent = tmp_path / "plugin_dir"
         fake_pkg_parent.mkdir()
         monkeypatch.setattr(
-            "deepseek_megapack.config.CONFIG_LOCAL", fake_root / CONFIG_LOCAL_NAME
+            "empornium_megapack.config.CONFIG_LOCAL", fake_root / CONFIG_LOCAL_NAME
         )
-        monkeypatch.setattr("deepseek_megapack.config.PACKAGE_DIR", fake_pkg_parent)
+        monkeypatch.setattr("empornium_megapack.config.PACKAGE_DIR", fake_pkg_parent)
 
         assert find_config_local() == fake_root / CONFIG_LOCAL_NAME

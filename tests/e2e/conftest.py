@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 import pytest
 
-# Ensure backend is at the very front of sys.path so 'app' and 'deepseek_megapack' resolve cleanly
+# Ensure backend is at the very front of sys.path so 'app' and 'empornium_megapack' resolve cleanly
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 BACKEND_DIR = PROJECT_ROOT / "backend"
 PLUGIN_DIR = PROJECT_ROOT / "plugin"
@@ -28,11 +28,11 @@ from task import sanitize_name
 
 def resolve_domain():
     """
-    Resolves the domain layer package, preferring deepseek_megapack
+    Resolves the domain layer package, preferring empornium_megapack
     with fallback to app during milestone transition.
     """
     try:
-        import deepseek_megapack as dm
+        import empornium_megapack as dm
         return dm
     except ImportError:
         import app as dm
@@ -41,7 +41,7 @@ def resolve_domain():
 
 @pytest.fixture
 def domain_module():
-    """Fixture providing the active domain module (deepseek_megapack or app)."""
+    """Fixture providing the active domain module (empornium_megapack or app)."""
     return resolve_domain()
 
 

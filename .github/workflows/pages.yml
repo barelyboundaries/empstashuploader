@@ -10,7 +10,7 @@ on:
     branches: [main]
     paths:
       - "plugin/**"
-      - "backend/deepseek_megapack/**"
+      - "backend/empornium_megapack/**"
       - "scripts/build_plugin_zip.mjs"
       - ".github/workflows/pages.yml"
 

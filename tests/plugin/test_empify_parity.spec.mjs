@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 // Parity guard: review.js empifyTag must behave exactly like
-// backend/deepseek_megapack/metadata.py empify(), which is authoritative:
+// backend/empornium_megapack/metadata.py empify(), which is authoritative:
 //
 //   def empify(tag: str) -> str:
 //       cleaned = re.sub(r"[^\w\s._-]", "", tag).lower()
@@ -11,7 +11,7 @@ import path from 'node:path';
 //       return cleaned.strip(".")[:32]
 //
 // Authoritative Python outputs (recorded from the project venv's python
-// importing deepseek_megapack.metadata; repr/ascii form):
+// importing empornium_megapack.metadata; repr/ascii form):
 //
 //   empify('a_b')             -> 'a.b'      (underscore runs become dots)
 //   empify('foo bar')         -> 'foo.bar'  (whitespace runs become dots)

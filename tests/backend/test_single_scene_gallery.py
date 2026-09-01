@@ -4,8 +4,8 @@ from unittest import mock
 
 import pytest
 
-from deepseek_megapack import images
-from deepseek_megapack.config import Settings
+from empornium_megapack import images
+from empornium_megapack.config import Settings
 
 TASK_PY = Path(__file__).resolve().parent.parent.parent / "plugin" / "task.py"
 

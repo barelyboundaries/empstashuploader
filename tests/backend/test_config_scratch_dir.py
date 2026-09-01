@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from deepseek_megapack.config import CONFIG_LOCAL_NAME, REPO_ROOT, Settings, get_settings
+from empornium_megapack.config import CONFIG_LOCAL_NAME, REPO_ROOT, Settings, get_settings
 
 
 class TestScratchDirDefault:
@@ -35,7 +35,7 @@ class TestScratchDirTomlOverride:
         toml_file = tmp_path / CONFIG_LOCAL_NAME
         toml_file.write_bytes(toml_content)
 
-        monkeypatch.setattr("deepseek_megapack.config.CONFIG_LOCAL", toml_file)
+        monkeypatch.setattr("empornium_megapack.config.CONFIG_LOCAL", toml_file)
         get_settings.cache_clear()
         try:
             s = get_settings()
@@ -68,7 +68,7 @@ class TestScratchDirTypeRejection:
         toml_file = tmp_path / CONFIG_LOCAL_NAME
         toml_file.write_bytes(toml_content)
 
-        monkeypatch.setattr("deepseek_megapack.config.CONFIG_LOCAL", toml_file)
+        monkeypatch.setattr("empornium_megapack.config.CONFIG_LOCAL", toml_file)
         get_settings.cache_clear()
         try:
             s = get_settings()
@@ -86,7 +86,7 @@ class TestScratchDirTypeRejection:
         toml_file = tmp_path / CONFIG_LOCAL_NAME
         toml_file.write_bytes(toml_content)
 
-        monkeypatch.setattr("deepseek_megapack.config.CONFIG_LOCAL", toml_file)
+        monkeypatch.setattr("empornium_megapack.config.CONFIG_LOCAL", toml_file)
         get_settings.cache_clear()
         try:
             s = get_settings()

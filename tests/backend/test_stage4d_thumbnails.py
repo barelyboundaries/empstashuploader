@@ -25,7 +25,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
 import task
-from deepseek_megapack.metadata import THUMB_WIDTH
+from empornium_megapack.metadata import THUMB_WIDTH
 
 
 def test_stage4d_thumbnail_markup_and_file_url_gate(tmp_path, capsys):

@@ -270,7 +270,7 @@ def verify_preflight_checklist(
 
     measured_presentation = presentation_bytes if presentation_bytes is not None else sub.get("presentation_bytes")
     if measured_presentation is not None:
-        from deepseek_megapack.config import get_settings
+        from empornium_megapack.config import get_settings
         cap = get_settings().presentation_max_bytes
         total = measured_presentation
         checks.append({

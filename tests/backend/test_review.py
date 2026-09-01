@@ -3,9 +3,9 @@ import os
 import sys
 from ctypes import wintypes
 
-from deepseek_megapack.config import Settings
-from deepseek_megapack.models import ApplyRequest, ReviewRequest
-from deepseek_megapack.review import (
+from empornium_megapack.config import Settings
+from empornium_megapack.models import ApplyRequest, ReviewRequest
+from empornium_megapack.review import (
     ByHandleFileInfo,
     PackService,
     _close_handle,
@@ -48,7 +48,7 @@ def make_file(fid, path, mod_time="2026-01-01T12:00:00-06:00", created_at="2026-
 
 
 def make_scene_review(scene_dict) -> "SceneReview":
-    from deepseek_megapack.models import SceneReview
+    from empornium_megapack.models import SceneReview
 
     return SceneReview(
         scene_id=scene_dict["id"],

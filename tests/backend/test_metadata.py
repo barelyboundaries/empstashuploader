@@ -2,7 +2,7 @@ import tempfile
 import os
 from types import SimpleNamespace
 
-from deepseek_megapack.metadata import (
+from empornium_megapack.metadata import (
     MAX_TAGS,
     bbcode_escape,
     empify,
@@ -15,8 +15,8 @@ from deepseek_megapack.metadata import (
     resolution_for,
     scene_title_default,
 )
-from deepseek_megapack.models import ApplyRequest, MetaRequest, SceneReview
-from deepseek_megapack.review import PackService
+from empornium_megapack.models import ApplyRequest, MetaRequest, SceneReview
+from empornium_megapack.review import PackService
 
 from test_review import FakeStash, make_file, make_scene, make_scene_review, service, touch
 

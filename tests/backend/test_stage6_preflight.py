@@ -25,7 +25,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
 import task
-from deepseek_megapack.build import verify_preflight_checklist
+from empornium_megapack.build import verify_preflight_checklist
 
 
 def test_stage6_preflight_all_checks_pass_on_valid_build(tmp_path):

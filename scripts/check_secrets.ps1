@@ -58,7 +58,7 @@ $selfRel = 'scripts/check_secrets.ps1'
 $rules = [ordered]@{
     'chv-extension-key'     = @{ pattern = '(?i)chv_';                         allow = @() }
     'passkey-credential'    = @{ pattern = '(?i)passkey\s*[:=]\s*["''][^"'']'; allow = @(
-            'backend/deepseek_megapack/torrents.py',
+            'backend/empornium_megapack/torrents.py',
             'tests/backend/test_stage5c_passkey_masking.py',
             'tests/backend/test_torrents.py',
             'tests/backend/test_tier5_domain_adversarial.py') }

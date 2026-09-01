@@ -39,8 +39,8 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
 import task
-from deepseek_megapack.build import verify_preflight_checklist
-from deepseek_megapack.config import get_settings
+from empornium_megapack.build import verify_preflight_checklist
+from empornium_megapack.config import get_settings
 
 
 def test_manifest_registers_build_single_scene_task():

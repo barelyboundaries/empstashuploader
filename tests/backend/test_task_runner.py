@@ -110,7 +110,7 @@ def _module_level_call_lines(source):
             roots = {n.split(".")[0] for n in names}
             if getattr(node, "module", None):
                 roots.add(node.module.split(".")[0])
-            if roots & {"torf", "deepseek_megapack"}:
+            if roots & {"torf", "empornium_megapack"}:
                 first_heavy_import = node.lineno
         if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
             fn = node.value.func
@@ -168,7 +168,7 @@ def test_ensure_python_env_reexecs_into_venv_with_absolute_script_path(monkeypat
     orig_import = __import__
 
     def mock_import(name, *args, **kwargs):
-        if name in ("deepseek_megapack", "torf"):
+        if name in ("empornium_megapack", "torf"):
             raise ImportError(name)
         return orig_import(name, *args, **kwargs)
 
@@ -215,7 +215,7 @@ def test_ensure_python_env_falls_through_when_no_venv_candidate(monkeypatch, tmp
     orig_import = __import__
 
     def mock_import(name, *args, **kwargs):
-        if name in ("deepseek_megapack", "torf"):
+        if name in ("empornium_megapack", "torf"):
             raise ImportError(name)
         return orig_import(name, *args, **kwargs)
 

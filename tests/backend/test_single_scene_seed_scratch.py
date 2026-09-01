@@ -29,7 +29,7 @@ PLUGIN_DIR = Path(__file__).resolve().parent.parent.parent / "plugin"
 if str(PLUGIN_DIR) not in sys.path:
     sys.path.insert(0, str(PLUGIN_DIR))
 
-from deepseek_megapack.build import sanitize_name  # noqa: E402
+from empornium_megapack.build import sanitize_name  # noqa: E402
 
 TASK_PY = PLUGIN_DIR / "task.py"
 

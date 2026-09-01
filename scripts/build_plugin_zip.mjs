@@ -32,7 +32,7 @@ import { deflateRawSync } from "node:zlib";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const pluginDir = join(repoRoot, "plugin");
-const backendPkg = join(repoRoot, "backend", "deepseek_megapack");
+const backendPkg = join(repoRoot, "backend", "empornium_megapack");
 const distDir = join(repoRoot, "dist");
 const zipPath = join(distDir, "deepseek-megapack.zip");
 const indexPath = join(distDir, "index.yml");
@@ -164,14 +164,14 @@ try {
     mkdirSync(dirname(dest), { recursive: true });
     cpSync(abs, dest);
   }
-  // Vendored tier-4 package: backend/deepseek_megapack -> stage/deepseek_megapack
+  // Vendored tier-4 package: backend/empornium_megapack -> stage/empornium_megapack
   const pkgFiles = [];
   for (const ent of readdirSync(backendPkg, { withFileTypes: true })) {
     if (ent.isDirectory() && ent.name === "__pycache__") continue;
     if (ent.isFile()) pkgFiles.push(ent.name);
   }
-  mkdirSync(join(stage, "deepseek_megapack"), { recursive: true });
-  for (const f of pkgFiles) cpSync(join(backendPkg, f), join(stage, "deepseek_megapack", f));
+  mkdirSync(join(stage, "empornium_megapack"), { recursive: true });
+  for (const f of pkgFiles) cpSync(join(backendPkg, f), join(stage, "empornium_megapack", f));
 
   // Installers from repo root + generated 3-line INSTALL.txt (README itself is
   // written by a parallel task and is intentionally NOT copied into the zip).
@@ -190,7 +190,7 @@ try {
   // Fail fast if the acceptance set ever loses a member.
   const required = [
     "deepseek-megapack.yml", "main.js", "style.css", "task.py", "requirements.txt",
-    "assets/review.html", "assets/review.js", "deepseek_megapack/main.py",
+    "assets/review.html", "assets/review.js", "empornium_megapack/main.py",
     "install.ps1", "install.sh", "INSTALL.txt",
   ];
   const missing = required.filter((f) => !existsSync(join(stage, f)));

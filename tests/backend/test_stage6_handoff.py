@@ -102,7 +102,7 @@ def test_stage6_tracker_tags_clean_and_space_joinable(tmp_path):
 
 def test_stage6_empornium_site_url_setting_and_payload_resolution(tmp_path, monkeypatch):
     """Stage 6 cleanup: empornium_site_url is configurable, defaults to empty, and surfaces in submission.json."""
-    from deepseek_megapack.config import Settings, get_settings
+    from empornium_megapack.config import Settings, get_settings
 
     # Verify default in Settings is empty string (no hardcoded domain)
     fresh_settings = Settings()

@@ -37,8 +37,8 @@ from task import (
     parse_input_payload,
     emit_progress,
 )
-from deepseek_megapack.models import MoveFilesRequest, MoveFilesResponse
-from deepseek_megapack.review import PackService
+from empornium_megapack.models import MoveFilesRequest, MoveFilesResponse
+from empornium_megapack.review import PackService
 import torf
 
 

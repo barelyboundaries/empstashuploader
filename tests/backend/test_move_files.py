@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock
 
-from deepseek_megapack.models import MoveFilesRequest, MoveFilesResponse
-from deepseek_megapack.review import PackService
+from empornium_megapack.models import MoveFilesRequest, MoveFilesResponse
+from empornium_megapack.review import PackService
 
 
 

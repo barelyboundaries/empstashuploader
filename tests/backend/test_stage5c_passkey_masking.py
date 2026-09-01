@@ -26,8 +26,8 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
 import task
-from deepseek_megapack.config import Settings
-from deepseek_megapack.torrents import sanitize_announce_url, validate_announce_url
+from empornium_megapack.config import Settings
+from empornium_megapack.torrents import sanitize_announce_url, validate_announce_url
 
 
 def test_stage5c_passkey_masked_in_manifest_and_submission(tmp_path, capsys):
@@ -51,7 +51,7 @@ def test_stage5c_passkey_masked_in_manifest_and_submission(tmp_path, capsys):
         "scenes": [{"id": 1, "path": str(media_file)}],
     }
 
-    with patch("deepseek_megapack.config.get_settings", return_value=fake_settings):
+    with patch("empornium_megapack.config.get_settings", return_value=fake_settings):
         result = task.run_build_megapack(payload)
 
     assert result["status"] == "success"
@@ -107,7 +107,7 @@ def test_stage5c_malformed_announce_url_raises_error(tmp_path):
         "scenes": [{"id": 1, "path": str(media_file)}],
     }
 
-    with patch("deepseek_megapack.config.get_settings", return_value=fake_settings):
+    with patch("empornium_megapack.config.get_settings", return_value=fake_settings):
         with pytest.raises(RuntimeError, match="Invalid announce URL"):
             task.run_build_megapack(payload)
 
@@ -136,7 +136,7 @@ def test_stage5c_payload_announce_ignored_without_explicit_opt_in(tmp_path):
     }
 
     # Case 1: Default (no opt-in) -> uses configured announce
-    with patch("deepseek_megapack.config.get_settings", return_value=fake_settings):
+    with patch("empornium_megapack.config.get_settings", return_value=fake_settings):
         res1 = task.run_build_megapack(payload_default)
 
     tor1 = torf.Torrent.read(res1["torrent_path"])
@@ -156,7 +156,7 @@ def test_stage5c_payload_announce_ignored_without_explicit_opt_in(tmp_path):
     media_file_optin.write_bytes(b"\x00" * 1024)
     payload_opt_in["scenes"] = [{"id": 1, "path": str(media_file_optin)}]
 
-    with patch("deepseek_megapack.config.get_settings", return_value=fake_settings):
+    with patch("empornium_megapack.config.get_settings", return_value=fake_settings):
         res2 = task.run_build_megapack(payload_opt_in)
 
     tor2 = torf.Torrent.read(res2["torrent_path"])

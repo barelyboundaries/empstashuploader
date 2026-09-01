@@ -3,8 +3,8 @@ import sys
 import httpx
 import pytest
 
-from deepseek_megapack.config import Settings
-from deepseek_megapack.images import (
+from empornium_megapack.config import Settings
+from empornium_megapack.images import (
     HAMSTER_UPLOAD_URL,
     ContactSheetError,
     ImageService,
@@ -18,8 +18,8 @@ from deepseek_megapack.images import (
     sha256_file,
     upload_hamster,
 )
-from deepseek_megapack.models import ImagesRequest
-from deepseek_megapack.review import PackService
+from empornium_megapack.models import ImagesRequest
+from empornium_megapack.review import PackService
 from test_review import FakeStash, make_file, make_scene
 
 VCSTUB = r"""
@@ -58,7 +58,7 @@ def vcstub(tmp_path):
 def stub_vcsi(monkeypatch, vcstub):
     def set_vcsi(extra=()):
         monkeypatch.setattr(
-            "deepseek_megapack.images._vcsi_command",
+            "empornium_megapack.images._vcsi_command",
             lambda settings: [sys.executable, str(vcstub)] + list(extra),
         )
 
@@ -100,15 +100,15 @@ class FakeClient:
 
 @pytest.fixture
 def no_backoff(monkeypatch):
-    monkeypatch.setattr("deepseek_megapack.images.time.sleep", lambda seconds: None)
-    monkeypatch.setattr("deepseek_megapack.images.random.uniform", lambda a, b: 0.0)
+    monkeypatch.setattr("empornium_megapack.images.time.sleep", lambda seconds: None)
+    monkeypatch.setattr("empornium_megapack.images.random.uniform", lambda a, b: 0.0)
 
 
 @pytest.fixture
 def record_sleep(monkeypatch):
     calls = []
-    monkeypatch.setattr("deepseek_megapack.images.time.sleep", lambda seconds: calls.append(seconds))
-    monkeypatch.setattr("deepseek_megapack.images.random.uniform", lambda a, b: 0.0)
+    monkeypatch.setattr("empornium_megapack.images.time.sleep", lambda seconds: calls.append(seconds))
+    monkeypatch.setattr("empornium_megapack.images.random.uniform", lambda a, b: 0.0)
     return calls
 
 
@@ -116,7 +116,7 @@ def record_sleep(monkeypatch):
 def fake_upload(monkeypatch):
     def install(responses=()):
         client = FakeClient(responses)
-        monkeypatch.setattr("deepseek_megapack.images.httpx.Client", lambda timeout: client)
+        monkeypatch.setattr("empornium_megapack.images.httpx.Client", lambda timeout: client)
         return client
 
     return install
@@ -145,7 +145,7 @@ def test_resolve_ffmpeg_explicit(tmp_path):
 
 
 def test_resolve_ffmpeg_which(monkeypatch, tmp_path):
-    monkeypatch.setattr("deepseek_megapack.images.shutil.which", lambda name: "C:\\ffmpeg.exe")
+    monkeypatch.setattr("empornium_megapack.images.shutil.which", lambda name: "C:\\ffmpeg.exe")
     assert resolve_ffmpeg(settings_with(tmp_path)) == "C:\\ffmpeg.exe"
 
 
@@ -153,15 +153,15 @@ def test_resolve_ffmpeg_cove_fallback(monkeypatch, tmp_path):
     cove = tmp_path / "cove" / "ffmpeg" / "ffmpeg.exe"
     cove.parent.mkdir(parents=True)
     cove.touch()
-    monkeypatch.setattr("deepseek_megapack.images._COVE_FFMPEG", cove)
-    monkeypatch.setattr("deepseek_megapack.images.shutil.which", lambda name: None)
+    monkeypatch.setattr("empornium_megapack.images._COVE_FFMPEG", cove)
+    monkeypatch.setattr("empornium_megapack.images.shutil.which", lambda name: None)
     assert resolve_ffmpeg(settings_with(tmp_path)) == str(cove)
 
 
 def test_resolve_ffmpeg_none(monkeypatch, tmp_path):
-    monkeypatch.setattr("deepseek_megapack.images.shutil.which", lambda name: None)
-    monkeypatch.setattr("deepseek_megapack.images._COVE_FFMPEG", tmp_path / "missing" / "ffmpeg.exe")
-    monkeypatch.setattr("deepseek_megapack.images.Path.home", classmethod(lambda cls: tmp_path))
+    monkeypatch.setattr("empornium_megapack.images.shutil.which", lambda name: None)
+    monkeypatch.setattr("empornium_megapack.images._COVE_FFMPEG", tmp_path / "missing" / "ffmpeg.exe")
+    monkeypatch.setattr("empornium_megapack.images.Path.home", classmethod(lambda cls: tmp_path))
     assert resolve_ffmpeg(settings_with(tmp_path)) is None
 
 
@@ -181,7 +181,7 @@ def test_generate_contact_sheet_passes_layout(tmp_path, vcstub, stub_vcsi):
 def test_generate_contact_sheet_failure_exit(tmp_path, vcstub):
     monkeypatch = pytest.MonkeyPatch()
     monkeypatch.setattr(
-        "deepseek_megapack.images._vcsi_command",
+        "empornium_megapack.images._vcsi_command",
         lambda settings: [sys.executable, str(vcstub), "--fail"],
     )
     try:
@@ -193,7 +193,7 @@ def test_generate_contact_sheet_failure_exit(tmp_path, vcstub):
 def test_generate_contact_sheet_missing_output(tmp_path, vcstub):
     monkeypatch = pytest.MonkeyPatch()
     monkeypatch.setattr(
-        "deepseek_megapack.images._vcsi_command",
+        "empornium_megapack.images._vcsi_command",
         lambda settings: [sys.executable, str(vcstub), "--noout"],
     )
     try:
@@ -203,8 +203,8 @@ def test_generate_contact_sheet_missing_output(tmp_path, vcstub):
 
 
 def test_generate_contact_sheet_vcsi_unavailable(monkeypatch, tmp_path):
-    monkeypatch.setattr("deepseek_megapack.images.shutil.which", lambda name: None)
-    monkeypatch.setattr("deepseek_megapack.images.sys.executable", str(tmp_path / "nopython.exe"))
+    monkeypatch.setattr("empornium_megapack.images.shutil.which", lambda name: None)
+    monkeypatch.setattr("empornium_megapack.images.sys.executable", str(tmp_path / "nopython.exe"))
     with pytest.raises(ContactSheetError):
         generate_contact_sheet(tmp_path / "v.mp4", tmp_path / "o.jpg", settings_with(tmp_path, vcsi_binary=""))
 
@@ -213,8 +213,8 @@ def test_vcsi_found_next_to_python(monkeypatch, tmp_path):
     venv = tmp_path / "venv" / "Scripts"
     venv.mkdir(parents=True)
     (venv / "vcsi.exe").write_bytes(b"")
-    monkeypatch.setattr("deepseek_megapack.images.shutil.which", lambda name: None)
-    monkeypatch.setattr("deepseek_megapack.images.sys.executable", str(venv / "python.exe"))
+    monkeypatch.setattr("empornium_megapack.images.shutil.which", lambda name: None)
+    monkeypatch.setattr("empornium_megapack.images.sys.executable", str(venv / "python.exe"))
     settings = settings_with(tmp_path, vcsi_binary="")
     assert _vcsi_command(settings) == [str(venv / "vcsi.exe")]
 
@@ -294,7 +294,7 @@ def test_upload_network_error_retried(tmp_path, no_backoff):
 
     monkeypatch = pytest.MonkeyPatch()
     client = BoomClient()
-    monkeypatch.setattr("deepseek_megapack.images.httpx.Client", lambda timeout: client)
+    monkeypatch.setattr("empornium_megapack.images.httpx.Client", lambda timeout: client)
     try:
         img = tmp_path / "cs.jpg"
         img.write_bytes(b"x")
@@ -304,7 +304,7 @@ def test_upload_network_error_retried(tmp_path, no_backoff):
 
 
 def test_retry_delay_exponential(monkeypatch):
-    monkeypatch.setattr("deepseek_megapack.images.random.uniform", lambda a, b: 0.0)
+    monkeypatch.setattr("empornium_megapack.images.random.uniform", lambda a, b: 0.0)
     settings = Settings(contact_sheet_upload_backoff_base=0.5, contact_sheet_upload_backoff_max=15.0)
     assert _retry_delay(0, settings) == 0.5
     assert _retry_delay(1, settings) == 1.0
@@ -313,13 +313,13 @@ def test_retry_delay_exponential(monkeypatch):
 
 
 def test_retry_delay_capped(monkeypatch):
-    monkeypatch.setattr("deepseek_megapack.images.random.uniform", lambda a, b: 0.0)
+    monkeypatch.setattr("empornium_megapack.images.random.uniform", lambda a, b: 0.0)
     settings = Settings(contact_sheet_upload_backoff_base=10.0, contact_sheet_upload_backoff_max=15.0)
     assert _retry_delay(1, settings) == 15.0
 
 
 def test_retry_delay_capped_after_jitter(monkeypatch):
-    monkeypatch.setattr("deepseek_megapack.images.random.uniform", lambda a, b: 0.25)
+    monkeypatch.setattr("empornium_megapack.images.random.uniform", lambda a, b: 0.25)
     settings = Settings(contact_sheet_upload_backoff_base=10.0, contact_sheet_upload_backoff_max=15.0)
     assert _retry_delay(0, settings) == 12.5
     assert _retry_delay(1, settings) == 15.0
@@ -327,7 +327,7 @@ def test_retry_delay_capped_after_jitter(monkeypatch):
 
 def test_retry_delay_never_exceeds_max(monkeypatch):
     calls = []
-    monkeypatch.setattr("deepseek_megapack.images.random.uniform", lambda a, b: calls.append((a, b)) or 0.25)
+    monkeypatch.setattr("empornium_megapack.images.random.uniform", lambda a, b: calls.append((a, b)) or 0.25)
     settings = Settings(contact_sheet_upload_backoff_base=8.0, contact_sheet_upload_backoff_max=10.0)
     for attempt in range(8):
         assert _retry_delay(attempt, settings) <= 10.0
@@ -427,7 +427,7 @@ def test_retry_after_negative_delta_no_sleep_negative(tmp_path, fake_upload, rec
 def test_retry_after_naive_datetime_rejected(monkeypatch):
     from datetime import datetime
 
-    monkeypatch.setattr("deepseek_megapack.images.email.utils.parsedate_to_datetime", lambda raw: datetime(2026, 1, 1, 12, 0, 0))
+    monkeypatch.setattr("empornium_megapack.images.email.utils.parsedate_to_datetime", lambda raw: datetime(2026, 1, 1, 12, 0, 0))
     response = FakeResponse(429, None, False, {"Retry-After": "Thu, 01 Jan 2026 12:00:00 GMT"})
     assert _retry_after_seconds(response) is None
 
@@ -499,7 +499,7 @@ def test_digest_cache_misses_on_change(tmp_path, vcstub, stub_vcsi, fake_upload)
     alt = tmp_path / "vcstub_alt.py"
     alt.write_text(VCSTUB.replace('"|".join(sys.argv[1:]).encode()', 'b"ALT"'), encoding="utf-8")
     monkeypatch = pytest.MonkeyPatch()
-    monkeypatch.setattr("deepseek_megapack.images._vcsi_command", lambda settings: [sys.executable, str(alt)])
+    monkeypatch.setattr("empornium_megapack.images._vcsi_command", lambda settings: [sys.executable, str(alt)])
     try:
         _, digest2, _ = service.contact_sheet("s1", str(video))
     finally:
@@ -628,9 +628,9 @@ def test_resolve_ffmpeg_stash_fallback(monkeypatch, tmp_path):
     stash_dir.mkdir()
     exe = stash_dir / "ffmpeg.exe"
     exe.touch()
-    monkeypatch.setattr("deepseek_megapack.images.shutil.which", lambda name: None)
-    monkeypatch.setattr("deepseek_megapack.images._COVE_FFMPEG", tmp_path / "missing.exe")
-    monkeypatch.setattr("deepseek_megapack.images.Path.home", classmethod(lambda cls: tmp_path))
+    monkeypatch.setattr("empornium_megapack.images.shutil.which", lambda name: None)
+    monkeypatch.setattr("empornium_megapack.images._COVE_FFMPEG", tmp_path / "missing.exe")
+    monkeypatch.setattr("empornium_megapack.images.Path.home", classmethod(lambda cls: tmp_path))
     assert resolve_ffmpeg(settings_with(tmp_path)) == str(exe)
 
 
@@ -642,7 +642,7 @@ def test_resolve_ffprobe_stash_fallback(monkeypatch, tmp_path):
     ffmpeg_exe.touch()
     ffprobe_exe = stash_dir / "ffprobe.exe"
     ffprobe_exe.touch()
-    monkeypatch.setattr("deepseek_megapack.images.shutil.which", lambda name: None)
-    monkeypatch.setattr("deepseek_megapack.images._COVE_FFMPEG", tmp_path / "missing.exe")
-    monkeypatch.setattr("deepseek_megapack.images.Path.home", classmethod(lambda cls: tmp_path))
+    monkeypatch.setattr("empornium_megapack.images.shutil.which", lambda name: None)
+    monkeypatch.setattr("empornium_megapack.images._COVE_FFMPEG", tmp_path / "missing.exe")
+    monkeypatch.setattr("empornium_megapack.images.Path.home", classmethod(lambda cls: tmp_path))
     assert resolve_ffprobe(settings_with(tmp_path)) == str(ffprobe_exe)

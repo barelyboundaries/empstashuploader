@@ -21,12 +21,12 @@ if str(BACKEND_DIR) in sys.path:
     sys.path.remove(str(BACKEND_DIR))
 sys.path.insert(0, str(BACKEND_DIR))
 
-import deepseek_megapack.main
+import empornium_megapack.main
 
 
 @pytest.fixture
 def client():
-    return TestClient(deepseek_megapack.main.app)
+    return TestClient(empornium_megapack.main.app)
 
 
 class TestFsExistsHappy:

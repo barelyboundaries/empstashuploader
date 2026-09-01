@@ -26,7 +26,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
 import task
-from deepseek_megapack.config import Settings
+from empornium_megapack.config import Settings
 
 
 def test_stage5d_submission_payload_schema_and_clean_tags(tmp_path):
@@ -128,7 +128,7 @@ def test_stage5d_dry_run_mode(tmp_path, capsys):
         "scenes": [{"id": 1, "path": str(media_file)}],
     }
 
-    with patch("deepseek_megapack.config.get_settings", return_value=fake_settings):
+    with patch("empornium_megapack.config.get_settings", return_value=fake_settings):
         res = task.run_build_megapack(payload)
 
     assert res["status"] == "success"
@@ -175,7 +175,7 @@ def test_stage5d_b4_regression_criterion(tmp_path):
         ],
     }
 
-    with patch("deepseek_megapack.config.get_settings", return_value=fake_settings):
+    with patch("empornium_megapack.config.get_settings", return_value=fake_settings):
         res = task.run_build_megapack(payload)
 
     assert res["status"] == "success"

@@ -25,8 +25,8 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.append(str(PROJECT_ROOT))
 
 import task
-from deepseek_megapack.config import Settings
-from deepseek_megapack.images import ContactSheetError, upload_hamster
+from empornium_megapack.config import Settings
+from empornium_megapack.images import ContactSheetError, upload_hamster
 
 
 def test_stage5a_upload_disabled_returns_file_urls(tmp_path):
@@ -47,7 +47,7 @@ def test_stage5a_upload_disabled_returns_file_urls(tmp_path):
         "scenes": [{"id": 1, "path": str(media_file)}],
     }
 
-    with patch("deepseek_megapack.images.upload_hamster") as mock_upload:
+    with patch("empornium_megapack.images.upload_hamster") as mock_upload:
         result = task.run_build_megapack(payload)
         mock_upload.assert_not_called()
 
@@ -78,8 +78,8 @@ def test_stage5a_upload_enabled_successful_hamster_upload(tmp_path):
     fake_settings = Settings(hamster_api_key="test-api-key")
     remote_url = "https://hamsterimg.net/images/2026/08/23/preview_1.jpg"
 
-    with patch("deepseek_megapack.config.get_settings", return_value=fake_settings), \
-         patch("deepseek_megapack.images.upload_hamster", return_value=remote_url) as mock_upload:
+    with patch("empornium_megapack.config.get_settings", return_value=fake_settings), \
+         patch("empornium_megapack.images.upload_hamster", return_value=remote_url) as mock_upload:
         result = task.run_build_megapack(payload)
         assert mock_upload.call_count == 2
 
@@ -114,7 +114,7 @@ def test_stage5a_missing_api_key_warns_once_and_falls_back(tmp_path, capsys):
 
     fake_settings = Settings(hamster_api_key="")
 
-    with patch("deepseek_megapack.config.get_settings", return_value=fake_settings):
+    with patch("empornium_megapack.config.get_settings", return_value=fake_settings):
         result = task.run_build_megapack(payload)
 
     assert result["status"] == "success"
@@ -155,8 +155,8 @@ def test_stage5a_degrade_and_continue_on_partial_failure(tmp_path, capsys):
             return remote_url1
         raise ContactSheetError("HTTP 500 Server Error")
 
-    with patch("deepseek_megapack.config.get_settings", return_value=fake_settings), \
-         patch("deepseek_megapack.images.upload_hamster", side_effect=side_effect_upload):
+    with patch("empornium_megapack.config.get_settings", return_value=fake_settings), \
+         patch("empornium_megapack.images.upload_hamster", side_effect=side_effect_upload):
         result = task.run_build_megapack(payload)
 
     assert result["status"] == "success"
