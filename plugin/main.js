@@ -10,7 +10,7 @@
   const BUTTON_ID = "empornium-megapack-btn";
   const MODAL_ID = "empornium-megapack-modal";
 
-  const INJECTED_STYLE_ID = "deepseek-review-injected-style";
+  const INJECTED_STYLE_ID = "empornium-review-injected-style";
 
   let activeEscHandler = null;
 
@@ -110,37 +110,37 @@
     closeMegapackModal();
 
     const resolvedMode = mode || (sceneIds.length === 1 ? "single" : "megapack");
-    window._deepseekSceneIds = sceneIds.map((id) => parseInt(id, 10)).filter((id) => !isNaN(id) && id > 0);
-    window._deepseekMode = resolvedMode;
-    window._deepseekCloseModal = closeMegapackModal;
+    window._emporniumSceneIds = sceneIds.map((id) => parseInt(id, 10)).filter((id) => !isNaN(id) && id > 0);
+    window._emporniumMode = resolvedMode;
+    window._emporniumCloseModal = closeMegapackModal;
 
     const overlay = document.createElement("div");
     overlay.id = MODAL_ID;
-    overlay.className = "deepseek-modal-overlay";
+    overlay.className = "empornium-modal-overlay";
 
     const container = document.createElement("div");
-    container.className = "deepseek-modal-container";
+    container.className = "empornium-modal-container";
 
     const isSingle = resolvedMode === "single";
     const modalTitle = isSingle ? "Empornium Single-Scene Uploader" : "DeepSeek Megapack Builder";
     const badgeText = `${sceneIds.length} scene(s) selected`;
 
     const header = document.createElement("div");
-    header.className = "deepseek-modal-header";
+    header.className = "empornium-modal-header";
     header.innerHTML = `
-      <div class="deepseek-modal-title">
-        <span class="deepseek-logo">${isSingle ? "🎬" : "📦"}</span>
+      <div class="empornium-modal-title">
+        <span class="empornium-logo">${isSingle ? "🎬" : "📦"}</span>
         <span>${modalTitle}</span>
-        <span class="deepseek-badge">${badgeText}</span>
+        <span class="empornium-badge">${badgeText}</span>
       </div>
-      <button class="deepseek-modal-close" title="Close (Esc)">&times;</button>
+      <button class="empornium-modal-close" title="Close (Esc)">&times;</button>
     `;
 
     const body = document.createElement("div");
-    body.className = "deepseek-modal-body";
+    body.className = "empornium-modal-body";
 
     const spinner = document.createElement("div");
-    spinner.className = "deepseek-modal-spinner";
+    spinner.className = "empornium-modal-spinner";
     spinner.style.cssText = "padding: 32px; text-align: center; color: var(--text-color, #aaa);";
     spinner.innerHTML = `
       <div style="font-size: 24px; margin-bottom: 8px;">⏳</div>
@@ -154,7 +154,7 @@
     document.body.appendChild(overlay);
 
     // Event handlers
-    const closeBtn = header.querySelector(".deepseek-modal-close");
+    const closeBtn = header.querySelector(".empornium-modal-close");
     closeBtn.addEventListener("click", closeMegapackModal);
 
     overlay.addEventListener("click", (e) => {
@@ -174,19 +174,19 @@
       const safeReason = escapeHtml(reason || "This content was blocked by browser security policy.");
       const safeToken = escapeHtml(token || "none (legacy transport)");
       body.innerHTML = `
-        <div class="deepseek-blocked-fallback" style="padding: 24px; text-align: center; color: var(--text-color, #e0e0e0); background: var(--bg-color, #1e1e1e); border-radius: 8px; margin: 20px;">
+        <div class="empornium-blocked-fallback" style="padding: 24px; text-align: center; color: var(--text-color, #e0e0e0); background: var(--bg-color, #1e1e1e); border-radius: 8px; margin: 20px;">
           <div style="font-size: 28px; margin-bottom: 12px;">⚠️</div>
           <h3 style="margin-bottom: 8px; color: #ff5252;">Content Loading Blocked</h3>
           <p style="margin-bottom: 16px; color: #aaa;">${safeReason}</p>
           <div style="font-size: 12px; color: #777; margin-bottom: 16px; font-family: monospace;">
             Debug: token=${safeToken}
           </div>
-          <button class="btn btn-primary deepseek-retry-btn" style="padding: 8px 16px; cursor: pointer; background: #3b82f6; color: white; border: none; border-radius: 4px;">
+          <button class="btn btn-primary empornium-retry-btn" style="padding: 8px 16px; cursor: pointer; background: #3b82f6; color: white; border: none; border-radius: 4px;">
             Retry Loading
           </button>
         </div>
       `;
-      const retryBtn = body.querySelector(".deepseek-retry-btn");
+      const retryBtn = body.querySelector(".empornium-retry-btn");
       if (retryBtn) {
         retryBtn.addEventListener("click", () => {
           openMegapackModal(sceneIds, resolvedMode);
@@ -198,9 +198,9 @@
     let token = null;
     try {
       token = await createToken(sceneIds);
-      window._deepseekToken = token;
+      window._emporniumToken = token;
     } catch (err) {
-      window._deepseekToken = "";
+      window._emporniumToken = "";
     }
 
     try {
@@ -243,8 +243,8 @@
       }
 
       // 2. Initialize review logic
-      if (typeof window.initDeepSeekReview === "function") {
-        window.initDeepSeekReview(window._deepseekSceneIds, token, resolvedMode);
+      if (typeof window.initEmporniumReview === "function") {
+        window.initEmporniumReview(window._emporniumSceneIds, token, resolvedMode);
       } else {
         const scriptUrl = `${origin.replace(/\/+$/, "")}/plugin/${PLUGIN_ID}/assets/review.js`;
         const jsResponse = await fetch(scriptUrl);
@@ -256,8 +256,8 @@
         scriptEl.textContent = jsText;
         document.body.appendChild(scriptEl);
 
-        if (typeof window.initDeepSeekReview === "function") {
-          window.initDeepSeekReview(window._deepseekSceneIds, token, resolvedMode);
+        if (typeof window.initEmporniumReview === "function") {
+          window.initEmporniumReview(window._emporniumSceneIds, token, resolvedMode);
         }
       }
     } catch (err) {
@@ -288,7 +288,7 @@
 
     const btn = document.createElement("button");
     btn.id = BUTTON_ID;
-    btn.className = "btn btn-secondary deepseek-trigger-btn";
+    btn.className = "btn btn-secondary empornium-trigger-btn";
     btn.innerHTML = `<span class="mr-1">📦</span> Empornium Uploader`;
     btn.title = "Build DeepSeek Megapack from selected scenes";
 

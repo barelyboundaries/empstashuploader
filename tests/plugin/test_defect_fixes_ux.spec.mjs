@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+﻿import { test, expect } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -192,7 +192,7 @@ test.describe("Defect Fixes UX: Chunked BBCode and Pasted Cover Image", () => {
     await captureRunId(page);
     setupGraphQLMocks(page, { bbcodeMode: "chunked_full" });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=10&mode=single");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=10&mode=single");
     await page.locator("#output-dir").fill("C:\\Packs");
     await expect(page.locator("#loading-state")).toBeHidden({ timeout: 5000 });
     await page.locator("#pack-title").fill("Anji & Honey");
@@ -208,7 +208,7 @@ test.describe("Defect Fixes UX: Chunked BBCode and Pasted Cover Image", () => {
     await captureRunId(page);
     setupGraphQLMocks(page, { bbcodeMode: "chunked_missing_one" });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=10&mode=single");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=10&mode=single");
     await page.locator("#output-dir").fill("C:\\Packs");
     await expect(page.locator("#loading-state")).toBeHidden({ timeout: 5000 });
     await page.locator("#pack-title").fill("Anji & Honey");
@@ -228,7 +228,7 @@ test.describe("Defect Fixes UX: Chunked BBCode and Pasted Cover Image", () => {
     await captureRunId(page);
     setupGraphQLMocks(page, { lastRecordedTask: recorded });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=10&mode=single");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=10&mode=single");
     await expect(page.locator("#loading-state")).toBeHidden({ timeout: 5000 });
 
     // Synthesize paste event with 10x10 PNG

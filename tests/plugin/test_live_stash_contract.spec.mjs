@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+﻿import { test, expect } from '@playwright/test';
 
 const STASH_HTTP_URL = process.env.STASH_URL ?? 'http://localhost:9999';
 const STASH_WS_URL = STASH_HTTP_URL.replace(/^http/, 'ws') + '/graphql';
@@ -108,7 +108,7 @@ test.describe("Live Stash Contract Verification (No Mocks)", () => {
   });
 
   test("c) Static asset route serves review.html when installed (graceful skip otherwise)", async ({ request }) => {
-    const response = await request.get(`${STASH_HTTP_URL}/plugin/deepseek-megapack/assets/review.html`);
+    const response = await request.get(`${STASH_HTTP_URL}/plugin/empornium-megapack/assets/review.html`);
     if (response.status() === 404) {
       test.skip(true, "Plugin is not installed in the live Stash instance yet.");
       return;

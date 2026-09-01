@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+﻿import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -12,7 +12,7 @@ function setupStaticMocks(page) {
         <!DOCTYPE html>
         <html>
         <head>
-          <link rel="stylesheet" href="http://localhost:9999/plugins/deepseek-megapack/style.css">
+          <link rel="stylesheet" href="http://localhost:9999/plugins/empornium-megapack/style.css">
         </head>
         <body>
           <div class="btn-toolbar">
@@ -28,7 +28,7 @@ function setupStaticMocks(page) {
               <span>Scene 102</span>
             </div>
           </div>
-          <script src="http://localhost:9999/plugins/deepseek-megapack/main.js"></script>
+          <script src="http://localhost:9999/plugins/empornium-megapack/main.js"></script>
         </body>
         </html>
       `
@@ -249,12 +249,12 @@ test.describe("Milestone 3 Challenger 2: Full End-to-End User Journey & Fault In
     await page.goto("http://localhost:9999/scenes");
 
     // 1. Toolbar button click
-    const btn = page.locator("#deepseek-megapack-btn");
+    const btn = page.locator("#empornium-megapack-btn");
     await expect(btn).toBeVisible();
     await btn.click();
 
     // 2. Modal iframe mounted
-    const modal = page.locator("#deepseek-megapack-modal");
+    const modal = page.locator("#empornium-megapack-modal");
     await expect(modal).toBeVisible();
     
     const frame = modal;
@@ -410,7 +410,7 @@ test.describe("Milestone 3 Challenger 2: Full End-to-End User Journey & Fault In
       window.WebSocket = FailingWebSocket;
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=301");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=301");
     await page.locator("#output-dir").fill("C:\\Packs");
     await page.waitForSelector(".scene-card");
 
@@ -508,7 +508,7 @@ test.describe("Milestone 3 Challenger 2: Full End-to-End User Journey & Fault In
       window.WebSocket = FailingWebSocket;
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=401");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=401");
     await page.locator("#output-dir").fill("C:\\Packs");
     await page.waitForSelector(".scene-card");
 
@@ -550,7 +550,7 @@ test.describe("Milestone 3 Challenger 2: Full End-to-End User Journey & Fault In
       return route.fallback();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=501");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=501");
     await page.waitForSelector(".scene-card");
 
     const titleInput = page.locator("#pack-title");
@@ -572,22 +572,22 @@ test.describe("Milestone 3 Challenger 2: Full End-to-End User Journey & Fault In
       <!DOCTYPE html>
       <html>
       <head>
-        <link rel="stylesheet" href="http://localhost:9999/plugins/deepseek-megapack/style.css">
+        <link rel="stylesheet" href="http://localhost:9999/plugins/empornium-megapack/style.css">
       </head>
       <body>
         <div class="btn-toolbar"></div>
         <div class="scene-card" data-scene-id="101">
           <input type="checkbox" checked />
         </div>
-        <script src="http://localhost:9999/plugins/deepseek-megapack/main.js"></script>
+        <script src="http://localhost:9999/plugins/empornium-megapack/main.js"></script>
       </body>
       </html>
     `);
 
-    const triggerBtn = page.locator("#deepseek-megapack-btn");
+    const triggerBtn = page.locator("#empornium-megapack-btn");
     await triggerBtn.click();
 
-    const modal = page.locator("#deepseek-megapack-modal");
+    const modal = page.locator("#empornium-megapack-modal");
     await expect(modal).toBeVisible();
 
     // Trigger DEEPSEEK_CLOSE_MODAL postMessage
@@ -652,7 +652,7 @@ test.describe("Milestone 3 Challenger 2: Full End-to-End User Journey & Fault In
       await dialog.accept();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=601,602");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=601,602");
     await page.locator("#output-dir").fill("C:\\Packs");
     await page.waitForSelector(".scene-card");
 

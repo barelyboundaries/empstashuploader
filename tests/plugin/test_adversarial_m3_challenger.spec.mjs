@@ -1,4 +1,4 @@
-/**
+﻿/**
  * DeepSeek Megapack Milestone 3 — Challenger 1 Adversarial & Stress Suite
  * Tests DOM mutation churn, XSS immunity, extreme scene volume, drag-and-drop reordering,
  * WebSocket fallback polling, and GraphQL mutation error handling.
@@ -74,7 +74,7 @@ test.describe('DeepSeek Megapack Challenger 1 M3 Adversarial Suite', () => {
       return route.continue();
     });
 
-    const url = 'http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=0,-99,NaN,undefined,null,abc,,101,202,303';
+    const url = 'http://localhost:9999/plugins/empornium-megapack/review.html?scenes=0,-99,NaN,undefined,null,abc,,101,202,303';
     await page.goto(url);
 
     const cards = page.locator('.scene-card');
@@ -112,7 +112,7 @@ test.describe('DeepSeek Megapack Challenger 1 M3 Adversarial Suite', () => {
       });
     });
 
-    const url = 'http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=1';
+    const url = 'http://localhost:9999/plugins/empornium-megapack/review.html?scenes=1';
     await page.goto(url);
     await page.locator('.scene-card').first().waitFor({ timeout: 5000 });
 
@@ -153,7 +153,7 @@ test.describe('DeepSeek Megapack Challenger 1 M3 Adversarial Suite', () => {
     });
 
     const sceneIdsParam = Array.from({ length: 150 }, (_, i) => i + 1).join(',');
-    const url = `http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=${sceneIdsParam}`;
+    const url = `http://localhost:9999/plugins/empornium-megapack/review.html?scenes=${sceneIdsParam}`;
     await page.goto(url);
 
     const cards = page.locator('.scene-card');
@@ -227,7 +227,7 @@ test.describe('DeepSeek Megapack Challenger 1 M3 Adversarial Suite', () => {
       await dialog.accept();
     });
 
-    const url = 'http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=1,2';
+    const url = 'http://localhost:9999/plugins/empornium-megapack/review.html?scenes=1,2';
     await page.goto(url);
     await page.locator("#output-dir").fill("C:\\Packs");
 
@@ -317,7 +317,7 @@ test.describe('DeepSeek Megapack Challenger 1 M3 Adversarial Suite', () => {
       window.WebSocket = FailingWebSocket;
     });
 
-    const url = 'http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=10&mode=megapack';
+    const url = 'http://localhost:9999/plugins/empornium-megapack/review.html?scenes=10&mode=megapack';
     await page.goto(url);
 
     await page.locator('#pack-title').fill('Adversarial M3 Build');

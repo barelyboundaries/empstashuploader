@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+﻿import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -144,7 +144,7 @@ async function bootHarness(page, {
   });
 
   const sceneIds = scenes.map((s) => s.id).join(",");
-  await page.goto(`http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=${sceneIds}&mode=megapack`);
+  await page.goto(`http://localhost:9999/plugins/empornium-megapack/review.html?scenes=${sceneIds}&mode=megapack`);
   await expect(page.locator(".scene-card")).toHaveCount(scenes.length);
   // The seed-dir field (currently #output-dir; todo 8 relabels it) drives the
   // consolidation destination — point it at the spec's seed dir.
@@ -190,7 +190,7 @@ test.describe("isPathUnderSeed — recursive seed-dir containment helper", () =>
       }
       return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: {} }) });
     });
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=1");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=1");
     await expect(page.locator(".scene-card")).toHaveCount(0);
 
     expect(await page.evaluate(() => typeof window.isPathUnderSeed)).toBe("function");

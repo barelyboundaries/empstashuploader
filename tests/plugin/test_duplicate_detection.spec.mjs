@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+﻿import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -129,7 +129,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=101,102,103,104,105");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=101,102,103,104,105");
     await page.waitForSelector(".scene-card");
 
     const cards = page.locator(".scene-card");
@@ -190,7 +190,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=101,102,103,104,105");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=101,102,103,104,105");
     await page.locator("#output-dir").fill("C:\\Packs");
     await page.waitForSelector(".scene-card");
 
@@ -253,7 +253,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=101,102,103,104,105");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=101,102,103,104,105");
     await page.waitForSelector(".scene-card");
 
     const filterBtn = page.locator("#btn-filter-conflicts");
@@ -298,7 +298,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=101,102,103,104,105");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=101,102,103,104,105");
     await page.locator("#output-dir").fill("C:\\Packs");
     await page.waitForSelector(".scene-card");
 
@@ -358,7 +358,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=201,202");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=201,202");
     await page.locator("#output-dir").fill("C:\\Packs");
     await page.waitForSelector(".scene-card");
 
@@ -443,7 +443,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=101,102,103,104,105");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=101,102,103,104,105");
     await page.waitForSelector(".scene-card");
 
     // The fixture files sit under C:\Packs — point the seed-dir field
@@ -502,7 +502,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=101,102,103,104,105");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=101,102,103,104,105");
     await page.waitForSelector(".scene-card");
 
     // Remove scene 103 and 105
@@ -572,7 +572,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=301,302,303");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=301,302,303");
     await page.waitForSelector(".scene-card");
 
     // Banner should report 1 conflict group and 3 colliding files across 2 scenes
@@ -639,7 +639,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
     });
 
     const idsString = largeSceneList.map((s) => s.id).join(",");
-    await page.goto(`http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=${idsString}`);
+    await page.goto(`http://localhost:9999/plugins/empornium-megapack/review.html?scenes=${idsString}`);
     await page.waitForSelector(".scene-card");
 
     // Group 0 is Group A (Scene 1001)
@@ -679,7 +679,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=101,102,103,104,105");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=101,102,103,104,105");
     await page.waitForSelector(".scene-card");
 
     // Remove scene 103 and 105
@@ -716,7 +716,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=101,102,103,104,105");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=101,102,103,104,105");
     await page.waitForSelector(".scene-card");
 
     // Filter to conflicts only (101, 103, 104, 105)
@@ -807,7 +807,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=401,402,403,404");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=401,402,403,404");
     await page.locator("#output-dir").fill("C:\\Packs");
     await page.waitForSelector(".scene-card");
 
@@ -905,7 +905,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=501,502,503,504,505,506");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=501,502,503,504,505,506");
     await page.waitForSelector(".scene-card");
 
     // All 3 collision groups detected (3 groups, 6 colliding files)
@@ -951,7 +951,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=601,602,603,604,605");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=601,602,603,604,605");
     await page.locator("#output-dir").fill("C:\\Packs");
     await page.waitForSelector(".scene-card");
 
@@ -1020,7 +1020,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=701,702,703,704,705,706");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=701,702,703,704,705,706");
     await page.waitForSelector(".scene-card");
 
     // All 6 cards rendered cleanly
@@ -1058,7 +1058,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=101,102,103,104,105");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=101,102,103,104,105");
     await page.waitForSelector(".scene-card");
 
     const card101 = page.locator('.scene-card[data-scene-id="101"]');
@@ -1150,7 +1150,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=801,802");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=801,802");
     await page.waitForSelector(".scene-card");
 
     const card801 = page.locator('.scene-card[data-scene-id="801"]');
@@ -1176,7 +1176,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=101,102,103,104,105");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=101,102,103,104,105");
     await page.locator("#output-dir").fill("C:\\Packs");
     await page.waitForSelector(".scene-card");
 
@@ -1292,7 +1292,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=901,902,903,904");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=901,902,903,904");
     await page.locator("#output-dir").fill("C:\\Packs");
     await page.waitForSelector(".scene-card");
 
@@ -1374,7 +1374,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=101,102,103,104,105");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=101,102,103,104,105");
     await page.waitForSelector(".scene-card");
 
     // The fixture files sit under C:\Packs — point the seed-dir field
@@ -1427,7 +1427,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=101,102,103,104,105");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=101,102,103,104,105");
     await page.locator("#output-dir").fill("C:\\Packs");
     await page.waitForSelector(".scene-card");
 
@@ -1494,7 +1494,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=951,952");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=951,952");
     await page.waitForSelector(".scene-card");
 
     const card951 = page.locator('.scene-card[data-scene-id="951"]');
@@ -1561,7 +1561,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=961,962,963");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=961,962,963");
     await page.waitForSelector(".scene-card");
 
     const card961 = page.locator('.scene-card[data-scene-id="961"]');
@@ -1576,7 +1576,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
   test("ADV-11. Metadata formatting helpers handle null, zero, and width-only resolution fallbacks safely", async ({ page }) => {
     setupMocks(page);
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html");
 
     const testResults = await page.evaluate(() => {
       return {
@@ -1679,7 +1679,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=971,972,973");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=971,972,973");
     await page.waitForSelector(".scene-card");
 
     const card971 = page.locator('.scene-card[data-scene-id="971"]');
@@ -1743,7 +1743,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=981,982,983,984");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=981,982,983,984");
     await page.waitForSelector(".scene-card");
 
     const card981 = page.locator('.scene-card[data-scene-id="981"]');
@@ -1797,7 +1797,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=991,992");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=991,992");
     await page.waitForSelector(".scene-card");
 
     // Collision banner should be hidden (no cross-scene collisions)
@@ -1844,7 +1844,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=995,996");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=995,996");
     await page.waitForSelector(".scene-card");
 
     const card995 = page.locator('.scene-card[data-scene-id="995"]');
@@ -1907,7 +1907,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=997,998,999,1000");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=997,998,999,1000");
     await page.waitForSelector(".scene-card");
 
     const card997 = page.locator('.scene-card[data-scene-id="997"]');
@@ -1945,7 +1945,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=101,103");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=101,103");
     await page.waitForSelector(".scene-card");
 
     const card103 = page.locator('.scene-card[data-scene-id="103"]');
@@ -2048,7 +2048,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
       await dialog.accept();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=4318,4319");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=4318,4319");
     await page.locator("#output-dir").fill("C:\\Packs");
     await page.waitForSelector(".scene-card");
 

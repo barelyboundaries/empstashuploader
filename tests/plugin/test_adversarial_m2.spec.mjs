@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+﻿import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -62,15 +62,15 @@ test.describe("DeepSeek Megapack Milestone 2 — Adversarial Stress & Edge Case 
     setupMocks(page);
 
     // Scenario A: No query parameter at all
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html");
     await expect(page.locator("#loading-state")).toHaveText("No scenes selected.");
 
     // Scenario B: Empty query parameter
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=");
     await expect(page.locator("#loading-state")).toHaveText("No scenes selected.");
 
     // Scenario C: Non-numeric, negative, and zero IDs
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=abc,,xyz,-5,0");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=abc,,xyz,-5,0");
     await expect(page.locator("#loading-state")).toHaveText("No scenes selected.");
   });
 
@@ -100,7 +100,7 @@ test.describe("DeepSeek Megapack Milestone 2 — Adversarial Stress & Edge Case 
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=foo,42,bar,99,-1,0");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=foo,42,bar,99,-1,0");
     await expect(page.locator(".scene-card")).toHaveCount(2);
     expect(requestedIds).toEqual([42, 99]);
   });
@@ -119,7 +119,7 @@ test.describe("DeepSeek Megapack Milestone 2 — Adversarial Stress & Edge Case 
       });
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=1,2");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=1,2");
     await expect(page.locator("#loading-state")).toContainText("Failed to load scenes");
   });
 
@@ -136,7 +136,7 @@ test.describe("DeepSeek Megapack Milestone 2 — Adversarial Stress & Edge Case 
       });
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=1,2");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=1,2");
     await expect(page.locator("#loading-state")).toContainText("Database connection failed; Stash locked");
   });
 
@@ -153,7 +153,7 @@ test.describe("DeepSeek Megapack Milestone 2 — Adversarial Stress & Edge Case 
       });
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=999");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=999");
     await expect(page.locator("#scene-list")).toContainText("No scenes found.");
   });
 
@@ -185,7 +185,7 @@ test.describe("DeepSeek Megapack Milestone 2 — Adversarial Stress & Edge Case 
       });
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=1");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=1");
 
     await expect(page.locator(".scene-card")).toHaveCount(1);
     await expect(page.locator(".scene-title")).toContainText("#1 - Untitled Scene");
@@ -265,7 +265,7 @@ test.describe("DeepSeek Megapack Milestone 2 — Adversarial Stress & Edge Case 
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=1,2&mode=megapack");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=1,2&mode=megapack");
     await page.locator("#output-dir").fill("C:\\Packs");
 
     // Read-only destination pre-check (collision-free, hermetic): without the
@@ -309,14 +309,14 @@ test.describe("DeepSeek Megapack Milestone 2 — Adversarial Stress & Edge Case 
   test("3.1 Badge styling classes render properly for badge-success, badge-warning, badge-danger", async ({ page }) => {
     setupMocks(page);
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=");
 
     // Verify badge classes exist in style.css
     await page.setContent(`
       <!DOCTYPE html>
       <html>
       <head>
-        <link rel="stylesheet" href="http://localhost:9999/plugins/deepseek-megapack/style.css">
+        <link rel="stylesheet" href="http://localhost:9999/plugins/empornium-megapack/style.css">
       </head>
       <body>
         <div id="test-badges">
@@ -359,7 +359,7 @@ test.describe("DeepSeek Megapack Milestone 2 — Adversarial Stress & Edge Case 
       });
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=1&mode=single");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=1&mode=single");
     await expect(page.locator(".scene-card")).toHaveCount(1);
     await expect(page.locator("#bbcode-preview")).toContainText("Lone Scene");
     await expect(page.locator("#bbcode-preview")).toContainText("[b]Performers:[/b] Solo");
@@ -387,7 +387,7 @@ test.describe("DeepSeek Megapack Milestone 2 — Adversarial Stress & Edge Case 
       });
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=10,20,30");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=10,20,30");
 
     const cards = page.locator(".scene-card");
     await expect(cards).toHaveCount(3);
@@ -425,7 +425,7 @@ test.describe("DeepSeek Megapack Milestone 2 — Adversarial Stress & Edge Case 
     });
 
     const idsParam = generatedScenes.map(s => s.id).join(",");
-    await page.goto(`http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=${idsParam}`);
+    await page.goto(`http://localhost:9999/plugins/empornium-megapack/review.html?scenes=${idsParam}`);
 
     // Verify all 100 cards rendered
     await expect(page.locator(".scene-card")).toHaveCount(100);
@@ -462,7 +462,7 @@ test.describe("DeepSeek Megapack Milestone 2 — Adversarial Stress & Edge Case 
 
     const idsParam = generatedScenes.map(s => s.id).join(",");
     const startTime = Date.now();
-    await page.goto(`http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=${idsParam}`);
+    await page.goto(`http://localhost:9999/plugins/empornium-megapack/review.html?scenes=${idsParam}`);
 
     await expect(page.locator(".scene-card")).toHaveCount(250);
     const duration = Date.now() - startTime;
@@ -511,7 +511,7 @@ test.describe("DeepSeek Megapack Milestone 2 — Adversarial Stress & Edge Case 
         });
       });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=1,2&mode=megapack");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=1,2&mode=megapack");
 
     await page.locator("#pack-title").fill("Mega Pack [4K] ~ Special Edition! 🔥");
     await page.locator("#pack-notes").fill("Line 1 with quotes \"hello\"\nLine 2 with [url]http://example.com[/url]");
@@ -541,7 +541,7 @@ test.describe("DeepSeek Megapack Milestone 2 — Adversarial Stress & Edge Case 
       });
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=1");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=1");
 
     const copyBtn = page.locator("#btn-copy-bbcode");
     await copyBtn.click();
@@ -609,7 +609,7 @@ test.describe("DeepSeek Megapack Milestone 2 — Adversarial Stress & Edge Case 
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=7");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=7");
     
     // Explicitly invoke polling mechanism
     await page.evaluate(() => {
@@ -654,19 +654,19 @@ test.describe("DeepSeek Megapack Milestone 2 — Adversarial Stress & Edge Case 
             <td>Scene 204</td>
           </tr>
         </table>
-        <script src="http://localhost:9999/plugins/deepseek-megapack/main.js"></script>
+        <script src="http://localhost:9999/plugins/empornium-megapack/main.js"></script>
       </body>
       </html>
     `);
 
-    const triggerBtn = page.locator("#deepseek-megapack-btn");
+    const triggerBtn = page.locator("#empornium-megapack-btn");
     await expect(triggerBtn).toBeVisible();
     await triggerBtn.click();
 
-    const modal = page.locator("#deepseek-megapack-modal");
+    const modal = page.locator("#empornium-megapack-modal");
     await expect(modal).toBeVisible();
-    await expect(modal.locator(".deepseek-badge")).toContainText("4 scene(s) selected");
-    const extractedIds = await page.evaluate(() => window._deepseekSceneIds);
+    await expect(modal.locator(".empornium-badge")).toContainText("4 scene(s) selected");
+    const extractedIds = await page.evaluate(() => window._emporniumSceneIds);
     expect(extractedIds).toEqual(expect.arrayContaining([201, 202, 203, 204]));
   });
 
@@ -690,16 +690,16 @@ test.describe("DeepSeek Megapack Milestone 2 — Adversarial Stress & Edge Case 
             <input type="checkbox" />
           </div>
         </div>
-        <script src="http://localhost:9999/plugins/deepseek-megapack/main.js"></script>
+        <script src="http://localhost:9999/plugins/empornium-megapack/main.js"></script>
       </body>
       </html>
     `);
 
-    const triggerBtn = page.locator("#deepseek-megapack-btn");
+    const triggerBtn = page.locator("#empornium-megapack-btn");
     await triggerBtn.click();
 
     expect(alertMessage).toBe("Please select at least one scene to build a megapack.");
-    await expect(page.locator("#deepseek-megapack-modal")).toHaveCount(0);
+    await expect(page.locator("#empornium-megapack-modal")).toHaveCount(0);
   });
 
   test("7.3 Repeated DOM mutations inject trigger button idempotently", async ({ page }) => {
@@ -711,7 +711,7 @@ test.describe("DeepSeek Megapack Milestone 2 — Adversarial Stress & Edge Case 
       <head></head>
       <body>
         <div class="btn-toolbar"></div>
-        <script src="http://localhost:9999/plugins/deepseek-megapack/main.js"></script>
+        <script src="http://localhost:9999/plugins/empornium-megapack/main.js"></script>
       </body>
       </html>
     `);
@@ -724,7 +724,7 @@ test.describe("DeepSeek Megapack Milestone 2 — Adversarial Stress & Edge Case 
       }
     });
 
-    await expect(page.locator("#deepseek-megapack-btn")).toHaveCount(1);
+    await expect(page.locator("#empornium-megapack-btn")).toHaveCount(1);
   });
 
 });

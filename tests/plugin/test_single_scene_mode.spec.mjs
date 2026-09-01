@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+﻿import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -7,7 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 function setupStaticMocks(page) {
-  page.route('**/plugins/deepseek-megapack/**', async (route) => {
+  page.route('**/plugins/empornium-megapack/**', async (route) => {
     const url = route.request().url();
     let filePath = '';
     if (url.includes('review.html')) {
@@ -50,7 +50,7 @@ function setupStaticMocks(page) {
           <input type="checkbox" class="card-check" value="102" />
           <div class="title">Second Scene Duo</div>
         </div>
-        <script src="http://localhost:9999/plugins/deepseek-megapack/main.js"></script>
+        <script src="http://localhost:9999/plugins/empornium-megapack/main.js"></script>
       </body>
       </html>
     `;
@@ -92,20 +92,20 @@ test.describe('Stage 7 Feature 2 — Single-Scene Mode Switch & Pre-Dispatch Val
 
     await page.goto('http://localhost:9999/scenes');
 
-    const btn = page.locator('#deepseek-megapack-btn');
+    const btn = page.locator('#empornium-megapack-btn');
     await expect(btn).toBeVisible();
     await btn.click();
 
-    const modal = page.locator('#deepseek-megapack-modal');
+    const modal = page.locator('#empornium-megapack-modal');
     await expect(modal).toBeVisible();
 
     // Verify main.js state and modal header
-    const mode = await page.evaluate(() => window._deepseekMode);
+    const mode = await page.evaluate(() => window._emporniumMode);
     expect(mode).toBe('single');
 
-    await expect(modal.locator('.deepseek-modal-title')).toContainText('Empornium Single-Scene Uploader');
-    await expect(modal.locator('.deepseek-logo')).toContainText('🎬');
-    await expect(modal.locator('.deepseek-badge')).toContainText('1 scene(s) selected');
+    await expect(modal.locator('.empornium-modal-title')).toContainText('Empornium Single-Scene Uploader');
+    await expect(modal.locator('.empornium-logo')).toContainText('🎬');
+    await expect(modal.locator('.empornium-badge')).toContainText('1 scene(s) selected');
   });
 
   test('2. Selection of 2+ scenes via main.js opens modal in megapack mode with header, logo, and badge', async ({ page }) => {
@@ -116,18 +116,18 @@ test.describe('Stage 7 Feature 2 — Single-Scene Mode Switch & Pre-Dispatch Val
     // Select second checkbox so 2 scenes are selected
     await page.locator('input.card-check[value="102"]').check();
 
-    const btn = page.locator('#deepseek-megapack-btn');
+    const btn = page.locator('#empornium-megapack-btn');
     await btn.click();
 
-    const modal = page.locator('#deepseek-megapack-modal');
+    const modal = page.locator('#empornium-megapack-modal');
     await expect(modal).toBeVisible();
 
-    const mode = await page.evaluate(() => window._deepseekMode);
+    const mode = await page.evaluate(() => window._emporniumMode);
     expect(mode).toBe('megapack');
 
-    await expect(modal.locator('.deepseek-modal-title')).toContainText('DeepSeek Megapack Builder');
-    await expect(modal.locator('.deepseek-logo')).toContainText('📦');
-    await expect(modal.locator('.deepseek-badge')).toContainText('2 scene(s) selected');
+    await expect(modal.locator('.empornium-modal-title')).toContainText('DeepSeek Megapack Builder');
+    await expect(modal.locator('.empornium-logo')).toContainText('📦');
+    await expect(modal.locator('.empornium-badge')).toContainText('2 scene(s) selected');
   });
 
   test('3. Review UI renders in single mode: switcher state, labels, helper text, hidden consolidation button and banner', async ({ page }) => {
@@ -156,7 +156,7 @@ test.describe('Stage 7 Feature 2 — Single-Scene Mode Switch & Pre-Dispatch Val
       return route.fallback();
     });
 
-    await page.goto('http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=101&mode=single');
+    await page.goto('http://localhost:9999/plugins/empornium-megapack/review.html?scenes=101&mode=single');
     await page.locator("#output-dir").fill("C:\\Packs");
 
     // 1. Header Mode Switcher Toggle
@@ -211,7 +211,7 @@ test.describe('Stage 7 Feature 2 — Single-Scene Mode Switch & Pre-Dispatch Val
       return route.fallback();
     });
 
-    await page.goto('http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=101&mode=single');
+    await page.goto('http://localhost:9999/plugins/empornium-megapack/review.html?scenes=101&mode=single');
 
     await page.locator('#pack-notes').fill('Special single-scene release notes!');
 
@@ -264,7 +264,7 @@ test.describe('Stage 7 Feature 2 — Single-Scene Mode Switch & Pre-Dispatch Val
 
     // 1. Zero media files
     currentSceneFiles = [];
-    await page.goto('http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=101&mode=single');
+    await page.goto('http://localhost:9999/plugins/empornium-megapack/review.html?scenes=101&mode=single');
     await page.locator("#output-dir").fill("C:\\Packs");
 
     const buildBtn = page.locator('#btn-build');
@@ -350,7 +350,7 @@ test.describe('Stage 7 Feature 2 — Single-Scene Mode Switch & Pre-Dispatch Val
       return route.fallback();
     });
 
-    await page.goto('http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=101&mode=single');
+    await page.goto('http://localhost:9999/plugins/empornium-megapack/review.html?scenes=101&mode=single');
     await page.locator("#output-dir").fill("C:\\Packs");
 
     await page.locator('#opt-upload-previews').check();
@@ -405,7 +405,7 @@ test.describe('Stage 7 Feature 2 — Single-Scene Mode Switch & Pre-Dispatch Val
       return route.fallback();
     });
 
-    await page.goto('http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=101&mode=single');
+    await page.goto('http://localhost:9999/plugins/empornium-megapack/review.html?scenes=101&mode=single');
 
     // Trigger onTaskComplete with BuildSingleScene payload
     await page.evaluate(() => {
@@ -466,7 +466,7 @@ test.describe('Stage 7 Feature 2 — Single-Scene Mode Switch & Pre-Dispatch Val
       return route.fallback();
     });
 
-    await page.goto('http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=401&mode=single');
+    await page.goto('http://localhost:9999/plugins/empornium-megapack/review.html?scenes=401&mode=single');
 
     // Title input should default from sanitized basename
     await expect(page.locator('#pack-title')).toHaveValue('Stash_VIP_Feature_2026');
@@ -503,7 +503,7 @@ test.describe('Stage 7 Feature 2 — Single-Scene Mode Switch & Pre-Dispatch Val
     });
 
     // Navigate with &mode=single parameter
-    await page.goto('http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=501&mode=single');
+    await page.goto('http://localhost:9999/plugins/empornium-megapack/review.html?scenes=501&mode=single');
     await page.locator("#output-dir").fill("C:\\Packs");
 
     const radioSingle = page.locator('#mode-single');
@@ -560,7 +560,7 @@ test.describe('Stage 7 Feature 2 — Single-Scene Mode Switch & Pre-Dispatch Val
       return route.fallback();
     });
 
-    await page.goto('http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=601,602&mode=megapack');
+    await page.goto('http://localhost:9999/plugins/empornium-megapack/review.html?scenes=601,602&mode=megapack');
 
     const buildBtn = page.locator('#btn-build');
     await expect(buildBtn).toBeDisabled();
@@ -597,7 +597,7 @@ test.describe('Stage 7 Feature 2 — Single-Scene Mode Switch & Pre-Dispatch Val
       return route.fallback();
     });
 
-    await page.goto('http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=701&mode=single');
+    await page.goto('http://localhost:9999/plugins/empornium-megapack/review.html?scenes=701&mode=single');
     await page.locator("#output-dir").fill("C:\\Packs");
 
     const buildBtn = page.locator('#btn-build');
@@ -641,7 +641,7 @@ test.describe('Stage 7 Feature 2 — Single-Scene Mode Switch & Pre-Dispatch Val
       return route.fallback();
     });
 
-    await page.goto('http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=801,802&mode=megapack');
+    await page.goto('http://localhost:9999/plugins/empornium-megapack/review.html?scenes=801,802&mode=megapack');
 
     const radioMegapack = page.locator('#mode-megapack');
     const radioSingle = page.locator('#mode-single');
@@ -703,7 +703,7 @@ test.describe('Stage 7 Feature 2 — Single-Scene Mode Switch & Pre-Dispatch Val
       return route.fallback();
     });
 
-    await page.goto('http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=901,902&mode=megapack');
+    await page.goto('http://localhost:9999/plugins/empornium-megapack/review.html?scenes=901,902&mode=megapack');
 
     const buildBtn = page.locator('#btn-build');
     const consolidateBtn = page.locator('#btn-consolidate');
@@ -780,7 +780,7 @@ test.describe('Stage 7 Feature 2 — Single-Scene Mode Switch & Pre-Dispatch Val
       return route.fallback();
     });
 
-    await page.goto('http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=951&mode=single');
+    await page.goto('http://localhost:9999/plugins/empornium-megapack/review.html?scenes=951&mode=single');
     // Seed-dir field starts EMPTY (no machine-path default) — set it explicitly.
     await page.locator('#output-dir').fill('C:\\Packs');
 
@@ -823,7 +823,7 @@ test.describe('Stage 7 Feature 2 — Single-Scene Mode Switch & Pre-Dispatch Val
       return route.fallback();
     });
 
-    await page.goto('http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=961&mode=single');
+    await page.goto('http://localhost:9999/plugins/empornium-megapack/review.html?scenes=961&mode=single');
 
     // Group consolidate is hidden
     await expect(page.locator('#group-consolidate')).toBeHidden();

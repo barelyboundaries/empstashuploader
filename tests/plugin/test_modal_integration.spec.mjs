@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+﻿import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -53,7 +53,7 @@ test.describe("DeepSeek Megapack Frontend - Full Integration Suite", () => {
       <!DOCTYPE html>
       <html>
       <head>
-        <link rel="stylesheet" href="http://localhost:9999/plugins/deepseek-megapack/style.css">
+        <link rel="stylesheet" href="http://localhost:9999/plugins/empornium-megapack/style.css">
       </head>
       <body>
         <div class="btn-toolbar">
@@ -73,41 +73,41 @@ test.describe("DeepSeek Megapack Frontend - Full Integration Suite", () => {
             <span>Scene 103 (unchecked)</span>
           </div>
         </div>
-        <script src="http://localhost:9999/plugins/deepseek-megapack/main.js"></script>
+        <script src="http://localhost:9999/plugins/empornium-megapack/main.js"></script>
       </body>
       </html>
     `);
 
     // Verify trigger button was injected
-    const triggerBtn = page.locator("#deepseek-megapack-btn");
+    const triggerBtn = page.locator("#empornium-megapack-btn");
     await expect(triggerBtn).toBeVisible();
     await expect(triggerBtn).toContainText("Empornium Uploader");
 
     // Click trigger button -> opens modal overlay
     await triggerBtn.click();
 
-    const modal = page.locator("#deepseek-megapack-modal");
+    const modal = page.locator("#empornium-megapack-modal");
     await expect(modal).toBeVisible();
-    await expect(modal.locator(".deepseek-badge")).toContainText("2 scene(s) selected");
+    await expect(modal.locator(".empornium-badge")).toContainText("2 scene(s) selected");
 
     // Test Close via &times; button
-    const closeBtn = modal.locator(".deepseek-modal-close");
+    const closeBtn = modal.locator(".empornium-modal-close");
     await closeBtn.click();
     await expect(modal).toHaveCount(0);
 
     // Reopen modal and test Escape key close
     await triggerBtn.click();
-    await expect(page.locator("#deepseek-megapack-modal")).toBeVisible();
+    await expect(page.locator("#empornium-megapack-modal")).toBeVisible();
     await page.keyboard.press("Escape");
-    await expect(page.locator("#deepseek-megapack-modal")).toHaveCount(0);
+    await expect(page.locator("#empornium-megapack-modal")).toHaveCount(0);
 
     // Reopen modal and test postMessage DEEPSEEK_CLOSE_MODAL
     await triggerBtn.click();
-    await expect(page.locator("#deepseek-megapack-modal")).toBeVisible();
+    await expect(page.locator("#empornium-megapack-modal")).toBeVisible();
     await page.evaluate(() => {
       window.postMessage({ type: "DEEPSEEK_CLOSE_MODAL" }, "*");
     });
-    await expect(page.locator("#deepseek-megapack-modal")).toHaveCount(0);
+    await expect(page.locator("#empornium-megapack-modal")).toHaveCount(0);
   });
 
   test("2. Scene loading, reordering, BBCode preview, and clipboard copy (review.html)", async ({ page, context }) => {
@@ -154,7 +154,7 @@ test.describe("DeepSeek Megapack Frontend - Full Integration Suite", () => {
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=1,2");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=1,2");
 
     // Check rendered scene cards
     await expect(page.locator(".scene-card")).toHaveCount(2);
@@ -282,7 +282,7 @@ test.describe("DeepSeek Megapack Frontend - Full Integration Suite", () => {
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=10&mode=megapack");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=10&mode=megapack");
     // Seed-dir field starts EMPTY (no machine-path default) — set it explicitly.
     await page.locator("#output-dir").fill("C:\\Packs");
 
@@ -290,7 +290,7 @@ test.describe("DeepSeek Megapack Frontend - Full Integration Suite", () => {
     await page.locator("#btn-probe").click();
     expect(probeCalledWith).toBeTruthy();
     expect(probeCalledWith.task_name).toBe("ProbeFiles");
-    expect(probeCalledWith.plugin_id).toBe("deepseek-megapack");
+    expect(probeCalledWith.plugin_id).toBe("empornium-megapack");
     await expect(page.locator("#status-text")).toContainText("Task ProbeFiles queued (Job ID: job-probe-99)");
 
     // 2. Consolidate Files (MoveFiles) — the flow now runs the read-only
@@ -306,7 +306,7 @@ test.describe("DeepSeek Megapack Frontend - Full Integration Suite", () => {
     await page.locator("#btn-build").click();
     expect(buildCalledWith).toBeTruthy();
     expect(buildCalledWith.task_name).toBe("BuildMegapack");
-    expect(buildCalledWith.plugin_id).toBe("deepseek-megapack");
+    expect(buildCalledWith.plugin_id).toBe("empornium-megapack");
 
     // Assert that dispatched payload carries height, duration, date, studio, video_codec, and upload_previews
     const payloadArg = buildCalledWith.args.find(a => a.key === "payload");
@@ -440,7 +440,7 @@ test.describe("DeepSeek Megapack Frontend - Full Integration Suite", () => {
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=1");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=1");
 
     // Seed-dir field starts EMPTY — set it so the build gate passes.
     await page.locator("#output-dir").fill("C:\\Packs");
@@ -527,7 +527,7 @@ test.describe("DeepSeek Megapack Frontend - Full Integration Suite", () => {
       window.WebSocket = MockWebSocket;
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=99&mode=megapack");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=99&mode=megapack");
     // Seed-dir field starts EMPTY — set it so the build gate passes.
     await page.locator("#output-dir").fill("C:\\Packs");
     await page.locator("#btn-build").click();

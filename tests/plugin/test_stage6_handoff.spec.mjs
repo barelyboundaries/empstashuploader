@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+﻿import { test, expect } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -118,7 +118,7 @@ test.describe("Stage 6 — Handoff Quality & Manual Upload Preparation", () => {
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
     setupGraphQLMocks(page, true);
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=10&mode=megapack");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=10&mode=megapack");
     await page.locator("#output-dir").fill("C:\\Packs");
     await expect(page.locator("#loading-state")).toBeHidden({ timeout: 5000 });
 
@@ -171,7 +171,7 @@ test.describe("Stage 6 — Handoff Quality & Manual Upload Preparation", () => {
     await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
     setupGraphQLMocks(page, false);
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=10&mode=megapack");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=10&mode=megapack");
     await expect(page.locator("#loading-state")).toBeHidden({ timeout: 5000 });
 
     // Set pack title
@@ -257,7 +257,7 @@ test.describe("Stage 6 — Handoff Quality & Manual Upload Preparation", () => {
   test("R4 & R5: Specific pre-flight failures disable upload link and itemize failures actionable", async ({ page }) => {
     setupGraphQLMocks(page, true);
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=10&mode=megapack");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=10&mode=megapack");
     await expect(page.locator("#loading-state")).toBeHidden({ timeout: 5000 });
 
     // Set pack title

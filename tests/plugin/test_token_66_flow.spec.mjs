@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+﻿import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
@@ -78,14 +78,14 @@ test.describe("DeepSeek Megapack - 66 Scenes POST+Token Transport & Chunking Flo
           <!DOCTYPE html>
           <html>
           <head>
-            <link rel="stylesheet" href="http://localhost:9999/plugins/deepseek-megapack/style.css">
+            <link rel="stylesheet" href="http://localhost:9999/plugins/empornium-megapack/style.css">
           </head>
           <body>
             <div class="btn-toolbar"></div>
             <div class="scenes-list">
               ${checkboxesHtml}
             </div>
-            <script src="http://localhost:9999/plugins/deepseek-megapack/main.js"></script>
+            <script src="http://localhost:9999/plugins/empornium-megapack/main.js"></script>
           </body>
           </html>
         `
@@ -103,7 +103,7 @@ test.describe("DeepSeek Megapack - 66 Scenes POST+Token Transport & Chunking Flo
     await page.goto("http://localhost:9999/test-scenes-66");
 
 
-    const triggerBtn = page.locator("#deepseek-megapack-btn");
+    const triggerBtn = page.locator("#empornium-megapack-btn");
     await expect(triggerBtn).toBeVisible();
     await triggerBtn.click();
 
@@ -113,13 +113,13 @@ test.describe("DeepSeek Megapack - 66 Scenes POST+Token Transport & Chunking Flo
     expect(postedTokenPayload.sceneIds[0]).toBe(1);
     expect(postedTokenPayload.sceneIds[65]).toBe(66);
 
-    const modal = page.locator("#deepseek-megapack-modal");
+    const modal = page.locator("#empornium-megapack-modal");
     await expect(modal).toBeVisible();
-    await expect(modal.locator(".deepseek-badge")).toContainText("66 scene(s) selected");
+    await expect(modal.locator(".empornium-badge")).toContainText("66 scene(s) selected");
 
     // The review layer must RESOLVE the 66 IDs by GETting the token back.
-    // Asserting window._deepseekToken instead would be near-worthless: main.js
-    // sets it before handing the token to initDeepSeekReview, so it stays
+    // Asserting window._emporniumToken instead would be near-worthless: main.js
+    // sets it before handing the token to initEmporniumReview, so it stays
     // populated even if the review layer never receives or uses the token.
     await expect
       .poll(() => requestUrls.some((u) => u.includes("/api/token/tok-66-test-uuid-abcdef123456")))
@@ -180,7 +180,7 @@ test.describe("DeepSeek Megapack - 66 Scenes POST+Token Transport & Chunking Flo
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?token=tok-66-active");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?token=tok-66-active");
 
     // Assert that 3 batches were sent (25, 25, 16)
     await expect.poll(() => graphqlBatches.length).toBe(3);
@@ -225,7 +225,7 @@ test.describe("DeepSeek Megapack - 66 Scenes POST+Token Transport & Chunking Flo
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=1,2");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=1,2");
 
     const cards = page.locator(".scene-card");
     await expect(cards).toHaveCount(2);
@@ -245,7 +245,7 @@ test.describe("DeepSeek Megapack - 66 Scenes POST+Token Transport & Chunking Flo
       });
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?token=missing-token-xyz");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?token=missing-token-xyz");
 
     const loadingState = page.locator("#loading-state");
     await expect(loadingState).toContainText("Failed to load scenes");
@@ -256,8 +256,8 @@ test.describe("DeepSeek Megapack - 66 Scenes POST+Token Transport & Chunking Flo
     await expect(retryBtn).toContainText("Retry");
   });
 
-  test("5. deepseek-megapack.yml CSP validation (localhost/127.0.0.1:9941, no wildcards)", async () => {
-    const ymlPath = path.resolve("plugin/deepseek-megapack.yml");
+  test("5. empornium-megapack.yml CSP validation (localhost/127.0.0.1:9941, no wildcards)", async () => {
+    const ymlPath = path.resolve("plugin/empornium-megapack.yml");
     const ymlContent = fs.readFileSync(ymlPath, "utf8");
 
     // Parse via Python yaml module
@@ -299,7 +299,7 @@ test.describe("DeepSeek Megapack - 66 Scenes POST+Token Transport & Chunking Flo
       <!DOCTYPE html>
       <html>
       <head>
-        <link rel="stylesheet" href="http://localhost:9999/plugins/deepseek-megapack/style.css">
+        <link rel="stylesheet" href="http://localhost:9999/plugins/empornium-megapack/style.css">
       </head>
       <body>
         <div class="btn-toolbar"></div>
@@ -309,7 +309,7 @@ test.describe("DeepSeek Megapack - 66 Scenes POST+Token Transport & Chunking Flo
             <span>Scene 10</span>
           </div>
         </div>
-        <script src="http://localhost:9999/plugins/deepseek-megapack/main.js"></script>
+        <script src="http://localhost:9999/plugins/empornium-megapack/main.js"></script>
       </body>
       </html>
     `);
@@ -319,17 +319,17 @@ test.describe("DeepSeek Megapack - 66 Scenes POST+Token Transport & Chunking Flo
       return route.fulfill({ status: 500, body: "Server Error" });
     });
 
-    const triggerBtn = page.locator("#deepseek-megapack-btn");
+    const triggerBtn = page.locator("#empornium-megapack-btn");
     await expect(triggerBtn).toBeVisible();
     await triggerBtn.click();
 
-    const modal = page.locator("#deepseek-megapack-modal");
+    const modal = page.locator("#empornium-megapack-modal");
     await expect(modal).toBeVisible();
 
-    const fallback = modal.locator(".deepseek-blocked-fallback");
+    const fallback = modal.locator(".empornium-blocked-fallback");
     await expect(fallback).toBeVisible();
     await expect(fallback).toContainText("Content Loading Blocked");
-    await expect(fallback.locator(".deepseek-retry-btn")).toBeVisible();
+    await expect(fallback.locator(".empornium-retry-btn")).toBeVisible();
   });
 
 });

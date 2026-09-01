@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+﻿import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -60,7 +60,7 @@ async function openReviewPage(page) {
     // real Stash instance that may be listening on :9999.
     return route.fallback();
   });
-  await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=1");
+  await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=1");
   await expect(page.locator(".scene-card")).toHaveCount(0);
 }
 

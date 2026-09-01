@@ -963,7 +963,7 @@
 
   function setMode(mode, userInitiated = false) {
     currentMode = mode === "single" ? "single" : "megapack";
-    window._deepseekMode = currentMode;
+    window._emporniumMode = currentMode;
     const isSingle = currentMode === "single";
 
     const radioMegapack = document.getElementById("mode-megapack");
@@ -1537,13 +1537,13 @@
     }
 
     try {
-      const activeToken = tokenOverride || window._deepseekToken || tokenParam;
+      const activeToken = tokenOverride || window._emporniumToken || tokenParam;
       if (activeToken) {
         sceneIds = await resolveToken(activeToken);
       } else if (idsOverride && Array.isArray(idsOverride) && idsOverride.length > 0) {
         sceneIds = idsOverride.map((id) => parseInt(id, 10)).filter((id) => !isNaN(id) && id > 0);
-      } else if (Array.isArray(window._deepseekSceneIds) && window._deepseekSceneIds.length > 0) {
-        sceneIds = window._deepseekSceneIds.map((id) => parseInt(id, 10)).filter((id) => !isNaN(id) && id > 0);
+      } else if (Array.isArray(window._emporniumSceneIds) && window._emporniumSceneIds.length > 0) {
+        sceneIds = window._emporniumSceneIds.map((id) => parseInt(id, 10)).filter((id) => !isNaN(id) && id > 0);
       } else if (sceneIdsParam) {
         sceneIds = sceneIdsParam
           .split(",")
@@ -1571,14 +1571,14 @@
         }
       }
 
-      const inferred = modeParam || window._deepseekMode || (sceneIds.length === 1 ? "single" : "megapack");
+      const inferred = modeParam || window._emporniumMode || (sceneIds.length === 1 ? "single" : "megapack");
       setMode(inferred);
 
       renderScenes();
       updateBBCode();
     } catch (err) {
       const safeError = escapeHtml(err.message || String(err));
-      const tokenInfo = (tokenOverride || window._deepseekToken || tokenParam) ? ` (token: ${escapeHtml(tokenOverride || window._deepseekToken || tokenParam)})` : "";
+      const tokenInfo = (tokenOverride || window._emporniumToken || tokenParam) ? ` (token: ${escapeHtml(tokenOverride || window._emporniumToken || tokenParam)})` : "";
       if (loadingState) {
         loadingState.innerHTML = `
           <div style="color: var(--danger); padding: 16px; border: 1px solid var(--danger); border-radius: 4px; background: rgba(239, 68, 68, 0.1); margin: 20px auto; max-width: 500px;">
@@ -3717,14 +3717,14 @@
     closeDirectoryBrowser();
   }
 
-  function initDeepSeekReview(ids, token, mode) {
+  function initEmporniumReview(ids, token, mode) {
     if (ids && Array.isArray(ids)) {
-      window._deepseekSceneIds = ids.map((id) => parseInt(id, 10)).filter((id) => !isNaN(id) && id > 0);
+      window._emporniumSceneIds = ids.map((id) => parseInt(id, 10)).filter((id) => !isNaN(id) && id > 0);
     }
     if (token) {
-      window._deepseekToken = token;
+      window._emporniumToken = token;
     }
-    const initialMode = mode || window._deepseekMode || urlParams.get("mode") || (ids?.length === 1 ? "single" : "megapack");
+    const initialMode = mode || window._emporniumMode || urlParams.get("mode") || (ids?.length === 1 ? "single" : "megapack");
     currentStage = 1;
     maxStageReached = 1;
     bindDomEvents();
@@ -3734,7 +3734,7 @@
   }
 
   // Window exports for tests and integrations
-  window.initDeepSeekReview = initDeepSeekReview;
+  window.initEmporniumReview = initEmporniumReview;
   window.startJobPolling = startJobPolling;
   window.onTaskComplete = onTaskComplete;
   window.loadScenes = loadScenes;
@@ -4015,8 +4015,8 @@
     if (closeHeaderBtn && !closeHeaderBtn.dataset.bound) {
       closeHeaderBtn.dataset.bound = "true";
       closeHeaderBtn.addEventListener("click", () => {
-        if (typeof window._deepseekCloseModal === "function") {
-          window._deepseekCloseModal();
+        if (typeof window._emporniumCloseModal === "function") {
+          window._emporniumCloseModal();
         } else if (window.parent && window.parent !== window) {
           window.parent.postMessage({ type: "DEEPSEEK_CLOSE_MODAL" }, "*");
         }

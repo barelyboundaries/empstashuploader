@@ -51,7 +51,7 @@ signal. It loads the real <code>plugin/main.js</code>.</p>
     <tr data-scene-id="7"><td><input type="checkbox" class="sel" data-id="7"><a href="/scenes/7">scene 7</a></td></tr>
     <tr data-scene-id="12"><td><input type="checkbox" class="sel" data-id="12"><a href="/scenes/12">scene 12</a></td></tr>
     <tr data-scene-id="55"><td><input type="checkbox" class="sel" data-id="55"><a href="/scenes/55">scene 55</a></td></tr>
-    <tr data-deepseek-duplicate="7" data-scene-id="7"><td><input type="checkbox" class="sel" data-id="7"><a href="/scenes/7">duplicate scene 7</a></td></tr>
+    <tr data-empornium-duplicate="7" data-scene-id="7"><td><input type="checkbox" class="sel" data-id="7"><a href="/scenes/7">duplicate scene 7</a></td></tr>
   </tbody>
 </table>
 
@@ -64,8 +64,8 @@ signal. It loads the real <code>plugin/main.js</code>.</p>
   var toggle = document.getElementById("more-menu");
   var mode = new URLSearchParams(location.search).get("mode") || "pinned";
   var menuRoot = ".scene-list-operations-dropdown.dropdown-menu.show";
-  var pluginItemId = "deepseek-empornium-uploader-action";
-  var legacyButtonId = "deepseek-megapack-action";
+  var pluginItemId = "empornium-megapack-uploader-action";
+  var legacyButtonId = "empornium-megapack-action";
   var pluginMutations = [];
 
   status.textContent = "HARNESS READY mode=" + mode + "\n";
@@ -140,8 +140,8 @@ signal. It loads the real <code>plugin/main.js</code>.</p>
     if (menuElement()) closeMenu();
     else mountMenu();
   });
-  window.__deepseekOpened = null;
-  window.open = function (url) { window.__deepseekOpened = String(url); return null; };
+  window.__emporniumOpened = null;
+  window.open = function (url) { window.__emporniumOpened = String(url); return null; };
   new MutationObserver(function (mutations) {
     mutations.forEach(function (mutation) {
       var nodes = Array.prototype.slice.call(mutation.addedNodes).concat(Array.prototype.slice.call(mutation.removedNodes));
@@ -149,7 +149,7 @@ signal. It loads the real <code>plugin/main.js</code>.</p>
     });
   }).observe(document.body, { childList: true, subtree: true });
 
-  window.__deepseekHarness = {
+  window.__emporniumHarness = {
     mode: mode,
     ready: true,
     assert: assertHarness,

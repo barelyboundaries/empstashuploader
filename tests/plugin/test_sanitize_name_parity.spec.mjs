@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+﻿import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -61,7 +61,7 @@ test.describe('Sanitize Name Parity between JS and Python', () => {
       });
     });
 
-    await page.goto('http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=1');
+    await page.goto('http://localhost:9999/plugins/empornium-megapack/review.html?scenes=1');
 
     for (const [rawInput, expected] of CORPUS) {
       const result = await page.evaluate((val) => window.sanitizeName(val), rawInput);
@@ -80,7 +80,7 @@ test.describe('Sanitize Name Parity between JS and Python', () => {
       });
     });
 
-    await page.goto('http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=1');
+    await page.goto('http://localhost:9999/plugins/empornium-megapack/review.html?scenes=1');
 
     // Subfolder creation
     const subResult = await page.evaluate(() => window.getPackDestinationFolder('C:\\Packs', 'My Pack'));

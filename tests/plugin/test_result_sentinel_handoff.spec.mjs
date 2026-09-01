@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+﻿import { test, expect } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -141,7 +141,7 @@ async function captureRunId(page) {
 }
 
 async function runBuild(page) {
-  await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=10&mode=single");
+  await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=10&mode=single");
   await expect(page.locator("#loading-state")).toBeHidden({ timeout: 5000 });
   await page.locator("#output-dir").fill("C:\\Packs");
   await page.locator("#pack-title").fill("Anji & Honey");

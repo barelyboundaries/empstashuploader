@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+﻿import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -68,7 +68,7 @@ test.describe('Empify Tag Parity between JS and Python', () => {
       });
     });
 
-    await page.goto('http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=1');
+    await page.goto('http://localhost:9999/plugins/empornium-megapack/review.html?scenes=1');
 
     for (const [rawInput, expected] of EMPIFY_CORPUS) {
       const result = await page.evaluate((val) => window.empifyTag(val), rawInput);
@@ -87,7 +87,7 @@ test.describe('Empify Tag Parity between JS and Python', () => {
       });
     });
 
-    await page.goto('http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=1');
+    await page.goto('http://localhost:9999/plugins/empornium-megapack/review.html?scenes=1');
 
     // Backend-derived properties (not single fixed outputs): separator runs of
     // any mix collapse to one dot; edge separators are trimmed; tags made only

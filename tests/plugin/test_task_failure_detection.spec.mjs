@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+﻿import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -117,7 +117,7 @@ test.describe('Task Failure Sentinel Detection & False-Success Protection', () =
       return route.continue();
     });
 
-    await page.goto('http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=101&mode=megapack');
+    await page.goto('http://localhost:9999/plugins/empornium-megapack/review.html?scenes=101&mode=megapack');
     await page.locator("#output-dir").fill("C:\\Packs");
     await expect(page.locator('#loading-state')).toBeHidden({ timeout: 5000 });
 
@@ -201,7 +201,7 @@ test.describe('Task Failure Sentinel Detection & False-Success Protection', () =
       window.WebSocket = MockWS;
     });
 
-    await page.goto('http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=201&mode=megapack');
+    await page.goto('http://localhost:9999/plugins/empornium-megapack/review.html?scenes=201&mode=megapack');
     await page.locator("#output-dir").fill("C:\\Packs");
     await page.locator('#btn-build').click();
 
@@ -283,7 +283,7 @@ test.describe('Task Failure Sentinel Detection & False-Success Protection', () =
       window.WebSocket = MockWS;
     });
 
-    await page.goto('http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=301&mode=megapack');
+    await page.goto('http://localhost:9999/plugins/empornium-megapack/review.html?scenes=301&mode=megapack');
     await page.locator("#output-dir").fill("C:\\Packs");
     await page.locator('#btn-build').click();
 
@@ -398,7 +398,7 @@ test.describe('Task Failure Sentinel Detection & False-Success Protection', () =
       window.WebSocket = MockWS;
     });
 
-    await page.goto('http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=401&mode=megapack');
+    await page.goto('http://localhost:9999/plugins/empornium-megapack/review.html?scenes=401&mode=megapack');
     await page.locator("#output-dir").fill("C:\\Packs");
     await page.locator('#btn-build').click();
     await expect.poll(() => page.evaluate(() => Boolean(window.__mockWsInstance))).toBe(true);
@@ -453,7 +453,7 @@ test.describe('Task Failure Sentinel Detection & False-Success Protection', () =
 
   test('5. Case sensitivity and enum matching: findFailureSentinel correctly handles Stash mixed-case LogLevel enum', async ({ page }) => {
     setupMocks(page);
-    await page.goto('http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=1');
+    await page.goto('http://localhost:9999/plugins/empornium-megapack/review.html?scenes=1');
 
     const result = await page.evaluate(() => {
       const runId = 'test-case-nonce';
@@ -586,7 +586,7 @@ test.describe('Task Failure Sentinel Detection & False-Success Protection', () =
       window.WebSocket = FailingWebSocket;
     });
 
-    await page.goto('http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=601&mode=megapack');
+    await page.goto('http://localhost:9999/plugins/empornium-megapack/review.html?scenes=601&mode=megapack');
     await page.locator("#output-dir").fill("C:\\Packs");
     await page.locator('#btn-build').click();
 
@@ -679,7 +679,7 @@ test.describe('Task Failure Sentinel Detection & False-Success Protection', () =
       window.WebSocket = FailingWebSocket;
     });
 
-    await page.goto('http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=701&mode=megapack');
+    await page.goto('http://localhost:9999/plugins/empornium-megapack/review.html?scenes=701&mode=megapack');
     await page.locator("#output-dir").fill("C:\\Packs");
     await page.locator('#btn-build').click();
 

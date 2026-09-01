@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+﻿import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -50,7 +50,7 @@ async function openReviewPage(page) {
     // real Stash instance that may be listening on :9999.
     return route.fallback();
   });
-  await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=1");
+  await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=1");
   await expect(page.locator(".scene-card")).toHaveCount(0);
 }
 
@@ -91,7 +91,7 @@ test.describe("DeepSeek Review — destination collision data layer", () => {
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=7");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=7");
 
     // No DOM wait here: the forced batch error makes the fallback return scene 7,
     // whose card renders asynchronously — a scene-card count assertion would race
@@ -544,7 +544,7 @@ test.describe("DeepSeek Review — destination collision dialog", () => {
       wire.probes.push(route.request().postData());
       return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ results: {} }) });
     });
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=1");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=1");
     await expect(page.locator(".scene-card")).toHaveCount(0);
 
     const collisions = [
@@ -723,7 +723,7 @@ test.describe("DeepSeek Review — destination collision dialog", () => {
       return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ results: {} }) });
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=1");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=1");
     await expect(page.locator(".scene-card")).toHaveCount(0);
 
     const dialogPromise = page.evaluate(
@@ -902,7 +902,7 @@ async function bootExecutionHarness(page, {
   });
 
   const sceneIds = scenes.map((s) => s.id).join(",");
-  await page.goto(`http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=${sceneIds}&mode=megapack`);
+  await page.goto(`http://localhost:9999/plugins/empornium-megapack/review.html?scenes=${sceneIds}&mode=megapack`);
   // Seed-dir field starts EMPTY (no machine-path default) — set it so the
   // consolidation destination matches the C:\Packs fixtures below.
   await page.locator("#output-dir").fill("C:\\Packs");

@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+﻿import { test, expect } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -55,7 +55,7 @@ test.describe("Presentation size indicator and preflight checks", () => {
   test("renders presentation_size preflight check and shows error styling when total exceeds 25 MiB cap", async ({ page }) => {
     setupGraphQLMocks(page);
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=10&mode=megapack");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=10&mode=megapack");
     await expect(page.locator("#loading-state")).toBeHidden({ timeout: 5000 });
 
     const overSizeBytes = 26.5 * 1024 * 1024; // 26.5 MiB
@@ -107,7 +107,7 @@ test.describe("Presentation size indicator and preflight checks", () => {
   test("renders presentation size indicator with normal styling when under cap", async ({ page }) => {
     setupGraphQLMocks(page);
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=10&mode=megapack");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=10&mode=megapack");
     await expect(page.locator("#loading-state")).toBeHidden({ timeout: 5000 });
 
     const underSizeBytes = 2.1 * 1024 * 1024; // 2.1 MiB

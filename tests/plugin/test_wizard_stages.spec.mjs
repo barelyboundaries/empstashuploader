@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+﻿import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -19,7 +19,7 @@ import path from 'node:path';
 //     failing stage into view, and does NOT advance.
 //   - Back is always free (except on stage 1). Rail click-to-jump works only
 //     for already-reached stages; forward movement requires Next validation.
-//   - Stage state is plain JS (no storage): initDeepSeekReview starts at 1.
+//   - Stage state is plain JS (no storage): initEmporniumReview starts at 1.
 //   - GET /health scratch_dir prefills #scratch-dir once at init, never
 //     clobbering user input.
 //   - The runPluginTask payload (intercepted from the WIRE, not the DOM)
@@ -173,7 +173,7 @@ async function bootHarness(page, {
   });
 
   const sceneIds = scenes.map((s) => s.id).join(",");
-  await page.goto(`http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=${sceneIds}&mode=${mode}`);
+  await page.goto(`http://localhost:9999/plugins/empornium-megapack/review.html?scenes=${sceneIds}&mode=${mode}`);
   await expect(page.locator(".scene-card")).toHaveCount(scenes.length);
   // The seed/scratch fields drive the stage gates — point them at the spec's
   // paths (the health prefill may also have filled scratch; fill() wins).

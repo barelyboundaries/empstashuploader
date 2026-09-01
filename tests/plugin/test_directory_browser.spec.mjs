@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+﻿import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -53,7 +53,7 @@ test.describe("DeepSeek Megapack - Server Filesystem Directory Browser", () => {
       });
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html");
 
     const outputDirInput = page.locator("#output-dir");
     const browseBtn = page.locator("#btn-browse-dir");
@@ -93,7 +93,7 @@ test.describe("DeepSeek Megapack - Server Filesystem Directory Browser", () => {
       });
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html");
     // Seed-dir field starts EMPTY (no machine-path default) — set it explicitly.
     await page.locator("#output-dir").fill("C:\\Packs");
 
@@ -167,7 +167,7 @@ test.describe("DeepSeek Megapack - Server Filesystem Directory Browser", () => {
       });
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html");
     await page.locator("#btn-browse-dir").click();
 
     const actionEntry = page.locator(".dir-entry").filter({ hasText: "Action" });
@@ -247,7 +247,7 @@ test.describe("DeepSeek Megapack - Server Filesystem Directory Browser", () => {
       });
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html");
     await page.locator("#output-dir").fill("C:\\Packs\\Action");
     await page.locator("#btn-browse-dir").click();
 
@@ -292,7 +292,7 @@ test.describe("DeepSeek Megapack - Server Filesystem Directory Browser", () => {
       });
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html");
     await page.locator("#output-dir").fill("C:\\Packs");
     const outputDir = page.locator("#output-dir");
     await expect(outputDir).toHaveValue("C:\\Packs");
@@ -341,7 +341,7 @@ test.describe("DeepSeek Megapack - Server Filesystem Directory Browser", () => {
       });
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html");
     const outputDir = page.locator("#output-dir");
     await outputDir.fill("D:\\StashMedia\\Megapacks");
 
@@ -463,7 +463,7 @@ test.describe("DeepSeek Megapack - Server Filesystem Directory Browser", () => {
       });
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=101,102&mode=megapack");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=101,102&mode=megapack");
     // Pack title starts EMPTY — set it so the probe target keeps its
     // <seed>/<sanitized title> subfolder.
     await page.locator("#pack-title").fill("My Awesome Megapack");
@@ -528,7 +528,7 @@ test.describe("DeepSeek Megapack - Server Filesystem Directory Browser", () => {
       });
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html");
     await page.locator("#output-dir").fill("X:\\NonExistent");
     await page.locator("#btn-browse-dir").click();
 
@@ -591,7 +591,7 @@ test.describe("DeepSeek Megapack - Server Filesystem Directory Browser", () => {
       });
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html");
     await page.locator("#btn-browse-dir").click();
     await expect(page.locator("#dir-browser-modal")).toBeVisible();
 
@@ -637,7 +637,7 @@ test.describe("DeepSeek Megapack - Server Filesystem Directory Browser", () => {
       });
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html");
     await page.locator("#btn-browse-dir").click();
 
     const specialEntry = page.locator(".dir-entry").first();
@@ -679,7 +679,7 @@ test.describe("DeepSeek Megapack - Server Filesystem Directory Browser", () => {
       });
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html");
     await page.locator("#output-dir").fill("D:\\EmptyStashPack");
     await page.locator("#btn-browse-dir").click();
 

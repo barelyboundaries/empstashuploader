@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+﻿import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -62,10 +62,10 @@ test.describe("DeepSeek Megapack Frontend - Adversarial Stress & Verification Su
           body: `
             <!DOCTYPE html>
             <html>
-            <head><link rel="stylesheet" href="http://localhost:9999/plugins/deepseek-megapack/style.css"></head>
+            <head><link rel="stylesheet" href="http://localhost:9999/plugins/empornium-megapack/style.css"></head>
             <body>
               <div id="wrapper">${c.html}</div>
-              <script src="http://localhost:9999/plugins/deepseek-megapack/main.js"></script>
+              <script src="http://localhost:9999/plugins/empornium-megapack/main.js"></script>
             </body>
             </html>
           `
@@ -73,7 +73,7 @@ test.describe("DeepSeek Megapack Frontend - Adversarial Stress & Verification Su
       });
 
       await page.goto("http://localhost:9999/scenes");
-      const btn = page.locator("#deepseek-megapack-btn");
+      const btn = page.locator("#empornium-megapack-btn");
       await expect(btn).toBeVisible();
       await expect(btn).toHaveCount(1);
     }
@@ -86,10 +86,10 @@ test.describe("DeepSeek Megapack Frontend - Adversarial Stress & Verification Su
         body: `
           <!DOCTYPE html>
           <html>
-          <head><link rel="stylesheet" href="http://localhost:9999/plugins/deepseek-megapack/style.css"></head>
+          <head><link rel="stylesheet" href="http://localhost:9999/plugins/empornium-megapack/style.css"></head>
           <body>
             <div id="dynamic-host"></div>
-            <script src="http://localhost:9999/plugins/deepseek-megapack/main.js"></script>
+            <script src="http://localhost:9999/plugins/empornium-megapack/main.js"></script>
           </body>
           </html>
         `
@@ -99,7 +99,7 @@ test.describe("DeepSeek Megapack Frontend - Adversarial Stress & Verification Su
     await page.goto("http://localhost:9999/dynamic");
 
     // Initially no button because no matching container exists
-    await expect(page.locator("#deepseek-megapack-btn")).toHaveCount(0);
+    await expect(page.locator("#empornium-megapack-btn")).toHaveCount(0);
 
     // Dynamically insert .btn-toolbar into #dynamic-host
     await page.evaluate(() => {
@@ -110,7 +110,7 @@ test.describe("DeepSeek Megapack Frontend - Adversarial Stress & Verification Su
     });
 
     // MutationObserver should detect and inject button immediately
-    const dynBtn = page.locator("#deepseek-megapack-btn");
+    const dynBtn = page.locator("#empornium-megapack-btn");
     await expect(dynBtn).toBeVisible({ timeout: 2000 });
     await expect(dynBtn).toHaveCount(1);
 
@@ -125,7 +125,7 @@ test.describe("DeepSeek Megapack Frontend - Adversarial Stress & Verification Su
     });
 
     await page.waitForTimeout(100);
-    await expect(page.locator("#deepseek-megapack-btn")).toHaveCount(1);
+    await expect(page.locator("#empornium-megapack-btn")).toHaveCount(1);
   });
 
   test("ADV-2: Mutation churn & rapid click spamming resilience", async ({ page }) => {
@@ -138,7 +138,7 @@ test.describe("DeepSeek Megapack Frontend - Adversarial Stress & Verification Su
         body: `
           <!DOCTYPE html>
           <html>
-          <head><link rel="stylesheet" href="http://localhost:9999/plugins/deepseek-megapack/style.css"></head>
+          <head><link rel="stylesheet" href="http://localhost:9999/plugins/empornium-megapack/style.css"></head>
           <body>
             <div id="app-root">
               <div class="btn-toolbar"></div>
@@ -146,7 +146,7 @@ test.describe("DeepSeek Megapack Frontend - Adversarial Stress & Verification Su
                 <input type="checkbox" checked />
               </div>
             </div>
-            <script src="http://localhost:9999/plugins/deepseek-megapack/main.js"></script>
+            <script src="http://localhost:9999/plugins/empornium-megapack/main.js"></script>
           </body>
           </html>
         `
@@ -168,7 +168,7 @@ test.describe("DeepSeek Megapack Frontend - Adversarial Stress & Verification Su
     });
 
     await page.waitForTimeout(150);
-    const triggerBtn = page.locator("#deepseek-megapack-btn");
+    const triggerBtn = page.locator("#empornium-megapack-btn");
     await expect(triggerBtn).toBeVisible();
     await expect(triggerBtn).toHaveCount(1);
 
@@ -178,7 +178,7 @@ test.describe("DeepSeek Megapack Frontend - Adversarial Stress & Verification Su
     }
 
     // Only 1 modal overlay should exist in DOM
-    const modal = page.locator("#deepseek-megapack-modal");
+    const modal = page.locator("#empornium-megapack-modal");
     await expect(modal).toBeVisible();
     await expect(modal).toHaveCount(1);
 
@@ -203,7 +203,7 @@ test.describe("DeepSeek Megapack Frontend - Adversarial Stress & Verification Su
         body: `
           <!DOCTYPE html>
           <html>
-          <head><link rel="stylesheet" href="http://localhost:9999/plugins/deepseek-megapack/style.css"></head>
+          <head><link rel="stylesheet" href="http://localhost:9999/plugins/empornium-megapack/style.css"></head>
           <body>
             <div class="btn-toolbar"></div>
             <div id="test-grid">
@@ -247,7 +247,7 @@ test.describe("DeepSeek Megapack Frontend - Adversarial Stress & Verification Su
                 <input type="checkbox" checked />
               </div>
             </div>
-            <script src="http://localhost:9999/plugins/deepseek-megapack/main.js"></script>
+            <script src="http://localhost:9999/plugins/empornium-megapack/main.js"></script>
           </body>
           </html>
         `
@@ -256,13 +256,13 @@ test.describe("DeepSeek Megapack Frontend - Adversarial Stress & Verification Su
 
     await page.goto("http://localhost:9999/selection-test");
 
-    const triggerBtn = page.locator("#deepseek-megapack-btn");
+    const triggerBtn = page.locator("#empornium-megapack-btn");
     await triggerBtn.click();
 
-    const modal = page.locator("#deepseek-megapack-modal");
+    const modal = page.locator("#empornium-megapack-modal");
     await expect(modal).toBeVisible();
-    await expect(modal.locator(".deepseek-badge")).toContainText("5 scene(s) selected");
-    const extractedIds = await page.evaluate(() => window._deepseekSceneIds);
+    await expect(modal.locator(".empornium-badge")).toContainText("5 scene(s) selected");
+    const extractedIds = await page.evaluate(() => window._emporniumSceneIds);
     expect(extractedIds).toEqual(expect.arrayContaining([101, 102, 103, 104, 105]));
 
 
@@ -276,11 +276,11 @@ test.describe("DeepSeek Megapack Frontend - Adversarial Stress & Verification Su
         body: `
           <!DOCTYPE html>
           <html>
-          <head><link rel="stylesheet" href="http://localhost:9999/plugins/deepseek-megapack/style.css"></head>
+          <head><link rel="stylesheet" href="http://localhost:9999/plugins/empornium-megapack/style.css"></head>
           <body>
             <div class="btn-toolbar"></div>
             <div class="scene-header">Single Scene View 777</div>
-            <script src="http://localhost:9999/plugins/deepseek-megapack/main.js"></script>
+            <script src="http://localhost:9999/plugins/empornium-megapack/main.js"></script>
           </body>
           </html>
         `
@@ -288,9 +288,9 @@ test.describe("DeepSeek Megapack Frontend - Adversarial Stress & Verification Su
     });
 
     await page.goto("http://localhost:9999/scenes/777");
-    await page.locator("#deepseek-megapack-btn").click();
-    await expect(page.locator("#deepseek-megapack-modal")).toBeVisible();
-    const fallbackIds = await page.evaluate(() => window._deepseekSceneIds);
+    await page.locator("#empornium-megapack-btn").click();
+    await expect(page.locator("#empornium-megapack-modal")).toBeVisible();
+    const fallbackIds = await page.evaluate(() => window._emporniumSceneIds);
     expect(fallbackIds).toEqual([777]);
 
 
@@ -303,11 +303,11 @@ test.describe("DeepSeek Megapack Frontend - Adversarial Stress & Verification Su
         body: `
           <!DOCTYPE html>
           <html>
-          <head><link rel="stylesheet" href="http://localhost:9999/plugins/deepseek-megapack/style.css"></head>
+          <head><link rel="stylesheet" href="http://localhost:9999/plugins/empornium-megapack/style.css"></head>
           <body>
             <div class="btn-toolbar"></div>
             <div>No selection</div>
-            <script src="http://localhost:9999/plugins/deepseek-megapack/main.js"></script>
+            <script src="http://localhost:9999/plugins/empornium-megapack/main.js"></script>
           </body>
           </html>
         `
@@ -321,9 +321,9 @@ test.describe("DeepSeek Megapack Frontend - Adversarial Stress & Verification Su
     });
 
     await page.goto("http://localhost:9999/scenes-empty");
-    await page.locator("#deepseek-megapack-btn").click();
+    await page.locator("#empornium-megapack-btn").click();
     expect(alertMessage).toBe("Please select at least one scene to build a megapack.");
-    await expect(page.locator("#deepseek-megapack-modal")).toHaveCount(0);
+    await expect(page.locator("#empornium-megapack-modal")).toHaveCount(0);
   });
 
   test("ADV-4: Modal Backdrop Click, Header Close & Cross-Frame postMessage", async ({ page }) => {
@@ -351,13 +351,13 @@ test.describe("DeepSeek Megapack Frontend - Adversarial Stress & Verification Su
         body: `
           <!DOCTYPE html>
           <html>
-          <head><link rel="stylesheet" href="http://localhost:9999/plugins/deepseek-megapack/style.css"></head>
+          <head><link rel="stylesheet" href="http://localhost:9999/plugins/empornium-megapack/style.css"></head>
           <body>
             <div class="btn-toolbar"></div>
             <div class="scene-card" data-scene-id="1">
               <input type="checkbox" checked />
             </div>
-            <script src="http://localhost:9999/plugins/deepseek-megapack/main.js"></script>
+            <script src="http://localhost:9999/plugins/empornium-megapack/main.js"></script>
           </body>
           </html>
         `
@@ -366,11 +366,11 @@ test.describe("DeepSeek Megapack Frontend - Adversarial Stress & Verification Su
 
     await page.goto("http://localhost:9999/modal-lifecycle");
 
-    const triggerBtn = page.locator("#deepseek-megapack-btn");
+    const triggerBtn = page.locator("#empornium-megapack-btn");
     await triggerBtn.click();
 
-    const overlay = page.locator("#deepseek-megapack-modal");
-    const container = page.locator(".deepseek-modal-container");
+    const overlay = page.locator("#empornium-megapack-modal");
+    const container = page.locator(".empornium-modal-container");
     await expect(overlay).toBeVisible();
 
     // 1. Click inside modal container -> modal should REMAIN OPEN
@@ -441,7 +441,7 @@ test.describe("DeepSeek Megapack Frontend - Adversarial Stress & Verification Su
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=10,20,30");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=10,20,30");
 
     const cards = page.locator(".scene-card");
     await expect(cards).toHaveCount(3);
@@ -562,7 +562,7 @@ test.describe("DeepSeek Megapack Frontend - Adversarial Stress & Verification Su
       window.WebSocket = FailingWebSocket;
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=55,56&mode=megapack");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=55,56&mode=megapack");
     // Seed-dir field starts EMPTY (no machine-path default) — set it so the
     // build gate passes against the C:\Packs fixtures. The pack title also
     // starts EMPTY; fill it so the artifact panel names the torrent as before.
@@ -650,7 +650,7 @@ test.describe("DeepSeek Megapack Frontend - Adversarial Stress & Verification Su
       await dialog.dismiss();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=1,2&mode=megapack");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=1,2&mode=megapack");
     // Seed-dir field starts EMPTY — set it so the confirm dialog names C:\Packs.
     await page.locator("#output-dir").fill("C:\\Packs");
     await page.locator("#btn-consolidate").click();
@@ -720,7 +720,7 @@ test.describe("DeepSeek Megapack Frontend - Adversarial Stress & Verification Su
       return route.continue();
     });
 
-    await page.goto("http://localhost:9999/plugins/deepseek-megapack/review.html?scenes=1");
+    await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=1");
     // Seed-dir field starts EMPTY — set it so the build gate passes.
     await page.locator("#output-dir").fill("C:\\Packs");
     await page.locator("#btn-build").click();

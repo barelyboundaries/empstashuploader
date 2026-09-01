@@ -1,10 +1,10 @@
-import { test, expect } from "@playwright/test";
+﻿import { test, expect } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 
 /**
  * main.js mounts the review UI by injecting review.html's <body> markup into
- * .deepseek-modal-body and its <style> block into the host document's <head>.
+ * .empornium-modal-body and its <style> block into the host document's <head>.
  * There is no iframe.
  *
  * That means review.html's own `body { display:flex; height:100vh }` rule never
@@ -38,15 +38,15 @@ async function mountLikeMainJs(page, { viewport = { width: 1419, height: 856 } }
 
       // Same DOM shape main.js builds.
       const overlay = document.createElement("div");
-      overlay.className = "deepseek-modal-overlay";
-      overlay.id = "deepseek-megapack-modal";
+      overlay.className = "empornium-modal-overlay";
+      overlay.id = "empornium-megapack-modal";
       const container = document.createElement("div");
-      container.className = "deepseek-modal-container";
+      container.className = "empornium-modal-container";
       const header = document.createElement("div");
-      header.className = "deepseek-modal-header";
-      header.innerHTML = '<div class="deepseek-modal-title">DeepSeek Megapack Builder</div>';
+      header.className = "empornium-modal-header";
+      header.innerHTML = '<div class="empornium-modal-title">DeepSeek Megapack Builder</div>';
       const body = document.createElement("div");
-      body.className = "deepseek-modal-body";
+      body.className = "empornium-modal-body";
       container.appendChild(header);
       container.appendChild(body);
       overlay.appendChild(container);
@@ -83,7 +83,7 @@ test.describe("Review UI mounted the way main.js mounts it", () => {
     await stuffSceneList(page);
 
     const fits = await page.evaluate(() => {
-      const rect = document.querySelector(".deepseek-modal-container").getBoundingClientRect();
+      const rect = document.querySelector(".empornium-modal-container").getBoundingClientRect();
       return { bottom: rect.bottom, viewport: window.innerHeight };
     });
 
@@ -145,7 +145,7 @@ test.describe("Review UI mounted the way main.js mounts it", () => {
 
     const m = await page.evaluate(() => {
       const layout = document.querySelector(".main-layout");
-      const modalBody = document.querySelector(".deepseek-modal-body");
+      const modalBody = document.querySelector(".empornium-modal-body");
       return {
         layoutHeight: layout.getBoundingClientRect().height,
         modalBodyHeight: modalBody.getBoundingClientRect().height
