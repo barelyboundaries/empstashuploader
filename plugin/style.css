@@ -106,3 +106,29 @@
   align-items: center;
   font-weight: 500;
 }
+
+/* Sidecar status badge (review.html header pill, fed by /health via review.js).
+   Palette follows this stylesheet's existing hex set (no CSS vars here). */
+.sidecar-status {
+  font-size: 0.75rem;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.sidecar-ok {
+  background: #198754;
+  color: #fff;
+}
+
+.sidecar-warn {
+  background: #ffc107;
+  color: #212529;
+}
+
+.sidecar-bad {
+  background: #dc3545;
+  color: #fff;
+}

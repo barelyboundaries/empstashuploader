@@ -8,6 +8,8 @@
   "use strict";
 
   const PLUGIN_ID = "deepseek-megapack";
+  // keep in sync with backend app.version (main.py FastAPI version) — bump when backend bumps
+  const EXPECTED_SIDECAR_VERSION = "0.2.0";
   let currentMode = "megapack"; // "megapack" | "single"
   let hasUserEditedTitle = false;
   let scenes = [];
@@ -2097,6 +2099,7 @@
   }
 
   async function consolidateFiles() {
+    refreshSidecarStatus(); // fire-and-forget: re-probe the badge on user action
     const rawOutput = (document.getElementById("output-dir")?.value || "").trim();
     if (!rawOutput) {
       alert("Please specify a destination directory.");
@@ -3752,6 +3755,7 @@
   window.activeScenes = activeScenes;
   window.computeDuplicateGroups = computeDuplicateGroups;
   window.consolidateFiles = consolidateFiles;
+  window.refreshSidecarStatus = refreshSidecarStatus;
   window.consolidatedFileIds = consolidatedFileIds;
   window.buildMegapack = buildMegapack;
   window.setMode = setMode;
@@ -3805,6 +3809,61 @@
         input.dispatchEvent(new Event("input", { bubbles: true }));
       }
       return;
+    }
+  }
+
+  // Live sidecar status badge (header pill). Best-effort: every failure mode
+  // collapses into one of the three badge states, never a thrown error into
+  // the UI. Unlike prefillScratchDirFromHealth — which stops at the first
+  // candidate that answers — this tries EVERY candidate before concluding,
+  // so a half-up sidecar (one loopback name answering, the other blocked)
+  // never reads as NOT RUNNING.
+  async function refreshSidecarStatus() {
+    try {
+      const badge = document.getElementById("sidecar-status");
+      if (!badge) return;
+      const endpoints = backendEndpoints("/health");
+      let version = null; // parsed from an ok+JSON candidate
+      let sawRunning = false; // any ok HTTP response, even with a malformed body
+      for (const url of endpoints) {
+        try {
+          const response = await fetch(url);
+          if (!response.ok) continue;
+          sawRunning = true;
+          try {
+            const data = await response.json();
+            const v = String(data?.version ?? "").trim();
+            if (v) {
+              version = v;
+              break; // usable version in hand — no need for more candidates
+            }
+          } catch (jsonErr) {
+            // Malformed body on an ok response: the sidecar IS running but
+            // this candidate exposed no version — keep trying the rest.
+          }
+        } catch (err) {
+          // Network-level failure for this candidate — try the next one.
+        }
+      }
+      if (version !== null) {
+        if (version === EXPECTED_SIDECAR_VERSION) {
+          badge.textContent = `Sidecar: connected (v${version})`;
+          badge.className = "sidecar-status sidecar-ok";
+        } else {
+          badge.textContent = `Sidecar: outdated (v${version}, expected ${EXPECTED_SIDECAR_VERSION}) — restart via start_backend.ps1`;
+          badge.className = "sidecar-status sidecar-warn";
+        }
+      } else if (sawRunning) {
+        // Running, but no candidate exposed a parseable version — refuse to
+        // claim green; nudge a restart so the expected version comes up.
+        badge.textContent = `Sidecar: outdated (v?, expected ${EXPECTED_SIDECAR_VERSION}) — restart via start_backend.ps1`;
+        badge.className = "sidecar-status sidecar-warn";
+      } else {
+        badge.textContent = "Sidecar: NOT RUNNING — run start_backend.ps1";
+        badge.className = "sidecar-status sidecar-bad";
+      }
+    } catch (err) {
+      // Best-effort: never throw into the UI.
     }
   }
 
@@ -4120,5 +4179,6 @@
   // Initial Load
   loadScenes();
   prefillScratchDirFromHealth();
+  refreshSidecarStatus();
 })();
 
