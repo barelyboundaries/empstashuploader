@@ -67,15 +67,15 @@ class TestFeature1PackagingAndDiscovery:
     """Feature 1: 4-tier ordered discovery protocol & packaging fix."""
 
     def test_f1_01_discovery_via_env_var(self, tmp_path, monkeypatch):
-        """1.1 DEEPSEEK_BACKEND_DIR environment variable is honored when set."""
+        """1.1 EMPORNIUM_BACKEND_DIR environment variable is honored when set."""
         fake_backend = tmp_path / "custom_backend"
         fake_backend.mkdir()
         (fake_backend / "empornium_megapack").mkdir()
         (fake_backend / "empornium_megapack" / "__init__.py").write_text("# fake pkg", encoding="utf-8")
 
-        monkeypatch.setenv("DEEPSEEK_BACKEND_DIR", str(fake_backend))
-        assert os.environ.get("DEEPSEEK_BACKEND_DIR") == str(fake_backend)
-        assert Path(os.environ["DEEPSEEK_BACKEND_DIR"]).exists()
+        monkeypatch.setenv("EMPORNIUM_BACKEND_DIR", str(fake_backend))
+        assert os.environ.get("EMPORNIUM_BACKEND_DIR") == str(fake_backend)
+        assert Path(os.environ["EMPORNIUM_BACKEND_DIR"]).exists()
 
     def test_f1_02_discovery_via_site_packages(self):
         """1.2 Package resolution succeeds via standard Python import mechanisms."""

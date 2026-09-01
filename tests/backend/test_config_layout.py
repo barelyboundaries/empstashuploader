@@ -3,7 +3,7 @@
 Settings must work in BOTH layouts: a dev checkout (repo root holds the
 local settings file and runtime dirs) and a vendored plugin dir under
 ~/.stash/plugins (local settings file beside the package, runtime dirs under
-~/.deepseek-megapack — never anywhere under ~/.stash).
+~/.empornium-megapack — never anywhere under ~/.stash).
 """
 
 from pathlib import Path
@@ -41,7 +41,7 @@ class TestDevCheckoutRuntimeDefaults:
 
 class TestVendoredRuntimeDefaults:
     """Without backend/+plugin/ siblings the package is vendored (e.g. inside
-    ~/.stash/plugins): runtime dirs fall back to ~/.deepseek-megapack/runtime."""
+    ~/.stash/plugins): runtime dirs fall back to ~/.empornium-megapack/runtime."""
 
     def test_defaults_under_home_when_no_checkout_markers(self, tmp_path, monkeypatch):
         fake_root = tmp_path / "vendored_pkg_parent"
@@ -53,7 +53,7 @@ class TestVendoredRuntimeDefaults:
 
         s = Settings()
 
-        runtime = fake_home / ".deepseek-megapack" / "runtime"
+        runtime = fake_home / ".empornium-megapack" / "runtime"
         assert s.staging_dir == runtime / "staging"
         assert s.output_dir == runtime / "output"
         assert s.scratch_dir == runtime / "scratch"
@@ -71,7 +71,7 @@ class TestVendoredRuntimeDefaults:
 
         assert fake_root not in (s.staging_dir, s.output_dir, s.scratch_dir)
         assert ".stash" not in s.scratch_dir.parts
-        assert s.scratch_dir == fake_home / ".deepseek-megapack" / "runtime" / "scratch"
+        assert s.scratch_dir == fake_home / ".empornium-megapack" / "runtime" / "scratch"
 
 
 class TestConfigLocalSearchOrder:

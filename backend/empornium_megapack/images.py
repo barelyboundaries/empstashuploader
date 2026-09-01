@@ -280,7 +280,7 @@ def upload_hamster(image_path: str | Path, settings: Settings | None = None) -> 
     api_key = settings.hamster_api_key.strip()
     if not api_key:
         raise ContactSheetError(
-            "No HamsterImg API key configured; set DEEPSEEK_HAMSTER_API_KEY "
+            "No HamsterImg API key configured; set EMPORNIUM_HAMSTER_API_KEY "
             f"or hamster_api_key in {CONFIG_LOCAL_NAME}."
         )
     data = {"type": "file", "action": "upload", "nsfw": "1", "format": "json"}

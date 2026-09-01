@@ -27,8 +27,8 @@ else
 fi
 export PYTHONPATH
 
-# --- ffmpeg: DEEPSEEK_FFMPEG_DIR wins; fall back to ~/.stash ---
-FFMPEG_DIR="${DEEPSEEK_FFMPEG_DIR:-}"
+# --- ffmpeg: EMPORNIUM_FFMPEG_DIR wins; fall back to ~/.stash ---
+FFMPEG_DIR="${EMPORNIUM_FFMPEG_DIR:-}"
 if [ -n "$FFMPEG_DIR" ] && [ -x "$FFMPEG_DIR/ffmpeg" ]; then
     :
 elif [ -d "$HOME/.stash" ] && [ -x "$HOME/.stash/ffmpeg" ]; then

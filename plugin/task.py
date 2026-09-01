@@ -116,7 +116,7 @@ def ensure_python_env():
 
     Trigger: 'import empornium_megapack' OR 'import torf' fails.
     Interpreter search order:
-      1. DEEPSEEK_VENV environment variable
+      1. EMPORNIUM_VENV environment variable
       2. A venv directory beside the plugin
          (Scripts/python.exe on Windows, bin/python elsewhere)
       3. A venv directory in the current working directory
@@ -141,14 +141,14 @@ def ensure_python_env():
         python_rel = Path("bin", "python")
 
     visited = {
-        p for p in os.environ.get("DEEPSEEK_REEXEC_VISITED", "").split(os.pathsep) if p
+        p for p in os.environ.get("EMPORNIUM_REEXEC_VISITED", "").split(os.pathsep) if p
     }
     # Installer-contract venv dir name, assembled from parts: the distribution
     # leak-grep (deny list) flags the joined literal even though the directory
     # itself is never committed (install.ps1/install.sh create it, todo 8).
     venv_dirname = "." + "venv"
     for venv_dir in (
-        os.environ.get("DEEPSEEK_VENV"),
+        os.environ.get("EMPORNIUM_VENV"),
         str(CURRENT_DIR / venv_dirname),
         str(Path.cwd() / venv_dirname),
         os.environ.get("VIRTUAL_ENV"),
@@ -161,7 +161,7 @@ def ensure_python_env():
         resolved = str(python_exe.resolve())
         if resolved == str(Path(sys.executable).resolve()) or resolved in visited:
             continue  # re-execing into this interpreter cannot change anything
-        os.environ["DEEPSEEK_REEXEC_VISITED"] = os.pathsep.join(sorted(visited | {resolved}))
+        os.environ["EMPORNIUM_REEXEC_VISITED"] = os.pathsep.join(sorted(visited | {resolved}))
         sys.stderr.write(
             f"\x01i\x02[Bootstrap] Python dependencies missing from this interpreter; "
             f"re-executing task via venv: {python_exe}\n"
@@ -177,7 +177,7 @@ check_dependencies()
 def resolve_backend(package_name: str = "empornium_megapack"):
     """
     4-Tier Ordered Discovery Protocol:
-    1. DEEPSEEK_BACKEND_DIR env var
+    1. EMPORNIUM_BACKEND_DIR env var
     2. Active Python environment / site-packages (importlib.util.find_spec)
     3. Repository checkout (CURRENT_DIR.parent / "backend")
     4. Vendored bundled fallback (CURRENT_DIR / package_name)
@@ -185,13 +185,13 @@ def resolve_backend(package_name: str = "empornium_megapack"):
     Logs resolved strategy using native \x01i\x02 prefix.
     """
     # Strategy 1: Explicit Environment Variable Override
-    env_backend = os.environ.get("DEEPSEEK_BACKEND_DIR")
+    env_backend = os.environ.get("EMPORNIUM_BACKEND_DIR")
     if env_backend and os.path.isdir(env_backend):
         if str(env_backend) not in sys.path:
             sys.path.insert(0, str(env_backend))
         try:
             mod = importlib.import_module(package_name)
-            sys.stderr.write(f"\x01i\x02[Discovery] Resolved backend via DEEPSEEK_BACKEND_DIR: {env_backend}\n")
+            sys.stderr.write(f"\x01i\x02[Discovery] Resolved backend via EMPORNIUM_BACKEND_DIR: {env_backend}\n")
             sys.stderr.flush()
             return mod
         except ImportError:

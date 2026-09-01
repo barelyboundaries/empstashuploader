@@ -27,8 +27,8 @@ if (Test-Path $backendDir) {
     $appDir = $pluginDir
 }
 
-# --- ffmpeg: DEEPSEEK_FFMPEG_DIR wins; fall back to ~/.stash ---
-$ffmpegDir = $env:DEEPSEEK_FFMPEG_DIR
+# --- ffmpeg: EMPORNIUM_FFMPEG_DIR wins; fall back to ~/.stash ---
+$ffmpegDir = $env:EMPORNIUM_FFMPEG_DIR
 if (-not ($ffmpegDir -and (Test-Path (Join-Path $ffmpegDir "ffmpeg.exe")))) {
     $stashFfmpegDir = Join-Path $HOME ".stash"
     if (Test-Path (Join-Path $stashFfmpegDir "ffmpeg.exe")) {

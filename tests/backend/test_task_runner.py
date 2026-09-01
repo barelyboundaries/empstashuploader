@@ -180,15 +180,15 @@ def test_ensure_python_env_reexecs_into_venv_with_absolute_script_path(monkeypat
 
     monkeypatch.setattr("builtins.__import__", mock_import)
     monkeypatch.setattr(os, "execv", fake_execv)
-    monkeypatch.setenv("DEEPSEEK_VENV", str(fake_venv))
+    monkeypatch.setenv("EMPORNIUM_VENV", str(fake_venv))
     monkeypatch.delenv("VIRTUAL_ENV", raising=False)
-    monkeypatch.delenv("DEEPSEEK_REEXEC_VISITED", raising=False)
+    monkeypatch.delenv("EMPORNIUM_REEXEC_VISITED", raising=False)
 
     try:
         with pytest.raises(SystemExit):
             task.ensure_python_env()
     finally:
-        marker = os.environ.pop("DEEPSEEK_REEXEC_VISITED", None)
+        marker = os.environ.pop("EMPORNIUM_REEXEC_VISITED", None)
 
     assert len(captured) == 1
     path, args = captured[0]
@@ -223,7 +223,7 @@ def test_ensure_python_env_falls_through_when_no_venv_candidate(monkeypatch, tmp
     monkeypatch.setattr("builtins.__import__", mock_import)
     monkeypatch.setattr(task, "CURRENT_DIR", tmp_path / "plugin")
     monkeypatch.setattr("pathlib.Path.cwd", lambda: tmp_path / "cwd")
-    monkeypatch.delenv("DEEPSEEK_VENV", raising=False)
+    monkeypatch.delenv("EMPORNIUM_VENV", raising=False)
     monkeypatch.delenv("VIRTUAL_ENV", raising=False)
 
     assert task.ensure_python_env() is None

@@ -32,17 +32,17 @@ def _runtime_default(name: str) -> Path:
 
     In a project checkout (backend/ + plugin/ siblings of the package) the
     dirs stay under REPO_ROOT/runtime as always. A vendored package (no such
-    siblings — e.g. inside ~/.stash/plugins) falls back to ~/.deepseek-megapack;
+    siblings — e.g. inside ~/.stash/plugins) falls back to ~/.empornium-megapack;
     never anywhere under ~/.stash, which Stash watches and would churn on
     plugin reloads.
     """
     if (REPO_ROOT / "backend").is_dir() and (REPO_ROOT / "plugin").is_dir():
         return REPO_ROOT / "runtime" / name
-    return Path.home() / ".deepseek-megapack" / "runtime" / name
+    return Path.home() / ".empornium-megapack" / "runtime" / name
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="DEEPSEEK_")
+    model_config = SettingsConfigDict(env_prefix="EMPORNIUM_")
 
     host: str = "127.0.0.1"
     port: int = 9941

@@ -703,7 +703,7 @@ class PackService:
         announce = (self.settings.empornium_announce_url or "").strip()
         if not announce:
             raise BuildError(
-                "No Empornium announce URL configured; set DEEPSEEK_EMPORNIUM_ANNOUNCE_URL."
+                "No Empornium announce URL configured; set EMPORNIUM_EMPORNIUM_ANNOUNCE_URL."
             )
         validate_announce_url(announce)
         policy = self._resolve_policy(request.file_time_policy, request.file_time_ascending)

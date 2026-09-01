@@ -261,11 +261,11 @@ class TestConfigAdversarial:
         assert s.path_mappings == []
 
     def test_settings_env_overrides(self, monkeypatch):
-        """Environment variables with DEEPSEEK_ prefix override settings."""
-        monkeypatch.setenv("DEEPSEEK_PORT", "8888")
-        monkeypatch.setenv("DEEPSEEK_FILE_TIME_ASCENDING", "false")
-        monkeypatch.setenv("DEEPSEEK_STASH_API_KEY", "secret_key_123")
-        monkeypatch.setenv("DEEPSEEK_HAMSTER_API_KEY", "hamster_xyz")
+        """Environment variables with EMPORNIUM_ prefix override settings."""
+        monkeypatch.setenv("EMPORNIUM_PORT", "8888")
+        monkeypatch.setenv("EMPORNIUM_FILE_TIME_ASCENDING", "false")
+        monkeypatch.setenv("EMPORNIUM_STASH_API_KEY", "secret_key_123")
+        monkeypatch.setenv("EMPORNIUM_HAMSTER_API_KEY", "hamster_xyz")
 
         s = Settings()
         assert s.port == 8888

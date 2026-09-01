@@ -117,12 +117,12 @@ So in an installed plugin, put `config.local.toml` next to `task.py` in the
 plugin folder. In a dev checkout, put it at the repo root.
 
 Runtime directories (staging, output, scratch) default to
-`~/.deepseek-megapack/runtime/` on end-user machines. They are never placed
+`~/.empornium-megapack/runtime/` on end-user machines. They are never placed
 under `~/.stash`, which Stash watches and would churn on plugin reloads. In a
 dev checkout they stay under the repo's `runtime/` folder.
 
 Every setting can also be set through an environment variable with the
-`DEEPSEEK_` prefix. For example `DEEPSEEK_HAMSTER_API_KEY` overrides
+`EMPORNIUM_` prefix. For example `EMPORNIUM_HAMSTER_API_KEY` overrides
 `hamster_api_key`.
 
 Here is the full template. Every field from the backend's `Settings` class is
@@ -169,7 +169,7 @@ path_mappings = []
 ```
 
 Secrets (the HamsterImg API key, the Empornium announce URL) live only in this
-file or in `DEEPSEEK_` environment variables. They never appear in committed
+file or in `EMPORNIUM_` environment variables. They never appear in committed
 files.
 
 ## Updates & uninstall
@@ -181,7 +181,7 @@ environment is gone after an update, re-run the installer script in the plugin
 folder to recreate it.
 
 **Uninstall.** Delete the plugin folder (`~/.stash/plugins/deepseek-megapack`)
-and, if present, `~/.deepseek-megapack/`.
+and, if present, `~/.empornium-megapack/`.
 
 ## Releases
 
@@ -204,7 +204,7 @@ field in sync with the release you are publishing.
   key should be rotated if it was ever used.
 - **The sidecar has no authentication.** It binds to `127.0.0.1` only. Never
   expose it.
-- **Secrets live only in `config.local.toml`** (gitignored) or in `DEEPSEEK_`
+- **Secrets live only in `config.local.toml`** (gitignored) or in `EMPORNIUM_`
   environment variables.
 
 ## Troubleshooting

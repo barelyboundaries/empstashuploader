@@ -45,9 +45,9 @@ class TestScratchDirTomlOverride:
             get_settings.cache_clear()
 
     def test_env_override_wins(self, tmp_path, monkeypatch):
-        """DEEPSEEK_SCRATCH_DIR env var overrides the default (via pydantic coercion to Path)."""
+        """EMPORNIUM_SCRATCH_DIR env var overrides the default (via pydantic coercion to Path)."""
         custom = tmp_path / "env_scratch"
-        monkeypatch.setenv("DEEPSEEK_SCRATCH_DIR", str(custom))
+        monkeypatch.setenv("EMPORNIUM_SCRATCH_DIR", str(custom))
         get_settings.cache_clear()
         try:
             s = get_settings()
