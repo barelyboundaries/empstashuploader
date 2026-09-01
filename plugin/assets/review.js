@@ -521,38 +521,83 @@
   // FAIL-CLOSED: any non-200, network error, or malformed response throws —
   // a probe failure must NEVER be interpreted as "does not exist", or a
   // rename could clobber an occupied name.
+  // Turn the recorded per-attempt results into ONE actionable message,
+  // chosen by precedence:
+  //   1. HTTP 404  → sidecar is running but outdated (does not serve
+  //      /api/fs/exists); remediation: restart via start_backend.ps1.
+  //   2. Network   → sidecar unreachable; remediation: start_backend.ps1.
+  //   3. Other HTTP status → surfaced with the failing URL.
+  //   4. Malformed body → otherwise-unclassified 200 responses.
+  function classifyProbeFailure(attempts) {
+    const notFound = attempts.find((a) => a.kind === "http" && a.status === 404);
+    if (notFound) {
+      return new Error(
+        `Filesystem probe failed: the sidecar answered 404 at ${notFound.url} — the running sidecar is outdated and does not serve /api/fs/exists. Restart it with start_backend.ps1, then retry.`
+      );
+    }
+    const networkAttempts = attempts.filter((a) => a.kind === "network");
+    if (networkAttempts.length > 0) {
+      const urls = networkAttempts.map((a) => a.url).join("; ");
+      return new Error(
+        `Filesystem probe failed: the sidecar backend is not reachable (no response at ${urls}). Start it with start_backend.ps1, then retry.`
+      );
+    }
+    const httpAttempt = [...attempts].reverse().find((a) => a.kind === "http");
+    if (httpAttempt) {
+      return new Error(
+        `Filesystem probe failed (HTTP ${httpAttempt.status}) at ${httpAttempt.url}`
+      );
+    }
+    return new Error("Filesystem probe returned a malformed response");
+  }
+
   async function pathExistsBatch(paths) {
     const CHUNK_SIZE = 100;
     const results = {};
     for (let i = 0; i < paths.length; i += CHUNK_SIZE) {
       const chunk = paths.slice(i, i + CHUNK_SIZE);
       const endpoints = backendEndpoints("/api/fs/exists");
-      let lastError = null;
+      // Per-attempt record: {url, kind, status} with kind ∈ {"network",
+      // "http", "malformed"}. "malformed" covers both an unparseable body
+      // and a 200 whose body fails the results-shape check.
+      const attempts = [];
       let chunkResults = null;
       for (const url of endpoints) {
+        let response;
         try {
-          const response = await fetch(url, {
+          response = await fetch(url, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ paths: chunk })
           });
-          if (!response.ok) {
-            lastError = new Error(`Filesystem probe failed (HTTP ${response.status})`);
-            continue;
-          }
-          const data = await response.json();
-          if (!data || !data.results || typeof data.results !== "object") {
-            lastError = new Error("Filesystem probe returned a malformed response");
-            continue;
-          }
-          chunkResults = data.results;
-          break;
         } catch (err) {
-          lastError = err;
+          attempts.push({ url, kind: "network", status: null });
+          continue;
         }
+        if (!response.ok) {
+          attempts.push({ url, kind: "http", status: response.status });
+          continue;
+        }
+        // Parse failures are "malformed", never "network" — hence the
+        // json() call gets its own try/catch, separate from fetch().
+        let data = null;
+        try {
+          data = await response.json();
+        } catch (err) {
+          attempts.push({ url, kind: "malformed", status: response.status });
+          continue;
+        }
+        if (!data || !data.results || typeof data.results !== "object") {
+          attempts.push({ url, kind: "malformed", status: response.status });
+          continue;
+        }
+        chunkResults = data.results;
+        break;
       }
       if (!chunkResults) {
-        throw lastError || new Error("Filesystem probe failed");
+        // FAIL-CLOSED: every failure path still throws — a probe failure
+        // must NEVER resolve as "does not exist".
+        throw classifyProbeFailure(attempts);
       }
       Object.assign(results, chunkResults);
     }
