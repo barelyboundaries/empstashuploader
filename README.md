@@ -71,6 +71,8 @@ Stash) and hard-refresh the browser.
 
 ## Sidecar
 
+Consolidation and its collision pre-check REQUIRES the sidecar to be running.
+
 The sidecar is a small FastAPI backend that binds to `127.0.0.1:9941`. It
 serves three things:
 
@@ -89,6 +91,19 @@ tells you to run the installer first.
 
 The sidecar binds to `127.0.0.1` only and has no authentication. Never expose
 it beyond the local machine.
+
+### Troubleshooting
+
+If you see one of these errors when running consolidation:
+
+- `Consolidation aborted: destination check failed — Filesystem probe failed (HTTP 404)`
+- `Consolidation aborted: destination check failed — Filesystem probe failed: destination not reachable`
+
+**Cause:** The sidecar is not running, or the installed version is outdated.
+
+**Fix:** Run `start_backend.ps1` (Windows) or `start_backend.sh` (macOS/Linux)
+from the distribution root. If the virtual environment is missing, run
+`install.ps1` (or `install.sh`) first to create it.
 
 ## Configuration
 

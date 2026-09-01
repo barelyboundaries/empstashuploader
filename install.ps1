@@ -218,8 +218,8 @@ Write-Host @"
       Stash -> Settings -> Plugins -> Reload (or restart Stash).
    2. Run a Megapack task from the scene tools - task.py re-execs
       into this .venv on its own; no manual activation needed.
-   3. Optional review-UI sidecar: start the backend with the start script
-      from the full distribution; it binds 127.0.0.1 only.
+   3. Consolidation REQUIRES the sidecar: start it with start_backend.ps1
+      (run this installer first if the .venv is missing). It binds 127.0.0.1 only.
    4. Optional config: put config.local.toml in the PLUGIN folder (next to
       task.py) - the backend checks the repository root first in dev
       checkouts, the plugin folder when vendored. The template is in the
