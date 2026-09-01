@@ -670,11 +670,14 @@
   let destCollisionState = null;
 
   function stashUiOrigin() {
-    // Same host/port logic as backendEndpoints/resolveToken: when this page is
-    // served by the backend sidecar (port 9941), window.location.origin is the
-    // FastAPI server, NOT Stash — derive the Stash UI origin from the hostname
-    // on Stash's port 9999 instead. executeGraphQL posts to a relative
-    // /graphql and has no base URL, so it must never be used here.
+    // When the UI is served by the backend sidecar (port 9941),
+    // window.location IS the sidecar and cannot reveal where Stash actually
+    // runs, so scene links fall back to Stash's default port 9999
+    // (http://<hostname>:9999). This is a documented limitation: if Stash
+    // listens on a different port, those links will be wrong. On any other
+    // origin the page is served by Stash itself, so window.location.origin
+    // is already the Stash UI. executeGraphQL posts to a relative /graphql
+    // and has no base URL, so it must never be used to derive an origin.
     if (window.location.port === "9941") {
       return `http://${window.location.hostname}:9999`;
     }

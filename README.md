@@ -84,6 +84,11 @@ serves three things:
 - **Health prefill.** The review UI prefills directory fields from the
   sidecar's health endpoint.
 
+When the review UI is opened through the sidecar itself (port 9941),
+"Open scene in Stash" links fall back to Stash's default port 9999 — a
+documented limitation; if your Stash listens on a different port, those
+links will point to the wrong place.
+
 Start it with `start_backend.ps1` (Windows) or `start_backend.sh`
 (macOS/Linux) from the distribution root. The script uses the virtual
 environment the installer created under `plugin\.venv`; if that is missing it
