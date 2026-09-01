@@ -2019,7 +2019,7 @@ def emit_result_sentinel(payload, result):
     Publishes a successful task result to stderr as a log sentinel so the review
     UI can read it. Stash's job API does not expose plugin stdout, so a result
     written only there never reaches the browser. This is the success-side
-    counterpart to DEEPSEEK_TASK_FAILED.
+    counterpart to EMPORNIUM_TASK_FAILED.
 
     Best-effort: a failure here must not fail an otherwise successful build.
     """
@@ -2037,7 +2037,7 @@ def emit_result_sentinel(payload, result):
             compact["bbcode_truncated"] = True
             encoded = json.dumps(compact, ensure_ascii=False, separators=(",", ":"))
 
-        sys.stderr.write(f"\x01i\x02DEEPSEEK_TASK_RESULT {run_id}: {encoded}\n")
+        sys.stderr.write(f"\x01i\x02EMPORNIUM_TASK_RESULT {run_id}: {encoded}\n")
         sys.stderr.flush()
     except Exception as exc:
         sys.stderr.write(f"\x01w\x02Failed to emit result sentinel: {exc}\n")
@@ -2068,7 +2068,7 @@ def emit_bbcode_sentinel(payload, result):
         total_chunks = len(chunks)
 
         for idx, chunk in enumerate(chunks, 1):
-            sys.stderr.write(f"\x01i\x02DEEPSEEK_TASK_BBCODE {run_id} {idx}/{total_chunks}: {chunk}\n")
+            sys.stderr.write(f"\x01i\x02EMPORNIUM_TASK_BBCODE {run_id} {idx}/{total_chunks}: {chunk}\n")
             sys.stderr.flush()
     except Exception as exc:
         sys.stderr.write(f"\x01w\x02Failed to emit bbcode sentinel: {exc}\n")
@@ -2101,9 +2101,9 @@ def main():
     except Exception as err:
         run_id = payload.get("run_id") if isinstance(payload, dict) else None
         if run_id:
-            sys.stderr.write(f"\x01e\x02DEEPSEEK_TASK_FAILED {run_id}: {err}\n")
+            sys.stderr.write(f"\x01e\x02EMPORNIUM_TASK_FAILED {run_id}: {err}\n")
         else:
-            sys.stderr.write(f"\x01e\x02DEEPSEEK_TASK_FAILED: {err}\n")
+            sys.stderr.write(f"\x01e\x02EMPORNIUM_TASK_FAILED: {err}\n")
         sys.stderr.write(f"\x01e\x02Task execution failed: {err}\n")
         traceback.print_exc(file=sys.stderr)
         sys.stderr.flush()

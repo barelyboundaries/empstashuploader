@@ -101,11 +101,11 @@ test.describe("DeepSeek Megapack Frontend - Full Integration Suite", () => {
     await page.keyboard.press("Escape");
     await expect(page.locator("#empornium-megapack-modal")).toHaveCount(0);
 
-    // Reopen modal and test postMessage DEEPSEEK_CLOSE_MODAL
+    // Reopen modal and test postMessage EMPORNIUM_CLOSE_MODAL
     await triggerBtn.click();
     await expect(page.locator("#empornium-megapack-modal")).toBeVisible();
     await page.evaluate(() => {
-      window.postMessage({ type: "DEEPSEEK_CLOSE_MODAL" }, "*");
+      window.postMessage({ type: "EMPORNIUM_CLOSE_MODAL" }, "*");
     });
     await expect(page.locator("#empornium-megapack-modal")).toHaveCount(0);
   });

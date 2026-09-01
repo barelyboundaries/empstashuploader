@@ -120,7 +120,7 @@ def test_emit_bbcode_sentinel_roundtrip_large_multiline_utf8(capsys):
     captured = capsys.readouterr()
     stderr = captured.err
 
-    sentinel_prefix = f"\x01i\x02DEEPSEEK_TASK_BBCODE {run_id} "
+    sentinel_prefix = f"\x01i\x02EMPORNIUM_TASK_BBCODE {run_id} "
     lines = [ln for ln in stderr.splitlines() if sentinel_prefix in ln]
     assert len(lines) > 1, "Expected multiple chunk lines for >100k payload"
 

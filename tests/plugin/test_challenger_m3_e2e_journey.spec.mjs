@@ -590,9 +590,9 @@ test.describe("Milestone 3 Challenger 2: Full End-to-End User Journey & Fault In
     const modal = page.locator("#empornium-megapack-modal");
     await expect(modal).toBeVisible();
 
-    // Trigger DEEPSEEK_CLOSE_MODAL postMessage
+    // Trigger EMPORNIUM_CLOSE_MODAL postMessage
     await page.evaluate(() => {
-      window.postMessage({ type: "DEEPSEEK_CLOSE_MODAL" }, "*");
+      window.postMessage({ type: "EMPORNIUM_CLOSE_MODAL" }, "*");
     });
 
     await expect(modal).toHaveCount(0);

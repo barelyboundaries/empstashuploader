@@ -129,7 +129,7 @@ function setupGraphQLMocks(page, { bbcodeMode = "chunked_full", lastRecordedTask
         messages.push({
           time: "2026-08-30T10:00:00Z",
           level: "Info",
-          message: `DEEPSEEK_TASK_RESULT ${runId}: ` + JSON.stringify({
+          message: `EMPORNIUM_TASK_RESULT ${runId}: ` + JSON.stringify({
             status: "success",
             task: "UploadCoverImage",
             run_id: runId,
@@ -142,7 +142,7 @@ function setupGraphQLMocks(page, { bbcodeMode = "chunked_full", lastRecordedTask
           time: "2026-08-30T10:00:00Z",
           level: "Info",
           message:
-            `DEEPSEEK_TASK_RESULT ${runId}: ` +
+            `EMPORNIUM_TASK_RESULT ${runId}: ` +
             JSON.stringify({
               status: "success",
               pack_title: "Anji & Honey",
@@ -166,7 +166,7 @@ function setupGraphQLMocks(page, { bbcodeMode = "chunked_full", lastRecordedTask
             messages.push({
               time: "2026-08-30T10:00:01Z",
               level: "Info",
-              message: `DEEPSEEK_TASK_BBCODE ${runId} ${i + 1}/${total}: ${chunk}`
+              message: `EMPORNIUM_TASK_BBCODE ${runId} ${i + 1}/${total}: ${chunk}`
             });
           });
         } else if (bbcodeMode === "chunked_missing_one") {
@@ -175,7 +175,7 @@ function setupGraphQLMocks(page, { bbcodeMode = "chunked_full", lastRecordedTask
             messages.push({
               time: "2026-08-30T10:00:01Z",
               level: "Info",
-              message: `DEEPSEEK_TASK_BBCODE ${runId} ${i + 1}/${total}: ${chunk}`
+              message: `EMPORNIUM_TASK_BBCODE ${runId} ${i + 1}/${total}: ${chunk}`
             });
           });
         }

@@ -324,7 +324,7 @@ def test_validate_pack_files_present_requires_extras_when_provided(tmp_path):
 def test_megapack_build_fails_when_pack_primary_missing_from_seed_dir(tmp_path):
     # OLD→NEW: pre-T3, a declared scene path missing from disk was silently
     # DROPPED (existence filter) and the build succeeded with fewer files. Under
-    # presence validation the build must exit 1 via DEEPSEEK_TASK_FAILED, name
+    # presence validation the build must exit 1 via EMPORNIUM_TASK_FAILED, name
     # the exact missing filename(s), include the Consolidate hint, and write no
     # torrent anywhere.
     seed_dir = tmp_path / "seed"
@@ -354,7 +354,7 @@ def test_megapack_build_fails_when_pack_primary_missing_from_seed_dir(tmp_path):
 
     proc = _run_task_py(payload)
     assert proc.returncode == 1, f"expected failure, got:\n{proc.stderr}"
-    assert "DEEPSEEK_TASK_FAILED" in proc.stderr
+    assert "EMPORNIUM_TASK_FAILED" in proc.stderr
     # Each missing path is named exactly
     assert "scene_02.mp4" in proc.stderr
     assert "scene_03.mp4" in proc.stderr

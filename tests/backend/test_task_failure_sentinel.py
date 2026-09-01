@@ -60,7 +60,7 @@ def test_task_parse_input_payload_extracts_run_id(monkeypatch):
 
 
 def test_task_failure_emits_attributable_sentinel_with_run_id():
-    """When a task fails, task.py writes \\x01e\\x02DEEPSEEK_TASK_FAILED <run_id>: <err> to stderr."""
+    """When a task fails, task.py writes \\x01e\\x02EMPORNIUM_TASK_FAILED <run_id>: <err> to stderr."""
     run_id = "test-nonce-fail-999"
     input_data = json.dumps({
         "task_name": "BuildMegapack",
@@ -82,7 +82,7 @@ def test_task_failure_emits_attributable_sentinel_with_run_id():
     )
 
     assert result.returncode == 1, f"Expected returncode 1, got {result.returncode}"
-    expected_sentinel = f"\x01e\x02DEEPSEEK_TASK_FAILED {run_id}:"
+    expected_sentinel = f"\x01e\x02EMPORNIUM_TASK_FAILED {run_id}:"
     assert expected_sentinel in result.stderr, (
         f"Expected sentinel '{expected_sentinel}' in stderr. Got:\n{result.stderr}"
     )
@@ -110,5 +110,5 @@ def test_task_failure_without_run_id_handles_gracefully():
     )
 
     assert result.returncode == 1
-    assert "\x01e\x02DEEPSEEK_TASK_FAILED:" in result.stderr
+    assert "\x01e\x02EMPORNIUM_TASK_FAILED:" in result.stderr
     assert "\x01e\x02Task execution failed:" in result.stderr

@@ -324,7 +324,7 @@
 
   // Listen for iframe / direct close messages
   window.addEventListener("message", (event) => {
-    if (event.data && event.data.type === "DEEPSEEK_CLOSE_MODAL") {
+    if (event.data && event.data.type === "EMPORNIUM_CLOSE_MODAL") {
       closeMegapackModal();
     }
   });

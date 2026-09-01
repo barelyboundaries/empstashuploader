@@ -73,7 +73,7 @@
 
   function findFailureSentinel(logs, runId) {
     if (!logs || !Array.isArray(logs) || !runId) return null;
-    const target = `DEEPSEEK_TASK_FAILED ${runId}`;
+    const target = `EMPORNIUM_TASK_FAILED ${runId}`;
     for (const log of logs) {
       if (!log) continue;
       const isError = log.level === "Error" || String(log.level || "").toUpperCase() === "ERROR";
@@ -97,7 +97,7 @@
   // expose plugin stdout, so the backend publishes its result as a log line.
   function findResultSentinel(logs, runId) {
     if (!logs || !Array.isArray(logs) || !runId) return null;
-    const target = `DEEPSEEK_TASK_RESULT ${runId}: `;
+    const target = `EMPORNIUM_TASK_RESULT ${runId}: `;
     // Walk backwards: the newest matching line wins if a run somehow repeats.
     for (let i = logs.length - 1; i >= 0; i--) {
       const log = logs[i];
@@ -109,19 +109,19 @@
         const parsed = JSON.parse(json);
         if (parsed && typeof parsed === "object") return parsed;
       } catch (err) {
-        console.warn("Could not parse DEEPSEEK_TASK_RESULT sentinel", err);
+        console.warn("Could not parse EMPORNIUM_TASK_RESULT sentinel", err);
       }
       return null;
     }
     return null;
   }
 
-  // Reassembles chunked base64 BBCode published on DEEPSEEK_TASK_BBCODE lines.
+  // Reassembles chunked base64 BBCode published on EMPORNIUM_TASK_BBCODE lines.
   // Large megapacks exceed single-line log budgets; this chunked stream is the
   // authoritative channel for the final rendered BBCode.
   function findBBCodeSentinel(logs, runId) {
     if (!logs || !Array.isArray(logs) || !runId) return null;
-    const target = `DEEPSEEK_TASK_BBCODE ${runId} `;
+    const target = `EMPORNIUM_TASK_BBCODE ${runId} `;
     const chunks = {};
     let totalChunks = null;
 
@@ -164,7 +164,7 @@
       const bytes = Uint8Array.from(binStr, (c) => c.charCodeAt(0));
       return new TextDecoder().decode(bytes);
     } catch (err) {
-      console.warn("Could not decode DEEPSEEK_TASK_BBCODE chunks", err);
+      console.warn("Could not decode EMPORNIUM_TASK_BBCODE chunks", err);
       return null;
     }
   }
@@ -4018,7 +4018,7 @@
         if (typeof window._emporniumCloseModal === "function") {
           window._emporniumCloseModal();
         } else if (window.parent && window.parent !== window) {
-          window.parent.postMessage({ type: "DEEPSEEK_CLOSE_MODAL" }, "*");
+          window.parent.postMessage({ type: "EMPORNIUM_CLOSE_MODAL" }, "*");
         }
       });
     }

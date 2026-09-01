@@ -60,13 +60,13 @@ def _run_task_py_single(payload: dict) -> subprocess.CompletedProcess:
 
 
 def _result_sentinel(proc: subprocess.CompletedProcess, run_id: str) -> dict:
-    """Extract the DEEPSEEK_TASK_RESULT sentinel JSON emitted to stderr."""
-    marker = f"DEEPSEEK_TASK_RESULT {run_id}: "
+    """Extract the EMPORNIUM_TASK_RESULT sentinel JSON emitted to stderr."""
+    marker = f"EMPORNIUM_TASK_RESULT {run_id}: "
     for line in proc.stderr.splitlines():
         if marker in line:
             return json.loads(line.split(marker, 1)[1])
     raise AssertionError(
-        f"DEEPSEEK_TASK_RESULT sentinel for run {run_id!r} not found in stderr:\n{proc.stderr}"
+        f"EMPORNIUM_TASK_RESULT sentinel for run {run_id!r} not found in stderr:\n{proc.stderr}"
     )
 
 
@@ -159,7 +159,7 @@ def test_single_scene_seed_scratch_relocates_artifacts_and_torrent_over_seed(tmp
     assert torrent_relpaths == {"feature_scene.mp4"}
     assert bool(t.verify(str(seed_dir))) is True
 
-    # DEEPSEEK_TASK_RESULT sentinel carries the scratch locations
+    # EMPORNIUM_TASK_RESULT sentinel carries the scratch locations
     sentinel = _result_sentinel(proc, run_id)
     for key in ("torrent_path", "manifest_path", "submission_path"):
         _assert_direct_child(sentinel[key], pack_scratch)
@@ -190,7 +190,7 @@ def test_single_scene_seed_missing_file_fails_with_exact_path_and_hint(tmp_path)
 
     proc = _run_task_py_single(payload)
     assert proc.returncode == 1
-    assert "DEEPSEEK_TASK_FAILED" in proc.stderr
+    assert "EMPORNIUM_TASK_FAILED" in proc.stderr
     # The exact missing path + the same hint the megapack path emits
     assert str(missing_path) in proc.stderr
     assert "Run Consolidate or add the missing files to the seed directory" in proc.stderr
@@ -226,7 +226,7 @@ def test_single_scene_file_outside_seed_dir_is_refused(tmp_path):
 
     proc = _run_task_py_single(payload)
     assert proc.returncode == 1
-    assert "DEEPSEEK_TASK_FAILED" in proc.stderr
+    assert "EMPORNIUM_TASK_FAILED" in proc.stderr
     assert str(media) in proc.stderr
     assert "Run Consolidate or add the missing files to the seed directory" in proc.stderr
 

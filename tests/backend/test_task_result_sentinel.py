@@ -19,7 +19,7 @@ def _emit(payload, result, capsys):
 
 
 def _parse(stderr, run_id):
-    marker = f"\x01i\x02DEEPSEEK_TASK_RESULT {run_id}: "
+    marker = f"\x01i\x02EMPORNIUM_TASK_RESULT {run_id}: "
     assert marker in stderr, stderr
     line = stderr[stderr.index(marker) + len(marker):].splitlines()[0]
     return json.loads(line)
@@ -53,7 +53,7 @@ def test_result_sentinel_is_a_single_line(capsys):
 
     stderr = _emit({"run_id": run_id}, result, capsys)
 
-    sentinel_lines = [ln for ln in stderr.splitlines() if "DEEPSEEK_TASK_RESULT" in ln]
+    sentinel_lines = [ln for ln in stderr.splitlines() if "EMPORNIUM_TASK_RESULT" in ln]
     assert len(sentinel_lines) == 1
     assert _parse(stderr, run_id)["bbcode"] == "line one\nline two\nline three"
 
@@ -89,7 +89,7 @@ def test_no_sentinel_without_a_run_id(capsys):
     """Without a run_id the UI cannot attribute the result, so emit nothing."""
     stderr = _emit({}, {"status": "success"}, capsys)
 
-    assert "DEEPSEEK_TASK_RESULT" not in stderr
+    assert "EMPORNIUM_TASK_RESULT" not in stderr
 
 
 def test_emitter_never_raises_on_unserializable_result(capsys):
@@ -98,5 +98,5 @@ def test_emitter_never_raises_on_unserializable_result(capsys):
     task.emit_result_sentinel({"run_id": "test-nonce-result-005"}, {"bad": object()})
 
     err = capsys.readouterr().err
-    assert "DEEPSEEK_TASK_RESULT" not in err
+    assert "EMPORNIUM_TASK_RESULT" not in err
     assert "Failed to emit result sentinel" in err

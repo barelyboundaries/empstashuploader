@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 // The build's real output -- hosted image URLs and the final BBCode -- exists
-// only on the backend. It reaches the browser on a DEEPSEEK_TASK_RESULT log
+// only on the backend. It reaches the browser on a EMPORNIUM_TASK_RESULT log
 // line; without it the UI falls back to locally-composed data that has no
 // image block at all.
 const REMOTE_IMAGE = "https://hamsterimg.net/images/2026/08/28/preview.jpg";
@@ -91,7 +91,7 @@ function setupGraphQLMocks(page, { emitResult = true, imageCount = 1 } = {}) {
           time: "2026-08-28T10:00:00Z",
           level: "Info",
           message:
-            `DEEPSEEK_TASK_RESULT ${runId}: ` +
+            `EMPORNIUM_TASK_RESULT ${runId}: ` +
             JSON.stringify({
               status: "success",
               pack_title: "Anji & Honey",

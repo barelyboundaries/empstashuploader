@@ -303,7 +303,7 @@ test.describe('Task Failure Sentinel Detection & False-Success Protection', () =
               loggingSubscribe: [{
                 time: '2026-08-28T01:00:00Z',
                 level: 'Error',
-                message: `[Plugin / DeepSeek Megapack Generator] DEEPSEEK_TASK_FAILED ${runId}: Consolidation failed: insufficient free space on C:\\Packs`,
+                message: `[Plugin / Empornium Megapack Builder] EMPORNIUM_TASK_FAILED ${runId}: Consolidation failed: insufficient free space on C:\\Packs`,
               }],
             },
           },
@@ -416,7 +416,7 @@ test.describe('Task Failure Sentinel Detection & False-Success Protection', () =
               loggingSubscribe: [{
                 time: '2026-08-28T01:00:00Z',
                 level: 'Error',
-                message: `[Plugin / DeepSeek Megapack Generator] DEEPSEEK_TASK_FAILED concurrent-other-nonce-888: Some background error`,
+                message: `[Plugin / Empornium Megapack Builder] EMPORNIUM_TASK_FAILED concurrent-other-nonce-888: Some background error`,
               }],
             },
           },
@@ -461,17 +461,17 @@ test.describe('Task Failure Sentinel Detection & False-Success Protection', () =
 
       const errorEntry = {
         level: 'Error', // Stash LogLevel enum value
-        message: `[Plugin / DeepSeek Megapack Generator] DEEPSEEK_TASK_FAILED ${runId}: ${errorMsg}`,
+        message: `[Plugin / Empornium Megapack Builder] EMPORNIUM_TASK_FAILED ${runId}: ${errorMsg}`,
       };
 
       const infoEntry = {
         level: 'Info',
-        message: `[Plugin / DeepSeek Megapack Generator] DEEPSEEK_TASK_FAILED ${runId}: ${errorMsg}`,
+        message: `[Plugin / Empornium Megapack Builder] EMPORNIUM_TASK_FAILED ${runId}: ${errorMsg}`,
       };
 
       const warningEntry = {
         level: 'Warning',
-        message: `[Plugin / DeepSeek Megapack Generator] DEEPSEEK_TASK_FAILED ${runId}: ${errorMsg}`,
+        message: `[Plugin / Empornium Megapack Builder] EMPORNIUM_TASK_FAILED ${runId}: ${errorMsg}`,
       };
 
       return {
@@ -561,7 +561,7 @@ test.describe('Task Failure Sentinel Detection & False-Success Protection', () =
                 {
                   time: '2026-08-28T01:00:00Z',
                   level: 'Error',
-                  message: `[Plugin / DeepSeek Megapack Generator] DEEPSEEK_TASK_FAILED ${dispatchedRunId}: Missing consolidated media file on disk`,
+                  message: `[Plugin / Empornium Megapack Builder] EMPORNIUM_TASK_FAILED ${dispatchedRunId}: Missing consolidated media file on disk`,
                 },
               ],
             },

@@ -55,13 +55,13 @@ def _run_task_py(payload: dict) -> subprocess.CompletedProcess:
 
 
 def _result_sentinel(proc: subprocess.CompletedProcess, run_id: str) -> dict:
-    """Extract the DEEPSEEK_TASK_RESULT sentinel JSON emitted to stderr."""
-    marker = f"DEEPSEEK_TASK_RESULT {run_id}: "
+    """Extract the EMPORNIUM_TASK_RESULT sentinel JSON emitted to stderr."""
+    marker = f"EMPORNIUM_TASK_RESULT {run_id}: "
     for line in proc.stderr.splitlines():
         if marker in line:
             return json.loads(line.split(marker, 1)[1])
     raise AssertionError(
-        f"DEEPSEEK_TASK_RESULT sentinel for run {run_id!r} not found in stderr:\n{proc.stderr}"
+        f"EMPORNIUM_TASK_RESULT sentinel for run {run_id!r} not found in stderr:\n{proc.stderr}"
     )
 
 
@@ -146,7 +146,7 @@ def test_seed_scratch_payload_relocates_all_artifacts_to_scratch(tmp_path):
     assert torrent_relpaths == {"scene_01.mp4", "scene_02.mp4"}
     assert bool(t.verify(str(seed_dir))) is True
 
-    # DEEPSEEK_TASK_RESULT sentinel carries the scratch locations
+    # EMPORNIUM_TASK_RESULT sentinel carries the scratch locations
     sentinel = _result_sentinel(proc, run_id)
     for key in ("torrent_path", "manifest_path", "submission_path"):
         _assert_direct_child(sentinel[key], pack_scratch)
@@ -224,7 +224,7 @@ def test_scratch_inside_seed_is_rejected_naming_both_paths(tmp_path):
 
     proc = _run_task_py(payload)
     assert proc.returncode == 1
-    assert "DEEPSEEK_TASK_FAILED" in proc.stderr
+    assert "EMPORNIUM_TASK_FAILED" in proc.stderr
     # The error must name BOTH offending paths
     assert str(seed_dir) in proc.stderr
     assert str(scratch_dir) in proc.stderr
@@ -253,7 +253,7 @@ def test_seed_inside_scratch_is_rejected_naming_both_paths(tmp_path):
 
     proc = _run_task_py(payload)
     assert proc.returncode == 1
-    assert "DEEPSEEK_TASK_FAILED" in proc.stderr
+    assert "EMPORNIUM_TASK_FAILED" in proc.stderr
     assert str(seed_dir) in proc.stderr
     assert str(scratch_dir) in proc.stderr
 
@@ -279,7 +279,7 @@ def test_missing_explicit_seed_dir_is_rejected(tmp_path):
 
     proc = _run_task_py(payload)
     assert proc.returncode == 1
-    assert "DEEPSEEK_TASK_FAILED" in proc.stderr
+    assert "EMPORNIUM_TASK_FAILED" in proc.stderr
     assert str(seed_dir) in proc.stderr
     assert "does not exist" in proc.stderr
 
@@ -302,7 +302,7 @@ def test_empty_seed_dir_string_is_rejected(tmp_path):
 
     proc = _run_task_py(payload)
     assert proc.returncode == 1
-    assert "DEEPSEEK_TASK_FAILED" in proc.stderr
+    assert "EMPORNIUM_TASK_FAILED" in proc.stderr
     assert "seed_dir" in proc.stderr
     assert "non-empty" in proc.stderr
 
