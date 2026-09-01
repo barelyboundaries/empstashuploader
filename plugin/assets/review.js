@@ -7,7 +7,7 @@
 (function () {
   "use strict";
 
-  const PLUGIN_ID = "deepseek-megapack";
+  const PLUGIN_ID = "empornium-megapack";
   // keep in sync with backend app.version (main.py FastAPI version) — bump when backend bumps
   const EXPECTED_SIDECAR_VERSION = "0.2.0";
   let currentMode = "megapack"; // "megapack" | "single"
@@ -186,7 +186,7 @@
   // Backend sidecar endpoint resolution (port 9941). The sidecar binds
   // 127.0.0.1 only, so every candidate targets the loopback explicitly:
   // hostname-derived URLs break when Stash is served from a non-loopback host
-  // (and violate the CSP connect-src allowlist, which deepseek-megapack.yml
+  // (and violate the CSP connect-src allowlist, which empornium-megapack.yml
   // restricts to 127.0.0.1:9941 / localhost:9941). Stash's /plugin/{id}/
   // route serves static assets only — it has never proxied the sidecar API.
   function backendEndpoints(apiPath) {

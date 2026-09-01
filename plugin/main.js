@@ -6,9 +6,9 @@
 (function () {
   "use strict";
 
-  const PLUGIN_ID = "deepseek-megapack";
-  const BUTTON_ID = "deepseek-megapack-btn";
-  const MODAL_ID = "deepseek-megapack-modal";
+  const PLUGIN_ID = "empornium-megapack";
+  const BUTTON_ID = "empornium-megapack-btn";
+  const MODAL_ID = "empornium-megapack-modal";
 
   const INJECTED_STYLE_ID = "deepseek-review-injected-style";
 
