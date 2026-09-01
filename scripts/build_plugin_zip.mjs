@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// build_plugin_zip.mjs — one command: dist/deepseek-megapack.zip + dist/index.yml
+// build_plugin_zip.mjs — one command: dist/empornium-megapack.zip + dist/index.yml
 //
 // CommunityScripts shape: zip entries sit at the ZIP ROOT (no wrapper folder),
 // matching what build_site.sh-style packaging produces, so Stash's plugin
@@ -34,7 +34,7 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const pluginDir = join(repoRoot, "plugin");
 const backendPkg = join(repoRoot, "backend", "empornium_megapack");
 const distDir = join(repoRoot, "dist");
-const zipPath = join(distDir, "deepseek-megapack.zip");
+const zipPath = join(distDir, "empornium-megapack.zip");
 const indexPath = join(distDir, "index.yml");
 
 // Explicit deny list — a future plugin/ addition matching any of these can
@@ -141,7 +141,7 @@ const makeZip = (entries) => {
 // --- metadata sources -------------------------------------------------------
 const ymlField = (text, key) => {
   const m = text.match(new RegExp(`^${key}:\\s*(.+)$`, "m"));
-  if (!m) throw new Error(`plugin/deepseek-megapack.yml has no ${key}: field`);
+  if (!m) throw new Error(`plugin/empornium-megapack.yml has no ${key}: field`);
   return m[1].trim().replace(/^"(.*)"$/, "$1").replace(/^'(.*)'$/, "$1");
 };
 const gitShortSha = () =>
@@ -180,16 +180,16 @@ try {
   writeFileSync(
     join(stage, "INSTALL.txt"),
     [
-      "DeepSeek Megapack - quick start",
+      "Empornium Megapack Builder - quick start",
       "1. Run install.ps1 (Windows) or install.sh (Linux/macOS) from this folder; it creates a .venv beside the plugin files and installs the Python dependencies.",
-      "2. Full instructions: see README.md at the root of the deepseek-megapack repository.",
+      "2. Full instructions: see README.md at the root of the empornium-megapack repository.",
       "",
     ].join("\n"),
   );
 
   // Fail fast if the acceptance set ever loses a member.
   const required = [
-    "deepseek-megapack.yml", "main.js", "style.css", "task.py", "requirements.txt",
+    "empornium-megapack.yml", "main.js", "style.css", "task.py", "requirements.txt",
     "assets/review.html", "assets/review.js", "empornium_megapack/main.py",
     "install.ps1", "install.sh", "INSTALL.txt",
   ];
@@ -218,16 +218,16 @@ try {
   writeFileSync(zipPath, zip);
   const sha256 = createHash("sha256").update(zip).digest("hex");
 
-  const yml = readFileSync(join(pluginDir, "deepseek-megapack.yml"), "utf8");
+  const yml = readFileSync(join(pluginDir, "empornium-megapack.yml"), "utf8");
   const version = ymlField(yml, "version");
   const name = ymlField(yml, "name");
   const shortSha = gitShortSha();
   writeFileSync(indexPath, [
-    `id: deepseek-megapack`,
+    `id: empornium-megapack`,
     `name: ${name}`,
     `version: "${version}-${shortSha}"`,
     `date: ${new Date().toISOString()}`,
-    `path: deepseek-megapack.zip`,
+    `path: empornium-megapack.zip`,
     `sha256: ${sha256}`,
     "",
   ].join("\n"));

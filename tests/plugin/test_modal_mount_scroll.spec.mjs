@@ -44,7 +44,7 @@ async function mountLikeMainJs(page, { viewport = { width: 1419, height: 856 } }
       container.className = "empornium-modal-container";
       const header = document.createElement("div");
       header.className = "empornium-modal-header";
-      header.innerHTML = '<div class="empornium-modal-title">DeepSeek Megapack Builder</div>';
+      header.innerHTML = '<div class="empornium-modal-title">Empornium Megapack Builder</div>';
       const body = document.createElement("div");
       body.className = "empornium-modal-body";
       container.appendChild(header);

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install.sh - DeepSeek Megapack: one-command plugin environment setup (Linux/macOS).
+# install.sh - Empornium Megapack Builder: one-command plugin environment setup (Linux/macOS).
 #
 # Verifies Python >= 3.12 (backend/pyproject.toml: requires-python = ">=3.12"),
 # creates a .venv inside the plugin folder, installs requirements.txt into it,
@@ -15,7 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Repo checkout: plugin tree lives in a plugin/ subfolder beside this script.
 # Shipped zip:   plugin files sit at the root BESIDE this script (flat layout).
 # Detected by manifest presence, not by convention.
-if [ -f "$SCRIPT_DIR/plugin/deepseek-megapack.yml" ]; then
+if [ -f "$SCRIPT_DIR/plugin/empornium-megapack.yml" ]; then
     PLUGIN_DIR="$SCRIPT_DIR/plugin"
     LAYOUT_LABEL="repo (plugin/ subfolder beside install.sh)"
 else
@@ -32,14 +32,14 @@ info() { printf '   %s\n' "$1"; }
 
 if [ ! -f "$REQUIREMENTS" ]; then
     printf 'ERROR: %s not found.\n' "$REQUIREMENTS" >&2
-    printf 'Expected the plugin files (requirements.txt, task.py, deepseek-megapack.yml)\n' >&2
+    printf 'Expected the plugin files (requirements.txt, task.py, empornium-megapack.yml)\n' >&2
     printf 'either beside this script (shipped zip layout) or in a plugin/ subfolder\n' >&2
     printf 'beside it (repo checkout). Re-run from the distribution root or the\n' >&2
     printf 'extracted zip folder.\n' >&2
     exit 1
 fi
 
-printf 'DeepSeek Megapack - plugin environment installer\n'
+printf 'Empornium Megapack Builder - plugin environment installer\n'
 printf 'Layout: %s\n' "$LAYOUT_LABEL"
 printf 'Plugin folder: %s\n' "$PLUGIN_DIR"
 

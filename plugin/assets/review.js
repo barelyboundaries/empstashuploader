@@ -1,5 +1,5 @@
 /**
- * DeepSeek Megapack Review & Staging Interface
+ * Empornium Megapack Builder Review & Staging Interface
  * Handles scene inspection, drag-and-drop ordering, filesystem probing,
  * GraphQL file consolidation, megapack building, and BBCode generation.
  */
@@ -974,7 +974,7 @@
     const headerLogo = document.getElementById("header-logo");
     const headerTitle = document.getElementById("header-modal-title");
     if (headerLogo) headerLogo.textContent = isSingle ? "🎬" : "📦";
-    if (headerTitle) headerTitle.textContent = isSingle ? "Empornium Single-Scene Uploader" : "DeepSeek Megapack Builder";
+    if (headerTitle) headerTitle.textContent = isSingle ? "Empornium Single-Scene Uploader" : "Empornium Megapack Builder";
 
     const btnBuild = document.getElementById("btn-build");
     if (btnBuild) {

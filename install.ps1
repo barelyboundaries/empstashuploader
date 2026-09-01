@@ -1,4 +1,4 @@
-# install.ps1 - DeepSeek Megapack: one-command plugin environment setup (Windows).
+# install.ps1 - Empornium Megapack Builder: one-command plugin environment setup (Windows).
 #
 # Verifies Python >= 3.12 (backend/pyproject.toml: requires-python = ">=3.12"),
 # creates a .venv inside the plugin folder, installs requirements.txt into it,
@@ -14,7 +14,7 @@ $ErrorActionPreference = 'Stop'
 # Shipped zip:   plugin files sit at the root BESIDE this script (flat layout).
 # Detected by manifest presence, not by convention.
 $repoPluginDir = Join-Path $PSScriptRoot 'plugin'
-if (Test-Path (Join-Path $repoPluginDir 'deepseek-megapack.yml')) {
+if (Test-Path (Join-Path $repoPluginDir 'empornium-megapack.yml')) {
     $pluginDir = $repoPluginDir
     $layoutLabel = 'repo (plugin\ subfolder beside install.ps1)'
 }
@@ -84,14 +84,14 @@ function Find-LauncherPython {
 
 if (-not (Test-Path $requirements)) {
     Write-Host "ERROR: $requirements not found." -ForegroundColor Red
-    Write-Host "Expected the plugin files (requirements.txt, task.py, deepseek-megapack.yml)"
+    Write-Host "Expected the plugin files (requirements.txt, task.py, empornium-megapack.yml)"
     Write-Host "either beside this script (shipped zip layout) or in a plugin\ subfolder"
     Write-Host "beside it (repo checkout). Re-run from the distribution root or the"
     Write-Host "extracted zip folder."
     exit 1
 }
 
-Write-Host "DeepSeek Megapack - plugin environment installer"
+Write-Host "Empornium Megapack Builder - plugin environment installer"
 Write-Host "Layout: $layoutLabel"
 Write-Host "Plugin folder: $pluginDir"
 

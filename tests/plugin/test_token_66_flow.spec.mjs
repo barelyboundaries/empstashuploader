@@ -42,7 +42,7 @@ function setupMocks(page) {
   });
 }
 
-test.describe("DeepSeek Megapack - 66 Scenes POST+Token Transport & Chunking Flow", () => {
+test.describe("Empornium Megapack Builder - 66 Scenes POST+Token Transport & Chunking Flow", () => {
 
   test("1. 66 scenes selected -> POST /api/token -> IDs travel by token, never in a URL", async ({ page }) => {
     setupMocks(page);

@@ -125,7 +125,7 @@ test.describe('Stage 7 Feature 2 — Single-Scene Mode Switch & Pre-Dispatch Val
     const mode = await page.evaluate(() => window._emporniumMode);
     expect(mode).toBe('megapack');
 
-    await expect(modal.locator('.empornium-modal-title')).toContainText('DeepSeek Megapack Builder');
+    await expect(modal.locator('.empornium-modal-title')).toContainText('Empornium Megapack Builder');
     await expect(modal.locator('.empornium-logo')).toContainText('📦');
     await expect(modal.locator('.empornium-badge')).toContainText('2 scene(s) selected');
   });

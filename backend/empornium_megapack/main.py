@@ -40,7 +40,7 @@ async def lifespan(app: FastAPI):
             pass
 
 
-app = FastAPI(title="DeepSeek Megapack Backend", version="0.2.0", lifespan=lifespan)
+app = FastAPI(title="Empornium Megapack Builder Backend", version="0.2.0", lifespan=lifespan)
 
 allow_origins = list(settings.allow_origins)
 for default_origin in ["http://127.0.0.1:9999", "http://localhost:9999"]:
@@ -120,7 +120,7 @@ def get_token_endpoint(token: str):
 def health():
     return {
         "status": "ok",
-        "track": "DeepSeek",
+        "track": "Empornium Megapack Builder",
         "version": app.version,
         "stash_url": settings.stash_url,
         "staging_dir": str(settings.staging_dir),

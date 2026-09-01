@@ -1,5 +1,5 @@
 /**
- * DeepSeek Megapack - In-Stash Plugin UI Injection
+ * Empornium Megapack Builder - In-Stash Plugin UI Injection
  * Hooks into Stash scene selection and opens an embedded review modal.
  */
 
@@ -122,7 +122,7 @@
     container.className = "empornium-modal-container";
 
     const isSingle = resolvedMode === "single";
-    const modalTitle = isSingle ? "Empornium Single-Scene Uploader" : "DeepSeek Megapack Builder";
+    const modalTitle = isSingle ? "Empornium Single-Scene Uploader" : "Empornium Megapack Builder";
     const badgeText = `${sceneIds.length} scene(s) selected`;
 
     const header = document.createElement("div");
@@ -290,7 +290,7 @@
     btn.id = BUTTON_ID;
     btn.className = "btn btn-secondary empornium-trigger-btn";
     btn.innerHTML = `<span class="mr-1">📦</span> Empornium Uploader`;
-    btn.title = "Build DeepSeek Megapack from selected scenes";
+    btn.title = "Build Empornium Megapack Builder from selected scenes";
 
     btn.addEventListener("click", async () => {
       const selectedIds = getSelectedSceneIds();

@@ -1,5 +1,5 @@
 """
-Token Store for the DeepSeek Megapack Builder.
+Token Store for the Empornium Megapack Builder.
 Provides short-lived token storage for transport of scene ID arrays to iframe review UI,
 avoiding browser URL length limits and iframe blocked rendering for large scene selections (e.g. 66+ scenes).
 """

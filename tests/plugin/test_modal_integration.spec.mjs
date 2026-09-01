@@ -43,7 +43,7 @@ function setupMocks(page) {
 }
 
 
-test.describe("DeepSeek Megapack Frontend - Full Integration Suite", () => {
+test.describe("Empornium Megapack Builder Frontend - Full Integration Suite", () => {
 
   test("1. DOM Injection & Modal Opening / Closing (main.js)", async ({ page }) => {
     setupMocks(page);

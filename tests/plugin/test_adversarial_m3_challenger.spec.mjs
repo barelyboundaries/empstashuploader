@@ -1,5 +1,5 @@
 ﻿/**
- * DeepSeek Megapack Milestone 3 — Challenger 1 Adversarial & Stress Suite
+ * Empornium Megapack Builder Milestone 3 — Challenger 1 Adversarial & Stress Suite
  * Tests DOM mutation churn, XSS immunity, extreme scene volume, drag-and-drop reordering,
  * WebSocket fallback polling, and GraphQL mutation error handling.
  */
@@ -46,7 +46,7 @@ function setupMocks(page) {
   });
 }
 
-test.describe('DeepSeek Megapack Challenger 1 M3 Adversarial Suite', () => {
+test.describe('Empornium Megapack Builder Challenger 1 M3 Adversarial Suite', () => {
 
   test('ADV-M3-1: Adversarial query parameters and malformed scene IDs', async ({ page }) => {
     setupMocks(page);

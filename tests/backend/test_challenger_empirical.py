@@ -1,6 +1,6 @@
 """
 Empirical Challenger 1 Test Suite: Video Contact Sheets and Torrents.
-Performs adversarial empirical testing against task.py in DeepSeek Megapack.
+Performs adversarial empirical testing against task.py in Empornium Megapack Builder.
 """
 
 import io
@@ -269,7 +269,7 @@ def test_empirical_torrent_generation_and_readback():
         assert t.size == total_media_size
         assert t.trackers == [["https://tracker.example.com/announce"], ["https://backup.example.com/announce"]]
         assert t.private is True
-        assert t.created_by == "DeepSeek Megapack"
+        assert t.created_by == "Empornium Megapack Builder"
         assert t.pieces > 0
         raw_pieces = t.metainfo["info"]["pieces"]
         assert isinstance(raw_pieces, bytes)

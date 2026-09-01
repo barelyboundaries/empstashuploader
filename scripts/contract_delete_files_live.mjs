@@ -67,7 +67,7 @@ const FFMPEG =
   process.env.FFMPEG ||
   path.join(process.env.USERPROFILE || '', '.stash', 'ffmpeg.exe');
 
-const SCRATCH_DIR_NAME = '_deepseek_contract_tmp';
+const SCRATCH_DIR_NAME = '_empornium_contract_tmp';
 
 if (!OPT_IN) {
   console.error(

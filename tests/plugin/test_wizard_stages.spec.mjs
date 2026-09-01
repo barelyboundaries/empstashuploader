@@ -164,7 +164,7 @@ async function bootHarness(page, {
       contentType: "application/json",
       body: JSON.stringify({
         status: "ok",
-        track: "DeepSeek",
+        track: "Empornium Megapack Builder",
         output_dir: "C:\\Downloads\\Megapacks",
         scratch_dir: healthScratch,
         hamster_configured: false

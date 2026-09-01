@@ -64,7 +64,7 @@ async function openReviewPage(page) {
   await expect(page.locator(".scene-card")).toHaveCount(0);
 }
 
-test.describe("DeepSeek Review — sidecar probe diagnostics + status badge", () => {
+test.describe("Empornium Review — sidecar probe diagnostics + status badge", () => {
 
   // --- pathExistsBatch classification tiers (todo 3) -----------------------
 

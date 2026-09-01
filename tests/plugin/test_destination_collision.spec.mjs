@@ -54,7 +54,7 @@ async function openReviewPage(page) {
   await expect(page.locator(".scene-card")).toHaveCount(0);
 }
 
-test.describe("DeepSeek Review — destination collision data layer", () => {
+test.describe("Empornium Review — destination collision data layer", () => {
 
   test("oshash is selected in BOTH fetchScenesChunked queries (batch + per-id fallback)", async ({ page }) => {
     serveAssets(page);
@@ -382,7 +382,7 @@ async function openReviewPageOnBackendPort(page) {
   await expect(page.locator(".scene-card")).toHaveCount(0);
 }
 
-test.describe("DeepSeek Review — destination collision dialog", () => {
+test.describe("Empornium Review — destination collision dialog", () => {
 
   test("renders per-collision comparison with all six data fields, identical-content badge, and Stash scene links (port-9999 origin branch)", async ({ page }) => {
     serveAssets(page);
@@ -911,7 +911,7 @@ async function bootExecutionHarness(page, {
   return { wire, nativeDialogs };
 }
 
-test.describe("DeepSeek Review — consolidation execution engine (destination-collision-aware)", () => {
+test.describe("Empornium Review — consolidation execution engine (destination-collision-aware)", () => {
 
   test("(a) no collisions -> exactly one batched moveFiles; existing confirm() gate preserved", async ({ page }) => {
     const scenes = [

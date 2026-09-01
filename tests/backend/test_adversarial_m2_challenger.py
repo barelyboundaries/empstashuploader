@@ -1,5 +1,5 @@
 """
-DeepSeek Megapack Milestone 2 — Adversarial Challenger 2 Test Suite.
+Empornium Megapack Builder Milestone 2 — Adversarial Challenger 2 Test Suite.
 Rigorous stress-testing of fallback mechanisms (VCSI failure, upload failure, timeouts,
 Pillow placeholder generation) and payload validation (empty, null, corrupt JSON,
 missing files, preventing hollow torrents and partial manifest artifacts).

@@ -1,5 +1,5 @@
 """
-Single-process native Stash task runner for DeepSeek Megapack.
+Single-process native Stash task runner for Empornium Megapack Builder.
 Handles 'ProbeFiles' and 'BuildMegapack' tasks within Stash's native process lifecycle.
 """
 
@@ -458,7 +458,7 @@ def _generate_pillow_placeholder(
         from PIL import Image, ImageDraw
         img = Image.new("RGB", (1280, 720), color=(30, 30, 30))
         d = ImageDraw.Draw(img)
-        d.text((50, 50), f"DeepSeek Megapack: {pack_title}", fill=(255, 255, 255))
+        d.text((50, 50), f"Empornium Megapack Builder: {pack_title}", fill=(255, 255, 255))
         d.text((50, 90), f"Scene {scene_idx + 1}/{total_scenes}", fill=(200, 200, 200))
         if video_path:
             d.text((50, 130), f"File: {os.path.basename(video_path)}", fill=(180, 180, 180))

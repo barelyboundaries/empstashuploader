@@ -60,7 +60,7 @@ class TestVendoredRuntimeDefaults:
 
     def test_defaults_never_under_stash_tree(self, tmp_path, monkeypatch):
         """Even when vendored under a .stash-shaped tree, defaults leave it."""
-        fake_root = tmp_path / ".stash" / "plugins" / "deepseek-megapack"
+        fake_root = tmp_path / ".stash" / "plugins" / "empornium-megapack"
         fake_root.mkdir(parents=True)
         fake_home = tmp_path / "home"
         fake_home.mkdir()

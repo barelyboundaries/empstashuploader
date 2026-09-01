@@ -42,7 +42,7 @@ function setupMocks(page) {
 }
 
 
-test.describe("DeepSeek Megapack Frontend - Adversarial Stress & Verification Suite", () => {
+test.describe("Empornium Megapack Builder Frontend - Adversarial Stress & Verification Suite", () => {
 
   test("ADV-1: DOM Injection across all layout containers & dynamic container appearance", async ({ page }) => {
     setupMocks(page);

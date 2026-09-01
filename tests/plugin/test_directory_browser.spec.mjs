@@ -40,7 +40,7 @@ function setupMocks(page) {
   });
 }
 
-test.describe("DeepSeek Megapack - Server Filesystem Directory Browser", () => {
+test.describe("Empornium Megapack Builder - Server Filesystem Directory Browser", () => {
 
   test("1. 'Browse...' button is present adjacent to Destination Directory input", async ({ page }) => {
     setupMocks(page);

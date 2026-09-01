@@ -20,7 +20,7 @@ import torf
 
 MAX_PIECE_EXPONENT = 23  # 2^23 = 8 MiB
 MIN_PIECE_SIZE = 2**14  # 16 KiB
-CREATED_BY = "DeepSeek Megapack"
+CREATED_BY = "Empornium Megapack Builder"
 
 
 class TorrentError(Exception):

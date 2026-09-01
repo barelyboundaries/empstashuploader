@@ -48,7 +48,7 @@ def test_stage4b_widened_scene_payload_in_manifest(tmp_path):
         "duration": 3665.5,
         "video_codec": "h264",
         "date": "2026-05-12",
-        "studio": "Studio DeepSeek",
+        "studio": "Studio Empornium Megapack Builder",
         "performers": ["Alice Stone"],
         "tags": ["1080p", "Feature"],
     }
@@ -76,7 +76,7 @@ def test_stage4b_widened_scene_payload_in_manifest(tmp_path):
     assert saved_scene["duration"] == 3665.5
     assert saved_scene["video_codec"] == "h264"
     assert saved_scene["date"] == "2026-05-12"
-    assert saved_scene["studio"] == "Studio DeepSeek"
+    assert saved_scene["studio"] == "Studio Empornium Megapack Builder"
 
     # Assert tracker_tags is populated for Stage 5 upload engine
     assert "tracker_tags" in manifest_data

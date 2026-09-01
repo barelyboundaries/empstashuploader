@@ -22,10 +22,10 @@ const __dirname = path.dirname(__filename);
 // mismatch — that is the signal to refresh ASSET_RECORD below in the same
 // commit, so unreviewed or truncated asset changes can never slip through.
 const ASSET_RECORD = {
-  // review.js: T3 renamed JS/DOM/CSS identifiers to empornium branding
-  'review.js': '68b9a8c3f741a02cf57e40512795d3a3a5139b22bf468c5e34dee0a35e76d1ae',
-  // review.html: pre-existing hash (not modified by T3)
-  'review.html': '6dc818d86a67d1597ed23b3e3a2fd907c1305aac4041dcc1eeb4695e4e41be3b',
+  // review.js: T6 renamed DeepSeek brand strings to Empornium Megapack Builder
+  'review.js': '540ffb8bb6978bae6228e16cc592082b39a48794ec74e08315b2df0e09a225fc',
+  // review.html: T6 renamed DeepSeek brand strings to Empornium Megapack Builder
+  'review.html': 'd2c0c2953cf96794b0011c823edd8d95becda07505c90e91c9897d530e81b797',
 };
 
 function sha256(filePath) {

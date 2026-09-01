@@ -10,5 +10,5 @@ def test_health():
     assert response.status_code == 200
     body = response.json()
     assert body["status"] == "ok"
-    assert body["track"] == "DeepSeek"
+    assert body["track"] == "Empornium Megapack Builder"
     assert body["staging_dir"].endswith("runtime\\staging")

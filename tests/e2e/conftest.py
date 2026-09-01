@@ -1,5 +1,5 @@
 """
-Pytest configuration and shared fixtures for the DeepSeek Megapack E2E test suite.
+Pytest configuration and shared fixtures for the Empornium Megapack Builder E2E test suite.
 """
 
 import sys

@@ -1,4 +1,4 @@
-# DeepSeek Megapack
+# Empornium Megapack Builder
 
 A Stash plugin that turns selected scenes into Empornium-ready releases. Pick
 scenes in Stash, open the in-Stash review UI, and build a megapack or a
@@ -7,7 +7,7 @@ one pass. An optional helper sidecar handles very large selections and folder
 browsing.
 
 This README is the single source of truth for the plugin. It replaces the
-older DeepSeek project docs.
+older project docs.
 
 ## What it is
 
@@ -44,7 +44,7 @@ older DeepSeek project docs.
 ### Option A: from the Stash plugin source
 
 1. In Stash, go to **Settings → Plugins → Add Source** and enter
-   `https://ccoggle-ui.github.io/deepseek-megapack/index.yml`.
+   `https://barelyboundaries.github.io/empstashuploader/index.yml`.
 
    The placeholder is the URL of this repository's GitHub Pages `index.yml`.
    It is a literal placeholder because the Pages URL only exists after the
@@ -58,7 +58,7 @@ older DeepSeek project docs.
 ### Option B: manual
 
 1. Download the release zip.
-2. Copy its contents to `~/.stash/plugins/deepseek-megapack`.
+2. Copy its contents to `~/.stash/plugins/empornium-megapack`.
 3. Run the installer from that folder (`install.ps1` on Windows,
    `./install.sh` on macOS/Linux).
 
@@ -111,7 +111,7 @@ The backend reads `config.local.toml`. It looks for the file in this order:
 
 1. The repository root (a dev checkout).
 2. The package's parent directory, which is the plugin folder when the package
-   is vendored at `~/.stash/plugins/deepseek-megapack`.
+   is vendored at `~/.stash/plugins/empornium-megapack`.
 
 So in an installed plugin, put `config.local.toml` next to `task.py` in the
 plugin folder. In a dev checkout, put it at the repo root.
@@ -180,12 +180,12 @@ version, so back up `config.local.toml` before updating. If the virtual
 environment is gone after an update, re-run the installer script in the plugin
 folder to recreate it.
 
-**Uninstall.** Delete the plugin folder (`~/.stash/plugins/deepseek-megapack`)
+**Uninstall.** Delete the plugin folder (`~/.stash/plugins/empornium-megapack`)
 and, if present, `~/.empornium-megapack/`.
 
 ## Releases
 
-Each release bumps the `version:` field in `deepseek-megapack.yml`. The
+Each release bumps the `version:` field in `empornium-megapack.yml`. The
 published index version derives from it as `<version>-<shortsha>`, so keep the
 field in sync with the release you are publishing.
 
@@ -211,8 +211,8 @@ field in sync with the release you are publishing.
 
 | Symptom | Cause / fix |
 |---|---|
-| Plugin missing from `{ plugins { id } }` | Manifest failed to parse. Check `deepseek-megapack.yml`. |
-| Registered as ID `plugin` | The manifest was renamed to `plugin.yml`. Keep it named `deepseek-megapack.yml`; the ID comes from the filename. |
+| Plugin missing from `{ plugins { id } }` | Manifest failed to parse. Check `empornium-megapack.yml`. |
+| Registered as ID `plugin` | The manifest was renamed to `plugin.yml`. Keep it named `empornium-megapack.yml`; the ID comes from the filename. |
 | Modal opens blank / iframe 404 | `ui.assets` mapping missing, or `/plugins/` used instead of `/plugin/`. |
 | Task dispatch returns HTTP 400 | Plugin task args must be objects, not raw strings. |
 | Progress bar hangs at 5% forever | WebSocket subprotocol mismatch. The subscription must use `graphql-transport-ws`. |

@@ -53,7 +53,7 @@ function setupMocks(page) {
 }
 
 
-test.describe("DeepSeek Megapack Milestone 2 — Adversarial Stress & Edge Case Suite", () => {
+test.describe("Empornium Megapack Builder Milestone 2 — Adversarial Stress & Edge Case Suite", () => {
 
   // =========================================================================
   // 1. QUERY PARSING & EMPTY / MALFORMED SCENE IDS
