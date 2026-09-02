@@ -173,10 +173,13 @@ try {
   mkdirSync(join(stage, "empornium_megapack"), { recursive: true });
   for (const f of pkgFiles) cpSync(join(backendPkg, f), join(stage, "empornium_megapack", f));
 
-  // Installers from repo root + generated 3-line INSTALL.txt (README itself is
-  // written by a parallel task and is intentionally NOT copied into the zip).
+  // Installers + start scripts from repo root + generated 3-line INSTALL.txt
+  // (README itself is written by a parallel task and is intentionally NOT
+  // copied into the zip).
   cpSync(join(repoRoot, "install.ps1"), join(stage, "install.ps1"));
   cpSync(join(repoRoot, "install.sh"), join(stage, "install.sh"));
+  cpSync(join(repoRoot, "start_backend.ps1"), join(stage, "start_backend.ps1"));
+  cpSync(join(repoRoot, "start_backend.sh"), join(stage, "start_backend.sh"));
   writeFileSync(
     join(stage, "INSTALL.txt"),
     [
@@ -191,7 +194,7 @@ try {
   const required = [
     "empornium-megapack.yml", "main.js", "style.css", "task.py", "requirements.txt",
     "assets/review.html", "assets/review.js", "empornium_megapack/main.py",
-    "install.ps1", "install.sh", "INSTALL.txt",
+    "install.ps1", "install.sh", "start_backend.ps1", "start_backend.sh", "INSTALL.txt",
   ];
   const missing = required.filter((f) => !existsSync(join(stage, f)));
   if (missing.length) throw new Error(`stage missing required files: ${missing.join(", ")}`);
@@ -209,7 +212,7 @@ try {
         name,
         data: readFileSync(abs),
         mtime: st.mtime,
-        mode: name === "install.sh" ? 0o755 : 0o644,
+        mode: name === "install.sh" || name === "start_backend.sh" ? 0o755 : 0o644,
       };
     })
     .sort((a, b) => (a.name < b.name ? -1 : 1));
