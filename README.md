@@ -38,6 +38,10 @@ older project docs.
   runs.
 - **vcsi.** Auto-installed by the installer into the plugin's virtual
   environment. You do not install it yourself.
+- **Installer-mandatory dependencies.** `plugin/requirements.txt` is not
+  pip-installable standalone: vcsi 7.0.17 pins pillow==11.2.1 and
+  numpy==2.2.6, which conflict with pillow>=12. Always install via
+  `install.ps1`/`install.sh`, which handle vcsi with `--no-deps`.
 
 ## Install
 
@@ -46,9 +50,9 @@ older project docs.
 1. In Stash, go to **Settings → Plugins → Add Source** and enter
    `https://barelyboundaries.github.io/empstashuploader/index.yml`.
 
-   The placeholder is the URL of this repository's GitHub Pages `index.yml`.
-   It is a literal placeholder because the Pages URL only exists after the
-   first push. Replace it with the real URL once the Pages site is live.
+   GitHub Pages must be enabled on the `barelyboundaries/empstashuploader`
+   repository. The site is served by `.github/workflows/pages.yml`, which
+   builds the plugin zip and publishes `index.yml` on every push to `main`.
 
 2. Install the plugin from that source.
 3. Open the installed plugin folder and run the installer:
@@ -83,6 +87,10 @@ serves three things:
   directories.
 - **Health prefill.** The review UI prefills directory fields from the
   sidecar's health endpoint.
+
+Port 9941 is a fixed constant: the CSP, the frontend, and the backend are all
+pinned to it. If the port is already occupied, the start scripts print a
+port-in-use error and exit.
 
 When the review UI is opened through the sidecar itself (port 9941),
 "Open scene in Stash" links fall back to Stash's default port 9999 — a
@@ -204,9 +212,8 @@ field in sync with the release you are publishing.
 
 ## Security notes
 
-- **Rotate the HamsterImg API key periodically.** See risk R8 in the project
-  risks: a previously supplied key fragment must never be accepted, and the
-  key should be rotated if it was ever used.
+- **Rotate the HamsterImg API key periodically.** The announce passkey is
+  masked in logs and sanitized output, never logged in place.
 - **The sidecar has no authentication.** It binds to `127.0.0.1` only. Never
   expose it.
 - **Secrets live only in `config.local.toml`** (gitignored) or in `EMPORNIUM_`
