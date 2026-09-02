@@ -359,4 +359,185 @@ test.describe('Responsive Scene List Grid & 2D Drag-and-Drop Hit-Testing', () =>
     expect(titles[2]).toContain("Beta");
   });
 
+  test('R4 Adversarial: Multi-column drag to the right of a trailing single-card row inserts after that card', async ({ page }) => {
+    // 4 scenes in 3-column grid: Row 0 has 3 cards (Alpha, Beta, Gamma), Row 1 has 1 card (Delta)
+    await bootHarness(page, { sceneCount: 4, viewport: { width: 1400, height: 900 } });
+
+    // Initial: Alpha, Beta, Gamma, Delta
+    let titles = await getCardTitles(page);
+    expect(titles[0]).toContain("Alpha");
+    expect(titles[1]).toContain("Beta");
+    expect(titles[2]).toContain("Gamma");
+    expect(titles[3]).toContain("Delta");
+
+    // Drag Alpha (index 0) to Row 1, dropping in Column 1 space (to the right of Delta) with y in top half of Delta
+    const dropCoord = await page.evaluate(() => {
+      const cards = document.querySelectorAll("#scene-list .scene-card");
+      const delta = cards[3];
+      const r = delta.getBoundingClientRect();
+      // Right of Delta card, within top half of Delta (y < centerY)
+      return { x: r.right + 50, y: r.top + 15 };
+    });
+
+    await simulateDrag(page, 0, dropCoord.x, dropCoord.y);
+
+    titles = await getCardTitles(page);
+    // Expected: Beta, Gamma, Delta, Alpha (Alpha placed AFTER Delta)
+    expect(titles[0]).toContain("Beta");
+    expect(titles[1]).toContain("Gamma");
+    expect(titles[2]).toContain("Delta");
+    expect(titles[3]).toContain("Alpha");
+  });
+
+  test('R4 Adversarial: Multi-column drag with 2 scenes total correctly reorders left-to-right', async ({ page }) => {
+    await bootHarness(page, { sceneCount: 2, viewport: { width: 1400, height: 900 } });
+
+    // Initial: Alpha (#1), Beta (#2)
+    let titles = await getCardTitles(page);
+    expect(titles[0]).toContain("Alpha");
+    expect(titles[1]).toContain("Beta");
+
+    // Drag Alpha (index 0) to the right of Beta (index 1) in upper half
+    const dropCoord = await page.evaluate(() => {
+      const beta = document.querySelectorAll("#scene-list .scene-card")[1];
+      const r = beta.getBoundingClientRect();
+      return { x: r.right + 30, y: r.top + 10 };
+    });
+
+    await simulateDrag(page, 0, dropCoord.x, dropCoord.y);
+
+    titles = await getCardTitles(page);
+    expect(titles[0]).toContain("Beta");
+    expect(titles[1]).toContain("Alpha");
+  });
+
+  test('R4 Adversarial: Variable height cards maintain correct row-banding and drag target detection', async ({ page }) => {
+    await bootHarness(page, { sceneCount: 6, viewport: { width: 1400, height: 900 } });
+
+    // Inject extra content into card 1 (Beta) to make it significantly taller than other cards
+    await page.evaluate(() => {
+      const beta = document.querySelectorAll("#scene-list .scene-card")[1];
+      const extra = document.createElement("div");
+      extra.style.height = "120px";
+      extra.textContent = "Extra metadata height extension";
+      beta.querySelector(".scene-info").appendChild(extra);
+    });
+
+    // Verify Row 0 track expanded due to extra content in Beta compared to Row 1 cards
+    const heights = await page.evaluate(() => {
+      const cards = [...document.querySelectorAll("#scene-list .scene-card")];
+      return cards.map((c) => Math.round(c.getBoundingClientRect().height));
+    });
+    expect(heights[0]).toBeGreaterThan(heights[3] + 50);
+
+    // Drag Zeta (index 5, Row 1) between Alpha (index 0) and Beta (index 1) in Row 0
+    const alphaRightCoord = await page.evaluate(() => {
+      const alpha = document.querySelectorAll("#scene-list .scene-card")[0];
+      const r = alpha.getBoundingClientRect();
+      return { x: r.right + 6, y: r.top + r.height * 0.5 };
+    });
+
+    await simulateDrag(page, 5, alphaRightCoord.x, alphaRightCoord.y);
+
+    const reordered = await getCardTitles(page);
+    expect(reordered[0]).toContain("Alpha");
+    expect(reordered[1]).toContain("Zeta");
+    expect(reordered[2]).toContain("Beta");
+  });
+
+  test('R4 & Constraints: Drag reordering persists into final build payload dispatched via wizard stages', async ({ page }) => {
+    let capturedBuildPayload = null;
+    await bootHarness(page, { sceneCount: 4, viewport: { width: 1400, height: 900 } });
+
+    await page.route("**/graphql", async (route) => {
+      const postData = JSON.parse(route.request().postData() || "{}");
+      const query = postData.query || "";
+      if (query.includes("FindScenes")) {
+        const names = ["Alpha", "Beta", "Gamma", "Delta"];
+        const scenes = names.map((name, i) => makeScene(String(i + 1), `${name} Video Scene`));
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ data: { findScenes: { scenes } } })
+        });
+      }
+      if (query.includes("StageDirCheck")) {
+        const p = postData.variables?.path || "";
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ data: { directory: { path: p } } })
+        });
+      }
+      if (query.includes("RunBuild")) {
+        const args = postData.variables?.args || [];
+        const payloadArg = args.find((a) => a.key === "payload");
+        if (payloadArg && payloadArg.value?.str) {
+          capturedBuildPayload = JSON.parse(payloadArg.value.str);
+        }
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ data: { runPluginTask: "job-123" } })
+        });
+      }
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: {} }) });
+    });
+
+    // Reorder: Move Alpha (index 0) after Gamma (index 2)
+    const gammaRightCoord = await page.evaluate(() => {
+      const gamma = document.querySelectorAll("#scene-list .scene-card")[2];
+      const r = gamma.getBoundingClientRect();
+      return { x: r.left + r.width * 0.75, y: r.top + r.height * 0.5 };
+    });
+
+    await simulateDrag(page, 0, gammaRightCoord.x, gammaRightCoord.y);
+
+    const titles = await getCardTitles(page);
+    expect(titles[0]).toContain("Beta");
+    expect(titles[1]).toContain("Gamma");
+    expect(titles[2]).toContain("Alpha");
+    expect(titles[3]).toContain("Delta");
+
+    // Advance Stage 1 (Setup) -> Stage 2
+    await page.fill("#pack-title", "Reordered Megapack");
+    await page.click("#btn-stage-next");
+
+    // Advance Stage 2 (Locations) -> Stage 3
+    await page.fill("#output-dir", "D:\\Seed");
+    await page.fill("#scratch-dir", "D:\\Scratch");
+    await page.click("#btn-stage-next");
+
+    // Advance Stage 3 (Scenes) -> Stage 4 (Actions)
+    await page.click("#btn-stage-next");
+
+    // On Stage 4, click Build Megapack
+    await page.click("#btn-build");
+    await page.waitForTimeout(100);
+
+    // Assert that scenes were dispatched in the newly reordered sequence: [2, 3, 1, 4]
+    expect(capturedBuildPayload).not.toBeNull();
+    const dispatchedSceneIds = (capturedBuildPayload.scenes || []).map((s) => String(s.id));
+    expect(dispatchedSceneIds).toEqual(["2", "3", "1", "4"]);
+  });
+
+  test('R4 Adversarial: Drag reordering under deviceScaleFactor 1.25 (High-DPI / fractional zoom)', async ({ page }) => {
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await bootHarness(page, { sceneCount: 6, viewport: { width: 1400, height: 900 } });
+
+    // Drag Beta (index 1) to the left of Alpha (index 0)
+    const card0Rect = await page.evaluate(() => {
+      const c0 = document.querySelectorAll("#scene-list .scene-card")[0];
+      const r = c0.getBoundingClientRect();
+      return { x: r.left + r.width * 0.25, y: r.top + r.height * 0.5 };
+    });
+
+    await simulateDrag(page, 1, card0Rect.x, card0Rect.y);
+
+    const titles = await getCardTitles(page);
+    expect(titles[0]).toContain("Beta");
+    expect(titles[1]).toContain("Alpha");
+    expect(titles[2]).toContain("Gamma");
+  });
+
 });

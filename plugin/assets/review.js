@@ -1838,6 +1838,14 @@
     const draggableElements = [...container.querySelectorAll(".scene-card:not(.dragging)")];
     if (draggableElements.length === 0) return null;
 
+    // Detect multi-column layout via computed grid template tracks
+    let isMultiColumn = false;
+    try {
+      const style = window.getComputedStyle(container);
+      const cols = (style.gridTemplateColumns || "").split(/\s+/).filter(Boolean);
+      isMultiColumn = cols.length > 1;
+    } catch (_) {}
+
     // Group cards into visual row bands using vertical overlap tolerance (~5px)
     const rows = [];
     let currentRow = [];
@@ -1877,6 +1885,10 @@
       });
     }
 
+    if (!isMultiColumn) {
+      isMultiColumn = rows.some((r) => r.items.length > 1);
+    }
+
     // Determine target row based on y coordinate
     let targetRowIndex = 0;
     if (y < rows[0].top) {
@@ -1898,7 +1910,8 @@
     const targetRow = rows[targetRowIndex];
     const items = targetRow.items;
 
-    if (items.length === 1) {
+    // Single-column collapsed layout: use vertical midpoint (y)
+    if (!isMultiColumn) {
       const box = items[0].box;
       const centerY = box.top + box.height / 2;
       if (y < centerY) {
@@ -1908,6 +1921,7 @@
       }
     }
 
+    // Multi-column grid: use horizontal midpoint (x) across column tracks in the row
     for (const item of items) {
       const centerX = item.box.left + item.box.width / 2;
       if (x < centerX) {
