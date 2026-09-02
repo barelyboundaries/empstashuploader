@@ -1,4 +1,4 @@
-﻿import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -22,6 +22,18 @@ function serveAssets(page) {
   // Catch-all FIRST: everything not explicitly routed below gets an empty 404.
   // Prevents any accidental leak to the live sidecar (:9941) or favicon noise.
   page.route("**/*", (route) => route.fulfill({ status: 404, contentType: "text/plain", body: "" }));
+
+  page.route("**/graphql", async (route) => {
+    const postData = JSON.parse(route.request().postData() || "{}");
+    if (postData.query && postData.query.includes("runPluginTask")) {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ data: { runPluginTask: "job-default-1" } })
+      });
+    }
+    return route.fallback();
+  });
 
   page.route("**/plugin*/**/review.html*", async (route) => {
     const filePath = path.resolve("plugin/assets/review.html");
@@ -151,9 +163,9 @@ test.describe("Empornium Review — sidecar probe diagnostics + status badge", (
       .rejects.toThrow(/^(?!.*not reachable)/);
   });
 
-  // --- refreshSidecarStatus badge states (todo 4) --------------------------
+  // --- refreshSidecarStatus badge states & stop affordance -------------------
 
-  test("badge: /health unreachable -> NOT RUNNING, swallowed silently (no console/page errors)", async ({ page }) => {
+  test("badge: /health unreachable -> transitions through starting to failed-to-start, swallowed silently (no console/page errors)", async ({ page }) => {
     const consoleErrors = [];
     const pageErrors = [];
     page.on("console", (msg) => {
@@ -162,24 +174,21 @@ test.describe("Empornium Review — sidecar probe diagnostics + status badge", (
     page.on("pageerror", (err) => pageErrors.push(err.message));
 
     serveAssets(page);
-    // Registered BEFORE goto so the boot-time refreshSidecarStatus() call is
-    // intercepted too; the explicit re-call below makes the assertion
-    // deterministic regardless of boot timing.
+    // Registered BEFORE goto so the boot-time refreshSidecarStatus() call is intercepted
     await page.route("**/health*", (route) => route.abort());
     await openReviewPage(page);
 
-    await page.evaluate(() => window.refreshSidecarStatus());
-
     const badge = page.locator("#sidecar-status");
-    await expect(badge).toHaveText("Sidecar: NOT RUNNING — run start_backend.ps1");
+    const stopBtn = page.locator("#btn-sidecar-stop");
+
+    await expect(badge).toHaveClass(/sidecar-warn|sidecar-bad/);
+    await expect(stopBtn).toBeHidden();
+
+    // When polling timeout expires or task finishes with unreachable health, settles on failed-to-start
+    await expect(badge).toHaveText("Sidecar: failed to start — run start_backend.ps1", { timeout: 15000 });
     await expect(badge).toHaveClass(/sidecar-bad/);
-    // Best-effort swallows: every failure collapses into badge state, never
-    // an escaped uncaught exception or app-level console error. Chromium
-    // itself logs "Failed to load resource: net::ERR_FAILED" for each
-    // route.abort()-ed fetch (2 candidates × 3 refresh calls: boot-time
-    // prefillScratchDirFromHealth + boot-time refreshSidecarStatus + the
-    // explicit re-call) — that is browser network logging, NOT app code, so
-    // it is filtered; anything else failing the console must fail the test.
+    await expect(stopBtn).toBeHidden();
+
     expect(pageErrors, "no uncaught page errors").toEqual([]);
     const appConsoleErrors = consoleErrors.filter(
       (text) => !text.startsWith("Failed to load resource:")
@@ -187,7 +196,7 @@ test.describe("Empornium Review — sidecar probe diagnostics + status badge", (
     expect(appConsoleErrors, "no app-level console errors").toEqual([]);
   });
 
-  test("badge: /health ok with expected version 0.2.0 -> connected", async ({ page }) => {
+  test("badge: /health ok with expected version 0.2.0 -> connected, stop button visible", async ({ page }) => {
     serveAssets(page);
     await page.route("**/health*", (route) =>
       route.fulfill({
@@ -203,9 +212,12 @@ test.describe("Empornium Review — sidecar probe diagnostics + status badge", (
     const badge = page.locator("#sidecar-status");
     await expect(badge).toHaveText("Sidecar: connected (v0.2.0)");
     await expect(badge).toHaveClass(/sidecar-ok/);
+
+    const stopBtn = page.locator("#btn-sidecar-stop");
+    await expect(stopBtn).toBeVisible();
   });
 
-  test("badge: /health ok with old version 0.1.9 -> outdated + restart remediation", async ({ page }) => {
+  test("badge: /health ok with old version 0.1.9 -> outdated + restart remediation, stop button visible", async ({ page }) => {
     serveAssets(page);
     await page.route("**/health*", (route) =>
       route.fulfill({
@@ -223,6 +235,139 @@ test.describe("Empornium Review — sidecar probe diagnostics + status badge", (
       "Sidecar: outdated (v0.1.9, expected 0.2.0) — restart via start_backend.ps1"
     );
     await expect(badge).toHaveClass(/sidecar-warn/);
+
+    const stopBtn = page.locator("#btn-sidecar-stop");
+    await expect(stopBtn).toBeVisible();
+  });
+
+  test("stop button: clicking #btn-sidecar-stop dispatches POST /api/shutdown and transitions badge to NOT RUNNING", async ({ page }) => {
+    serveAssets(page);
+    let shutdownCalls = 0;
+    await page.route("**/health*", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ status: "ok", version: "0.2.0" })
+      })
+    );
+    await page.route("**/api/shutdown*", (route) => {
+      shutdownCalls++;
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ status: "ok", detail: "Server shutting down" })
+      });
+    });
+
+    await openReviewPage(page);
+    await page.evaluate(() => window.refreshSidecarStatus());
+
+    const badge = page.locator("#sidecar-status");
+    const stopBtn = page.locator("#btn-sidecar-stop");
+
+    await expect(badge).toHaveText("Sidecar: connected (v0.2.0)");
+    await expect(stopBtn).toBeVisible();
+
+    await stopBtn.click();
+
+    expect(shutdownCalls).toBeGreaterThanOrEqual(1);
+    await expect(badge).toHaveText("Sidecar: NOT RUNNING — run start_backend.ps1");
+    await expect(badge).toHaveClass(/sidecar-bad/);
+    await expect(stopBtn).toBeHidden();
+  });
+
+  test("badge recovery: initially unreachable -> starting -> recovers during polling -> connected", async ({ page }) => {
+    serveAssets(page);
+    let backendStarted = false;
+    const taskDispatches = [];
+
+    await page.route("**/graphql", async (route) => {
+      const postData = JSON.parse(route.request().postData() || "{}");
+      if (postData.query && postData.query.includes("FindScenes")) {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ data: { findScenes: { scenes: [] } } })
+        });
+      }
+      if (postData.query && postData.query.includes("runPluginTask")) {
+        taskDispatches.push(postData.variables);
+        if (postData.variables?.task_name === "StartBackend") {
+          backendStarted = true;
+        }
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ data: { runPluginTask: "job-start-1" } })
+        });
+      }
+      return route.fallback();
+    });
+
+    await page.route("**/health*", async (route) => {
+      if (!backendStarted) {
+        return route.abort();
+      }
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ status: "ok", version: "0.2.0", scratch_dir: "C:\\RecoveredScratch" })
+      });
+    });
+
+    await openReviewPage(page);
+
+    const badge = page.locator("#sidecar-status");
+    const stopBtn = page.locator("#btn-sidecar-stop");
+
+    await expect(badge).toHaveText("Sidecar: connected (v0.2.0)", { timeout: 8000 });
+    await expect(badge).toHaveClass(/sidecar-ok/);
+    await expect(stopBtn).toBeVisible();
+
+    expect(taskDispatches.some((v) => v?.task_name === "StartBackend")).toBe(true);
+  });
+
+  test("refreshSidecarStatus debouncing: multiple concurrent calls do not dispatch duplicate StartBackend tasks", async ({ page }) => {
+    serveAssets(page);
+    let startBackendDispatches = 0;
+
+    await page.route("**/graphql", async (route) => {
+      const postData = JSON.parse(route.request().postData() || "{}");
+      if (postData.query && postData.query.includes("FindScenes")) {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ data: { findScenes: { scenes: [] } } })
+        });
+      }
+      if (postData.query && postData.query.includes("runPluginTask")) {
+        if (postData.variables?.task_name === "StartBackend") {
+          startBackendDispatches++;
+        }
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ data: { runPluginTask: "job-start-1" } })
+        });
+      }
+      return route.fallback();
+    });
+
+    await page.route("**/health*", (route) => route.abort());
+
+    await openReviewPage(page);
+
+    // Call refreshSidecarStatus 3 times concurrently
+    await page.evaluate(() => {
+      return Promise.all([
+        window.refreshSidecarStatus(),
+        window.refreshSidecarStatus(),
+        window.refreshSidecarStatus()
+      ]);
+    });
+
+    // Exactly one StartBackend dispatch should have happened
+    expect(startBackendDispatches).toBe(1);
   });
 
 });

@@ -190,11 +190,21 @@ try {
     ].join("\n"),
   );
 
+  const yml = readFileSync(join(pluginDir, "empornium-megapack.yml"), "utf8");
+  const version = ymlField(yml, "version");
+  const name = ymlField(yml, "name");
+  const shortSha = gitShortSha();
+  const buildStamp = `${version}-${shortSha}`;
+
+  writeFileSync(join(stage, "BUILD_STAMP"), `${buildStamp}\n`);
+  writeFileSync(join(stage, "empornium_megapack", "BUILD_STAMP"), `${buildStamp}\n`);
+
   // Fail fast if the acceptance set ever loses a member.
   const required = [
     "empornium-megapack.yml", "main.js", "style.css", "task.py", "requirements.txt",
     "assets/review.html", "assets/review.js", "empornium_megapack/main.py",
     "install.ps1", "install.sh", "start_backend.ps1", "start_backend.sh", "INSTALL.txt",
+    "BUILD_STAMP",
   ];
   const missing = required.filter((f) => !existsSync(join(stage, f)));
   if (missing.length) throw new Error(`stage missing required files: ${missing.join(", ")}`);
@@ -221,10 +231,6 @@ try {
   writeFileSync(zipPath, zip);
   const sha256 = createHash("sha256").update(zip).digest("hex");
 
-  const yml = readFileSync(join(pluginDir, "empornium-megapack.yml"), "utf8");
-  const version = ymlField(yml, "version");
-  const name = ymlField(yml, "name");
-  const shortSha = gitShortSha();
   writeFileSync(indexPath, [
     `id: empornium-megapack`,
     `name: ${name}`,

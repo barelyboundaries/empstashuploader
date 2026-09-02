@@ -2,6 +2,8 @@ import asyncio
 import json
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -120,12 +122,39 @@ def get_token_endpoint(token: str):
     return TokenGetResponse(sceneIds=scene_ids)
 
 
+def get_build_stamp() -> Optional[str]:
+    """Retrieve the build stamp from env or BUILD_STAMP metadata file.
+
+    Returns:
+        str | None: String stamp (e.g. '0.2.0-639bc89') or None if unversioned/dev checkout.
+    """
+    env_stamp = os.environ.get("EMPORNIUM_BUILD_STAMP")
+    if env_stamp and env_stamp.strip():
+        return env_stamp.strip()
+
+    current_dir = Path(__file__).resolve().parent
+    candidates = (
+        current_dir / "BUILD_STAMP",          # vendored inside empornium_megapack/
+        current_dir.parent / "BUILD_STAMP",   # plugin root or backend root
+    )
+    for path in candidates:
+        if path.is_file():
+            try:
+                content = path.read_text(encoding="utf-8").strip()
+                if content:
+                    return content
+            except Exception:
+                pass
+    return None
+
+
 @app.get("/health")
 def health():
     return {
         "status": "ok",
         "track": "Empornium Megapack Builder",
         "version": app.version,
+        "build_stamp": get_build_stamp(),
         "stash_url": settings.stash_url,
         "staging_dir": str(settings.staging_dir),
         "output_dir": str(settings.output_dir),
@@ -235,4 +264,17 @@ def get_run_result(run_id: str):
     if result is None:
         return {"found": False}
     return {"found": True, "result": result}
+
+
+@app.post("/api/shutdown")
+async def shutdown_endpoint():
+    """Gracefully shuts down the sidecar process after returning HTTP 200."""
+    async def _delayed_shutdown(delay: float = 0.2):
+        await asyncio.sleep(delay)
+        if "PYTEST_CURRENT_TEST" not in os.environ and "TESTING" not in os.environ:
+            os._exit(0)
+
+    asyncio.create_task(_delayed_shutdown())
+    return {"status": "ok", "detail": "Server shutting down"}
+
 

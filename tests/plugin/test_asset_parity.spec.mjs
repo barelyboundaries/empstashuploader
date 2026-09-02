@@ -22,10 +22,10 @@ const __dirname = path.dirname(__filename);
 // mismatch — that is the signal to refresh ASSET_RECORD below in the same
 // commit, so unreviewed or truncated asset changes can never slip through.
 const ASSET_RECORD = {
-  // review.js: updated for false-build prevention (R1-R4 sidecar and fail-closed readiness)
-  'review.js': '8af981c00573d0fcb4b6d4e59c972674c55e5f243f6277d390faf8c107fbbb26',
-  // review.html: updated brand strings to Empornium Megapack Builder
-  'review.html': 'd2c0c2953cf96794b0011c823edd8d95becda07505c90e91c9897d530e81b797',
+  // review.js: updated for debounced 3-state sidecar status machine, StartBackend dispatch & polling, and stopSidecar affordance
+  'review.js': 'ef2e92c0edbe07d58ea9b74cef5e50295c7d1aca7f6c52f18f753923892c32ae',
+  // review.html: updated with #btn-sidecar-stop affordance and sidecar status badge classes
+  'review.html': 'fefecc57fef561e56be0d63464c2a9a4308b14874d95ecfbf9d2dccbb31827f7',
 };
 
 function sha256(filePath) {

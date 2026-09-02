@@ -14,8 +14,9 @@ import ctypes
 import traceback
 import re
 import subprocess
+import socket
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Set, Tuple
+from typing import Dict, Any, List, Optional, Set, Tuple, Union
 
 # Reconfigure standard streams to UTF-8 on Windows
 if hasattr(sys.stdin, "reconfigure"):
@@ -463,6 +464,46 @@ def _declared_pack_primary_paths(scenes: List[Any]) -> List[str]:
     return [p for sc in scenes for p in _extract_scene_paths(sc)]
 
 
+def _build_scene_id_map(scenes: Optional[Union[List[Any], Dict[str, Any]]]) -> Dict[str, str]:
+    """Maps media file paths (raw, normalized, absolute) to their Stash scene ID, if known."""
+    if not scenes:
+        return {}
+    if isinstance(scenes, dict):
+        if any(k in scenes for k in ("id", "scene_id", "path", "source_path", "file_paths", "files")):
+            scenes = [scenes]
+        else:
+            res: Dict[str, str] = {}
+            for k, v in scenes.items():
+                if k and v is not None:
+                    k_str = str(k).strip()
+                    v_str = str(v).strip()
+                    res[k_str] = v_str
+                    try:
+                        res[os.path.normcase(os.path.abspath(k_str))] = v_str
+                    except Exception:
+                        pass
+            return res
+
+    mapping: Dict[str, str] = {}
+    if isinstance(scenes, (list, tuple, set)):
+        for sc in scenes:
+            if not isinstance(sc, dict):
+                continue
+            sid = sc.get("id") or sc.get("scene_id")
+            if sid is None or str(sid).strip() == "":
+                continue
+            sid_str = str(sid).strip()
+            for p in _extract_scene_paths(sc):
+                if p:
+                    p_str = str(p).strip()
+                    mapping[p_str] = sid_str
+                    try:
+                        mapping[os.path.normcase(os.path.abspath(p_str))] = sid_str
+                    except Exception:
+                        pass
+    return mapping
+
+
 def normalize_grid_layout(layout: Optional[str], default: str = "4x4") -> str:
     """
     Normalizes layout options like 'grid_4x4', '4x4', 'grid_3x3', '3x3' to 'NxM'.
@@ -795,23 +836,47 @@ def validate_pack_files_present(
     consolidation_dir: str,
     expected_primary_paths: List[str],
     extras_expected: Optional[List[str]] = None,
+    scenes: Optional[Union[List[Any], Dict[str, Any]]] = None,
 ) -> None:
     """
     Ensures every expected pack file exists under consolidation_dir at ANY
     depth (recursive containment). Unrelated files are deliberately NOT
     scanned or refused — they are ignored entirely. Missing files abort the
-    build, naming each missing path exactly.
+    build, naming each missing path exactly (with scene ID if known) and
+    recommending actionable Stash cleanup remedies.
     """
+    if extras_expected and isinstance(extras_expected, list) and len(extras_expected) > 0 and isinstance(extras_expected[0], dict) and scenes is None:
+        scenes = extras_expected
+        extras_expected = None
+
     expected = [p for p in list(expected_primary_paths) + list(extras_expected or []) if p]
     missing = [
         p for p in expected
         if not (os.path.isfile(p) and _is_under(p, consolidation_dir))
     ]
     if missing:
+        scene_id_map = _build_scene_id_map(scenes)
+        missing_entries = []
+        for p in missing:
+            p_str = str(p)
+            sid = None
+            if scene_id_map:
+                sid = scene_id_map.get(p_str)
+                if not sid:
+                    try:
+                        sid = scene_id_map.get(os.path.normcase(os.path.abspath(p_str)))
+                    except Exception:
+                        pass
+            if sid:
+                missing_entries.append(f"scene {sid} -> {p_str}")
+            else:
+                missing_entries.append(p_str)
+
         _fail_build(
             f"Pack file(s) missing from '{consolidation_dir}': "
-            f"{', '.join(missing)}. "
-            f"Run Consolidate or add the missing files to the seed directory."
+            f"{', '.join(missing_entries)}. "
+            f"Run Consolidate or add the missing files to the seed directory, "
+            f"or run a Stash library scan/cleanup to resolve stale records."
         )
 
 
@@ -1266,7 +1331,7 @@ def run_build_megapack(payload: Any, server_connection: Optional[Dict[str, Any]]
             # dir (recursive). Before the arity check — the existence filter
             # above silently drops missing files, and this refusal names the
             # exact path + hint instead of a bare "found 0" count.
-            validate_pack_files_present(consolidation_dir, expected_primary_paths)
+            validate_pack_files_present(consolidation_dir, expected_primary_paths, scenes=scenes)
 
         if single_scene and total_files != 1:
             sys.stderr.write(f"\x01e\x02Single-scene mode requires exactly 1 media file, found {total_files}.\n")
@@ -1340,6 +1405,8 @@ def run_build_megapack(payload: Any, server_connection: Optional[Dict[str, Any]]
                     f"Found {len(outside)} file(s) outside it: {', '.join(outside[:3])}. "
                     f"Run Consolidate or add the missing files to the seed directory."
                 )
+
+            validate_pack_files_present(consolidation_dir, expected_primary_paths, scenes=scenes)
 
             payload_source = consolidation_dir
         else:
@@ -1851,6 +1918,8 @@ def parse_input_payload() -> tuple[str, Dict[str, Any], Dict[str, Any]]:
             mode = "probe"
         elif "upload_cover" in arg1 or "uploadcover" in arg1:
             mode = "upload_cover"
+        elif "start_backend" in arg1 or "startbackend" in arg1 or "start-backend" in arg1:
+            mode = "start_backend"
         elif "single" in arg1:
             mode = "single"
         elif "build" in arg1:
@@ -1874,6 +1943,8 @@ def parse_input_payload() -> tuple[str, Dict[str, Any], Dict[str, Any]]:
                             mode = "probe"
                         elif "uploadcover" in task_name.lower() or "upload_cover" in task_name.lower() or task_name == "UploadCoverImage":
                             mode = "upload_cover"
+                        elif "startbackend" in task_name.lower() or "start_backend" in task_name.lower() or "start-backend" in task_name.lower() or task_name == "StartBackend":
+                            mode = "start_backend"
                         elif "single" in task_name.lower() or task_name == "BuildSingleScene":
                             mode = "single"
                         elif "build" in task_name.lower():
@@ -1893,6 +1964,8 @@ def parse_input_payload() -> tuple[str, Dict[str, Any], Dict[str, Any]]:
                                         mode = "probe"
                                     elif "upload_cover" in v_str or "uploadcover" in v_str:
                                         mode = "upload_cover"
+                                    elif "start_backend" in v_str or "startbackend" in v_str or "start-backend" in v_str:
+                                        mode = "start_backend"
                                     elif "single" in v_str:
                                         mode = "single"
                                     else:
@@ -1919,6 +1992,8 @@ def parse_input_payload() -> tuple[str, Dict[str, Any], Dict[str, Any]]:
                                 mode = "probe"
                             elif "upload_cover" in v_str or "uploadcover" in v_str:
                                 mode = "upload_cover"
+                            elif "start_backend" in v_str or "startbackend" in v_str or "start-backend" in v_str:
+                                mode = "start_backend"
                             elif "single" in v_str:
                                 mode = "single"
                             else:
@@ -2046,6 +2121,211 @@ _SENTINEL_MAX_CHARS = 100000
 _BBCODE_CHUNK_CHARS = 4000
 
 
+def get_sidecar_port() -> int:
+    """
+    Resolves sidecar port with fallback precedence:
+    1. EMPORNIUM_PORT environment variable
+    2. settings.port (from backend config)
+    3. Default 9941
+
+    Coupling note: Port 9941 is currently pinned by the plugin CSP
+    (plugin/empornium-megapack.yml) and by backendEndpoints()
+    (plugin/assets/review.js).
+    """
+    env_port = os.environ.get("EMPORNIUM_PORT")
+    if env_port:
+        try:
+            return int(env_port)
+        except (ValueError, TypeError):
+            pass
+    if _domain_config is not None:
+        try:
+            settings = _domain_config.get_settings()
+            return getattr(settings, "port", 9941)
+        except Exception:
+            pass
+    return 9941
+
+
+def get_plugin_build_stamp() -> Optional[str]:
+    """Reads the packaged build stamp from CURRENT_DIR, or returns None in a dev checkout."""
+    for filename in ("BUILD_STAMP", "build_stamp"):
+        stamp_file = CURRENT_DIR / filename
+        if stamp_file.is_file():
+            try:
+                val = stamp_file.read_text(encoding="utf-8").strip()
+                if val:
+                    return val
+            except Exception:
+                pass
+    return None
+
+
+def check_sidecar_health(port: int) -> Tuple[bool, Optional[Dict[str, Any]]]:
+    """Queries GET /health on loopback. Returns (is_healthy, health_dict)."""
+    url = f"http://127.0.0.1:{port}/health"
+    req = urllib.request.Request(url, headers={"Host": f"127.0.0.1:{port}"})
+    try:
+        with urllib.request.urlopen(req, timeout=2.0) as resp:
+            if resp.status == 200:
+                body = resp.read().decode("utf-8")
+                return True, json.loads(body)
+    except Exception:
+        pass
+    return False, None
+
+
+def shutdown_sidecar(port: int) -> bool:
+    """Sends POST /api/shutdown to gracefully terminate running sidecar."""
+    url = f"http://127.0.0.1:{port}/api/shutdown"
+    req = urllib.request.Request(
+        url,
+        data=b"{}",
+        headers={
+            "Content-Type": "application/json",
+            "Host": f"127.0.0.1:{port}",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=3.0) as resp:
+            return resp.status in (200, 202, 204)
+    except Exception as exc:
+        sys.stderr.write(f"\x01w\x02[StartBackend] Shutdown request error: {exc}\n")
+        sys.stderr.flush()
+        return False
+
+
+def wait_for_port_release(port: int, host: str = "127.0.0.1", timeout: float = 10.0) -> None:
+    """Polls until loopback port is no longer listening."""
+    start = time.time()
+    while time.time() - start < timeout:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.5)
+            if s.connect_ex((host, port)) != 0:
+                return
+        time.sleep(0.2)
+    raise RuntimeError(
+        f"Port {port} failed to release within {timeout}s after shutdown request. "
+        f"Another process may still be holding port {port}."
+    )
+
+
+def spawn_sidecar(port: int) -> None:
+    """Spawns sidecar background process detached with std streams disconnected."""
+    venv_dir = CURRENT_DIR / ".venv"
+    if os.environ.get("EMPORNIUM_VENV"):
+        venv_dir = Path(os.environ["EMPORNIUM_VENV"])
+
+    if os.name == "nt":
+        python_exe = venv_dir / "Scripts" / "python.exe"
+    else:
+        python_exe = venv_dir / "bin" / "python"
+
+    if not python_exe.is_file():
+        err_msg = (
+            f"Virtual environment not found at {venv_dir}. "
+            f"Please run install.ps1 (Windows) or install.sh (Linux/macOS) first to set up the environment."
+        )
+        sys.stderr.write(f"\x01e\x02{err_msg}\n")
+        sys.stderr.flush()
+        raise RuntimeError(err_msg)
+
+    repo_backend = CURRENT_DIR.parent / "backend"
+    if repo_backend.is_dir() and (CURRENT_DIR / "empornium-megapack.yml").is_file():
+        app_dir = repo_backend
+    else:
+        app_dir = CURRENT_DIR
+
+    env = dict(os.environ)
+    env["PYTHONPATH"] = str(app_dir)
+
+    ffmpeg_dir = env.get("EMPORNIUM_FFMPEG_DIR")
+    if not (ffmpeg_dir and os.path.isfile(os.path.join(ffmpeg_dir, "ffmpeg.exe" if os.name == "nt" else "ffmpeg"))):
+        stash_ffmpeg = Path.home() / ".stash"
+        if (stash_ffmpeg / ("ffmpeg.exe" if os.name == "nt" else "ffmpeg")).is_file():
+            ffmpeg_dir = str(stash_ffmpeg)
+    if ffmpeg_dir:
+        env["PATH"] = f"{ffmpeg_dir}{os.pathsep}{env.get('PATH', '')}"
+
+    cmd = [
+        str(python_exe),
+        "-m",
+        "uvicorn",
+        "empornium_megapack.main:app",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        str(port),
+        "--app-dir",
+        str(app_dir),
+    ]
+
+    kwargs: Dict[str, Any] = {
+        "stdin": subprocess.DEVNULL,
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+        "close_fds": True,
+    }
+
+    if os.name == "nt":
+        creationflags = 0
+        if hasattr(subprocess, "DETACHED_PROCESS"):
+            creationflags |= subprocess.DETACHED_PROCESS
+        else:
+            creationflags |= 0x00000008
+        if hasattr(subprocess, "CREATE_NEW_PROCESS_GROUP"):
+            creationflags |= subprocess.CREATE_NEW_PROCESS_GROUP
+        else:
+            creationflags |= 0x00000200
+        kwargs["creationflags"] = creationflags
+    else:
+        kwargs["start_new_session"] = True
+
+    sys.stderr.write(f"\x01i\x02[StartBackend] Launching detached sidecar on 127.0.0.1:{port}...\n")
+    sys.stderr.flush()
+    subprocess.Popen(cmd, cwd=str(app_dir), env=env, **kwargs)
+
+
+def run_start_backend(payload: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Handles StartBackend task:
+    1. Checks if sidecar is currently healthy on resolved port.
+    2. Adopts if stamps match or in dev checkout.
+    3. Triggers shutdown and waits if stamp differs.
+    4. Spawns detached sidecar process if not running.
+    """
+    port = get_sidecar_port()
+    is_healthy, health_data = check_sidecar_health(port)
+    plugin_stamp = get_plugin_build_stamp()
+
+    if is_healthy and health_data:
+        running_stamp = health_data.get("build_stamp")
+        if not plugin_stamp:
+            sys.stderr.write(
+                f"\x01i\x02[StartBackend] Sidecar running on port {port} adopted (dev checkout, no build stamp)\n"
+            )
+            sys.stderr.flush()
+            return {"status": "ok", "action": "adopted", "port": port, "build_stamp": running_stamp}
+
+        if running_stamp == plugin_stamp:
+            sys.stderr.write(
+                f"\x01i\x02[StartBackend] Sidecar running on port {port} matches build stamp {plugin_stamp}; adopted\n"
+            )
+            sys.stderr.flush()
+            return {"status": "ok", "action": "adopted", "port": port, "build_stamp": running_stamp}
+
+        sys.stderr.write(
+            f"\x01w\x02[StartBackend] Sidecar on port {port} has stamp {running_stamp!r}, expected {plugin_stamp!r}. Shutting down stale sidecar...\n"
+        )
+        sys.stderr.flush()
+        shutdown_sidecar(port)
+        wait_for_port_release(port, timeout=10.0)
+
+    spawn_sidecar(port)
+    return {"status": "ok", "action": "started", "port": port}
+
+
 def post_result_to_sidecar(payload: Any, result: Any) -> None:
     """
     Posts task execution result to the sidecar run store via HTTP POST.
@@ -2066,19 +2346,7 @@ def post_result_to_sidecar(payload: Any, result: Any) -> None:
         # Port resolution with fallback
         # Coupling note: Port 9941 is currently pinned by the plugin CSP (plugin/empornium-megapack.yml)
         # and by backendEndpoints() (plugin/assets/review.js).
-        port = 9941
-        env_port = os.environ.get("EMPORNIUM_PORT")
-        if env_port:
-            try:
-                port = int(env_port)
-            except (ValueError, TypeError):
-                port = 9941
-        elif _domain_config is not None:
-            try:
-                settings = _domain_config.get_settings()
-                port = getattr(settings, "port", 9941)
-            except Exception:
-                port = 9941
+        port = get_sidecar_port()
 
         host = "127.0.0.1"
         url = f"http://{host}:{port}/api/run/{urllib.parse.quote(run_id)}"
@@ -2195,6 +2463,8 @@ def main():
             result = run_probe_files(payload)
         elif mode == "upload_cover" or "upload_cover" in str(mode).lower() or "uploadcover" in str(mode).lower():
             result = run_upload_cover(payload)
+        elif mode == "start_backend" or "start_backend" in str(mode).lower() or "startbackend" in str(mode).lower() or "start-backend" in str(mode).lower():
+            result = run_start_backend(payload)
         elif mode == "single" or "single" in str(mode).lower() or payload.get("single_scene"):
             payload["single_scene"] = True
             result = run_build_megapack(payload, server_connection)
@@ -2230,3 +2500,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

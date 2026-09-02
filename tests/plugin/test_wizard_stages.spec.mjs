@@ -1,4 +1,4 @@
-﻿import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -90,7 +90,7 @@ async function bootHarness(page, {
   fillDirs = true
 } = {}) {
   serveAssets(page);
-  const wire = { probes: [], builds: [], dirChecks: [] };
+  const wire = { probes: [], builds: [], dirChecks: [], startBackend: null };
 
   await page.route("**/graphql", async (route) => {
     const postData = JSON.parse(route.request().postData() || "{}");
@@ -120,6 +120,14 @@ async function bootHarness(page, {
       });
     }
     if (query.includes("runPluginTask")) {
+      if (postData.variables?.task_name === "StartBackend") {
+        wire.startBackend = postData.variables;
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ data: { runPluginTask: "job-start-backend-1" } })
+        });
+      }
       wire.builds.push(postData.variables);
       return route.fulfill({
         status: 200,
@@ -165,6 +173,7 @@ async function bootHarness(page, {
       body: JSON.stringify({
         status: "ok",
         track: "Empornium Megapack Builder",
+        version: "0.2.0",
         output_dir: "C:\\Downloads\\Megapacks",
         scratch_dir: healthScratch,
         hamster_configured: false

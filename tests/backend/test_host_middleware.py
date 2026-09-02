@@ -64,6 +64,12 @@ def test_fs_exists_foreign_host_rejected():
     assert response.status_code == 403
 
 
+def test_shutdown_foreign_host_rejected():
+    response = client.post("/api/shutdown", headers={"Host": "evil.com"})
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Untrusted Host header"
+
+
 def test_missing_host_header_allowed():
     """HTTP/1.0 clients may omit Host entirely — allow (browsers always send it)."""
     import asyncio

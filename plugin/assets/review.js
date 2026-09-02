@@ -3805,6 +3805,8 @@
     renderStageState();
     setMode(initialMode);
     loadScenes(ids, token);
+    prefillScratchDirFromHealth();
+    refreshSidecarStatus();
   }
 
   // Window exports for tests and integrations
@@ -3830,6 +3832,7 @@
   window.computeDuplicateGroups = computeDuplicateGroups;
   window.consolidateFiles = consolidateFiles;
   window.refreshSidecarStatus = refreshSidecarStatus;
+  window.stopSidecar = stopSidecar;
   window.consolidatedFileIds = consolidatedFileIds;
   window.buildMegapack = buildMegapack;
   window.setMode = setMode;
@@ -3887,58 +3890,159 @@
     }
   }
 
-  // Live sidecar status badge (header pill). Best-effort: every failure mode
-  // collapses into one of the three badge states, never a thrown error into
-  // the UI. Unlike prefillScratchDirFromHealth — which stops at the first
-  // candidate that answers — this tries EVERY candidate before concluding,
-  // so a half-up sidecar (one loopback name answering, the other blocked)
-  // never reads as NOT RUNNING.
-  async function refreshSidecarStatus() {
-    try {
-      const badge = document.getElementById("sidecar-status");
-      if (!badge) return;
-      const endpoints = backendEndpoints("/health");
-      let version = null; // parsed from an ok+JSON candidate
-      let sawRunning = false; // any ok HTTP response, even with a malformed body
-      for (const url of endpoints) {
+  // Sidecar refresh state & candidate probe helper
+  let activeSidecarRefreshPromise = null;
+
+  async function probeHealthCandidates() {
+    const endpoints = backendEndpoints("/health");
+    let version = null; // parsed from an ok+JSON candidate
+    let sawRunning = false; // any ok HTTP response, even with a malformed body
+    for (const url of endpoints) {
+      try {
+        const response = await fetch(url);
+        if (!response.ok) continue;
+        sawRunning = true;
         try {
-          const response = await fetch(url);
-          if (!response.ok) continue;
-          sawRunning = true;
-          try {
-            const data = await response.json();
-            const v = String(data?.version ?? "").trim();
-            if (v) {
-              version = v;
-              break; // usable version in hand — no need for more candidates
-            }
-          } catch (jsonErr) {
-            // Malformed body on an ok response: the sidecar IS running but
-            // this candidate exposed no version — keep trying the rest.
+          const data = await response.json();
+          const v = String(data?.version ?? "").trim();
+          if (v) {
+            version = v;
+            break;
           }
-        } catch (err) {
-          // Network-level failure for this candidate — try the next one.
+        } catch (jsonErr) {
+          // Malformed body on ok response
         }
+      } catch (err) {
+        // Network error for this candidate
       }
-      if (version !== null) {
-        if (version === EXPECTED_SIDECAR_VERSION) {
-          badge.textContent = `Sidecar: connected (v${version})`;
-          badge.className = "sidecar-status sidecar-ok";
-        } else {
-          badge.textContent = `Sidecar: outdated (v${version}, expected ${EXPECTED_SIDECAR_VERSION}) — restart via start_backend.ps1`;
-          badge.className = "sidecar-status sidecar-warn";
-        }
-      } else if (sawRunning) {
-        // Running, but no candidate exposed a parseable version — refuse to
-        // claim green; nudge a restart so the expected version comes up.
-        badge.textContent = `Sidecar: outdated (v?, expected ${EXPECTED_SIDECAR_VERSION}) — restart via start_backend.ps1`;
-        badge.className = "sidecar-status sidecar-warn";
+    }
+    return { ok: sawRunning || version !== null, version, sawRunning };
+  }
+
+  async function _doRefreshSidecarStatus() {
+    const badge = document.getElementById("sidecar-status");
+    const btnStop = document.getElementById("btn-sidecar-stop");
+    if (!badge) return;
+
+    const initialProbe = await probeHealthCandidates();
+    if (initialProbe.ok) {
+      if (initialProbe.version === EXPECTED_SIDECAR_VERSION) {
+        badge.textContent = `Sidecar: connected (v${initialProbe.version})`;
+        badge.className = "sidecar-status sidecar-ok";
       } else {
-        badge.textContent = "Sidecar: NOT RUNNING — run start_backend.ps1";
-        badge.className = "sidecar-status sidecar-bad";
+        badge.textContent = `Sidecar: outdated (v${initialProbe.version || "?"}, expected ${EXPECTED_SIDECAR_VERSION}) — restart via start_backend.ps1`;
+        badge.className = "sidecar-status sidecar-warn";
       }
+      if (btnStop) btnStop.style.display = "inline-flex";
+      prefillScratchDirFromHealth();
+      return;
+    }
+
+    // Health probe failed: transition to starting and dispatch StartBackend
+    badge.textContent = "Sidecar: starting…";
+    badge.className = "sidecar-status sidecar-warn";
+    if (btnStop) btnStop.style.display = "none";
+
+    try {
+      const query = `
+        mutation RunStartBackend($plugin_id: ID!, $task_name: String!, $args: [PluginArgInput!]) {
+          runPluginTask(
+            plugin_id: $plugin_id,
+            task_name: $task_name,
+            args: $args
+          )
+        }
+      `;
+      await executeGraphQL(query, {
+        plugin_id: PLUGIN_ID,
+        task_name: "StartBackend",
+        args: [{ key: "mode", value: { str: "start_backend" } }]
+      });
     } catch (err) {
-      // Best-effort: never throw into the UI.
+      badge.textContent = "Sidecar: failed to start — run start_backend.ps1";
+      badge.className = "sidecar-status sidecar-bad";
+      if (btnStop) btnStop.style.display = "none";
+      return;
+    }
+
+    // Poll /health with bounded timeout (~10s, 500ms intervals)
+    const pollDeadline = Date.now() + 10000;
+    const pollInterval = 500;
+    let running = false;
+    let runningVersion = null;
+
+    while (Date.now() < pollDeadline) {
+      await new Promise((r) => setTimeout(r, pollInterval));
+      const probe = await probeHealthCandidates();
+      if (probe.ok) {
+        running = true;
+        runningVersion = probe.version;
+        break;
+      }
+    }
+
+    if (running) {
+      if (runningVersion === EXPECTED_SIDECAR_VERSION) {
+        badge.textContent = `Sidecar: connected (v${runningVersion})`;
+        badge.className = "sidecar-status sidecar-ok";
+      } else {
+        badge.textContent = `Sidecar: outdated (v${runningVersion || "?"}, expected ${EXPECTED_SIDECAR_VERSION}) — restart via start_backend.ps1`;
+        badge.className = "sidecar-status sidecar-warn";
+      }
+      if (btnStop) btnStop.style.display = "inline-flex";
+      prefillScratchDirFromHealth();
+    } else {
+      badge.textContent = "Sidecar: failed to start — run start_backend.ps1";
+      badge.className = "sidecar-status sidecar-bad";
+      if (btnStop) btnStop.style.display = "none";
+    }
+  }
+
+  // Live sidecar status badge (header pill). Debounced so rapid or repeated
+  // calls reuse in-flight task / poll cycles and never flood duplicate StartBackend tasks.
+  async function refreshSidecarStatus() {
+    if (activeSidecarRefreshPromise) {
+      return activeSidecarRefreshPromise;
+    }
+    activeSidecarRefreshPromise = (async () => {
+      try {
+        await _doRefreshSidecarStatus();
+      } catch (err) {
+        // Best-effort: never throw into the UI.
+      } finally {
+        activeSidecarRefreshPromise = null;
+      }
+    })();
+    return activeSidecarRefreshPromise;
+  }
+
+  // Graceful sidecar shutdown via POST /api/shutdown
+  async function stopSidecar() {
+    const btn = document.getElementById("btn-sidecar-stop");
+    const badge = document.getElementById("sidecar-status");
+    if (btn) btn.disabled = true;
+    if (badge) {
+      badge.textContent = "Sidecar: stopping…";
+      badge.className = "sidecar-status sidecar-warn";
+    }
+
+    const endpoints = backendEndpoints("/api/shutdown");
+    for (const url of endpoints) {
+      try {
+        const resp = await fetch(url, { method: "POST" });
+        if (resp.ok) break;
+      } catch (err) {
+        // Best-effort: ignore network drops during process termination
+      }
+    }
+
+    if (badge) {
+      badge.textContent = "Sidecar: NOT RUNNING — run start_backend.ps1";
+      badge.className = "sidecar-status sidecar-bad";
+    }
+    if (btn) {
+      btn.style.display = "none";
+      btn.disabled = false;
     }
   }
 
@@ -4096,6 +4200,12 @@
           window.parent.postMessage({ type: "EMPORNIUM_CLOSE_MODAL" }, "*");
         }
       });
+    }
+
+    const stopSidecarBtn = document.getElementById("btn-sidecar-stop");
+    if (stopSidecarBtn && !stopSidecarBtn.dataset.bound) {
+      stopSidecarBtn.dataset.bound = "true";
+      stopSidecarBtn.addEventListener("click", stopSidecar);
     }
 
     const browseDirBtn = document.getElementById("btn-browse-dir");

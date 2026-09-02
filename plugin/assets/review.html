@@ -118,8 +118,6 @@
 
     .scene-title {
       font-size: 0.95rem;
-      font-weight: 600;
-      margin-bottom: 4px;
     }
 
     .scene-meta {
@@ -954,6 +952,38 @@
       border-right-color: var(--accent);
       box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.35);
     }
+
+    .sidecar-status {
+      font-size: 0.75rem;
+      margin-left: 8px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    .sidecar-ok {
+      background: #198754;
+      color: #fff;
+    }
+
+    .sidecar-warn,
+    .sidecar-starting {
+      background: #ffc107;
+      color: #212529;
+    }
+
+    .sidecar-bad {
+      background: #dc3545;
+      color: #fff;
+    }
+
+    .btn-sidecar-stop {
+      padding: 2px 8px;
+      font-size: 0.75rem;
+      margin-left: 6px;
+      line-height: 1.2;
+    }
   </style>
 </head>
 <body>
@@ -962,6 +992,7 @@
       <span id="header-logo">📦</span>
       <span id="header-modal-title">Empornium Megapack Builder</span>
       <span id="sidecar-status" class="sidecar-status" title="Backend sidecar on 127.0.0.1:9941">Sidecar: checking…</span>
+      <button id="btn-sidecar-stop" class="btn btn-secondary btn-sidecar-stop" style="display: none;" title="Stop Sidecar Backend">Stop sidecar</button>
     </div>
     <div style="display: flex; gap: 8px; align-items: center;">
       <button id="btn-header-close" class="btn btn-close-header" title="Close Review Modal">✕ Close</button>
