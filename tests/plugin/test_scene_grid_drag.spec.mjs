@@ -540,4 +540,131 @@ test.describe('Responsive Scene List Grid & 2D Drag-and-Drop Hit-Testing', () =>
     expect(titles[2]).toContain("Gamma");
   });
 
+  test('R3 & R4 Adversarial: Dynamic viewport resizing transitions between 3-column and 1-column layouts with valid drag', async ({ page }) => {
+    await bootHarness(page, { sceneCount: 6, viewport: { width: 1400, height: 900 } });
+
+    // Wide: 3 columns
+    let cols = await page.evaluate(() => {
+      const container = document.getElementById("scene-list");
+      return window.getComputedStyle(container).gridTemplateColumns.split(/\s+/).filter(Boolean).length;
+    });
+    expect(cols).toBe(3);
+
+    // Resize to narrow viewport: 1 column
+    await page.setViewportSize({ width: 600, height: 900 });
+    cols = await page.evaluate(() => {
+      const container = document.getElementById("scene-list");
+      return window.getComputedStyle(container).gridTemplateColumns.split(/\s+/).filter(Boolean).length;
+    });
+    expect(cols).toBe(1);
+
+    // Drag Alpha (index 0) below Beta (index 1) in narrow 1-column mode
+    const betaMid = await page.evaluate(() => {
+      const beta = document.querySelectorAll("#scene-list .scene-card")[1];
+      const r = beta.getBoundingClientRect();
+      return { x: r.left + r.width * 0.5, y: r.top + r.height * 0.75 };
+    });
+    await simulateDrag(page, 0, betaMid.x, betaMid.y);
+
+    let titles = await getCardTitles(page);
+    expect(titles[0]).toContain("Beta");
+    expect(titles[1]).toContain("Alpha");
+    expect(titles[2]).toContain("Gamma");
+
+    // Resize back to wide viewport: 3 columns
+    await page.setViewportSize({ width: 1400, height: 900 });
+    cols = await page.evaluate(() => {
+      const container = document.getElementById("scene-list");
+      return window.getComputedStyle(container).gridTemplateColumns.split(/\s+/).filter(Boolean).length;
+    });
+    expect(cols).toBe(3);
+
+    // Drag Delta (index 3, Row 1) before Beta (index 0, Row 0) in 3-column mode
+    const betaLeft = await page.evaluate(() => {
+      const beta = document.querySelectorAll("#scene-list .scene-card")[0];
+      const r = beta.getBoundingClientRect();
+      return { x: r.left + r.width * 0.2, y: r.top + r.height * 0.5 };
+    });
+    await simulateDrag(page, 3, betaLeft.x, betaLeft.y);
+
+    titles = await getCardTitles(page);
+    expect(titles[0]).toContain("Delta");
+    expect(titles[1]).toContain("Beta");
+    expect(titles[2]).toContain("Alpha");
+  });
+
+  test('R4 Adversarial: Drag reordering with soft-removed scenes maintains relative array slots', async ({ page }) => {
+    await bootHarness(page, { sceneCount: 6, viewport: { width: 1400, height: 900 } });
+
+    // Soft-remove scene 2 (Beta) by clicking its Remove button
+    await page.click(".scene-card:nth-child(2) button:has-text('Remove')");
+
+    let titles = await getCardTitles(page);
+    // Active cards: Alpha, Gamma, Delta, Epsilon, Zeta (5 cards)
+    expect(titles.length).toBe(5);
+    expect(titles[0]).toContain("Alpha");
+    expect(titles[1]).toContain("Gamma");
+
+    // Drag Alpha (index 0 of active cards) after Gamma (index 1 of active cards)
+    const gammaRight = await page.evaluate(() => {
+      const gamma = document.querySelectorAll("#scene-list .scene-card")[1];
+      const r = gamma.getBoundingClientRect();
+      return { x: r.left + r.width * 0.8, y: r.top + r.height * 0.5 };
+    });
+    await simulateDrag(page, 0, gammaRight.x, gammaRight.y);
+
+    titles = await getCardTitles(page);
+    expect(titles[0]).toContain("Gamma");
+    expect(titles[1]).toContain("Alpha");
+    expect(titles[2]).toContain("Delta");
+  });
+
+  test('R4 Adversarial: Extreme out-of-bounds drag coordinates clamp safely to first and last positions', async ({ page }) => {
+    await bootHarness(page, { sceneCount: 6, viewport: { width: 1400, height: 900 } });
+
+    // Drag Zeta (index 5) to extreme top-left (-100, -100) -> should insert before Alpha at index 0
+    await simulateDrag(page, 5, -100, -100);
+
+    let titles = await getCardTitles(page);
+    expect(titles[0]).toContain("Zeta");
+    expect(titles[1]).toContain("Alpha");
+    expect(titles[2]).toContain("Beta");
+
+    // Drag Zeta (now index 0) to extreme bottom-right (5000, 5000) -> should insert at the very end
+    await simulateDrag(page, 0, 5000, 5000);
+
+    titles = await getCardTitles(page);
+    expect(titles[0]).toContain("Alpha");
+    expect(titles[titles.length - 1]).toContain("Zeta");
+  });
+
+  test('R2 Adversarial: Stage rail chip styling, click-to-jump, and completed badge contracts', async ({ page }) => {
+    await bootHarness(page, { sceneCount: 3, viewport: { width: 1400, height: 900 } });
+
+    // Stage 1 active pill
+    const stage1 = page.locator("#stage-item-1");
+    await expect(stage1).toHaveClass(/stage-current/);
+    await expect(stage1).toHaveCSS("border-radius", "999px");
+    await expect(stage1.locator(".stage-num")).toHaveCSS("font-weight", "700");
+
+    // Advance Stage 1 -> 2
+    await page.fill("#pack-title", "Test Megapack Title");
+    await page.click("#btn-stage-next");
+
+    // Stage 1 completed green badge with checkmark
+    await expect(stage1).toHaveClass(/stage-completed/);
+    await expect(stage1.locator(".stage-check")).toBeVisible();
+    await expect(stage1).toHaveCSS("color", "rgb(16, 185, 129)");
+
+    // Stage 2 active
+    const stage2 = page.locator("#stage-item-2");
+    await expect(stage2).toHaveClass(/stage-current/);
+    await expect(stage2).toHaveCSS("background-color", "rgb(59, 130, 246)");
+
+    // Click reached Stage 1 rail item to jump back
+    await stage1.click();
+    await expect(page.locator("#stage-panel-1")).toHaveClass(/stage-current/);
+    await expect(stage1).toHaveClass(/stage-current/);
+  });
+
 });
