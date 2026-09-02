@@ -33,6 +33,7 @@
   let activePollingJobId = null;
   let activePollInterval = null;
   let currentCoverUrl = null;
+  const handledJobIds = new Set();
 
   // 1. Get Scene IDs from Query Parameters or Token Resolution
   const urlParams = new URLSearchParams(window.location.search);
@@ -2745,7 +2746,9 @@
           activeWs = null;
         }
         wsLogStreamActive = false;
-        startJobPolling(jobId, taskType, payload);
+        if (!handledJobIds.has(String(jobId))) {
+          startJobPolling(jobId, taskType, payload);
+        }
       };
 
       ws.onclose = () => {
@@ -2757,6 +2760,9 @@
           activeWs = null;
         }
         wsLogStreamActive = false;
+        if (!handledJobIds.has(String(jobId))) {
+          startJobPolling(jobId, taskType, payload);
+        }
       };
     } catch (e) {
       if (wsWatchdog) {
@@ -2764,12 +2770,18 @@
         wsWatchdog = null;
       }
       wsLogStreamActive = false;
-      startJobPolling(jobId, taskType, payload);
+      if (!handledJobIds.has(String(jobId))) {
+        startJobPolling(jobId, taskType, payload);
+      }
     }
   }
 
   function startJobPolling(jobId, taskType, payload) {
-    if (activePollingJobId === jobId && activePollInterval !== null) {
+    const jobIdStr = String(jobId);
+    if (handledJobIds.has(jobIdStr)) {
+      return;
+    }
+    if (String(activePollingJobId) === jobIdStr && activePollInterval !== null) {
       return;
     }
     if (activePollInterval) {
@@ -2779,6 +2791,16 @@
     activePollingJobId = jobId;
 
     const poll = async () => {
+      if (handledJobIds.has(jobIdStr)) {
+        if (activePollInterval) {
+          clearInterval(activePollInterval);
+          activePollInterval = null;
+        }
+        if (String(activePollingJobId) === jobIdStr) {
+          activePollingJobId = null;
+        }
+        return;
+      }
       try {
         const resp = await executeGraphQL(
           `query FindJob($id: ID!) { findJob(input: { id: $id }) { id status progress error } }`,
@@ -2792,7 +2814,7 @@
               clearInterval(activePollInterval);
               activePollInterval = null;
             }
-            if (activePollingJobId === jobId) {
+            if (String(activePollingJobId) === jobIdStr) {
               activePollingJobId = null;
             }
           }
@@ -2811,6 +2833,12 @@
     showStatus(`Running ${taskType}: ${Math.round(progress * 100)}%`, progress);
 
     if (job.status === "FINISHED") {
+      const jobIdStr = String(job.id);
+      if (handledJobIds.has(jobIdStr)) {
+        return;
+      }
+      handledJobIds.add(jobIdStr);
+
       if (wsWatchdog) {
         clearTimeout(wsWatchdog);
         wsWatchdog = null;
@@ -2828,7 +2856,74 @@
       activePollingJobId = null;
 
       const runId = payload?.run_id || activeRunId;
+      let sidecarResult = null;
 
+      if (runId) {
+        async function probeSidecarRun(rid) {
+          const endpoints = backendEndpoints(`/api/run/${encodeURIComponent(rid)}`);
+          let sawNetworkError = false;
+          for (const url of endpoints) {
+            try {
+              const resp = await fetch(url);
+              if (resp.status === 200) {
+                const data = await resp.json();
+                if (data && data.found === true) {
+                  return { status: "found", result: data.result };
+                } else if (data && data.found === false) {
+                  return { status: "not_found" };
+                } else {
+                  return { status: "transport_error" };
+                }
+              } else if (resp.status === 400) {
+                return { status: "bad_request" };
+              } else {
+                return { status: "transport_error" };
+              }
+            } catch (err) {
+              sawNetworkError = true;
+            }
+          }
+          return sawNetworkError ? { status: "transport_error" } : { status: "not_found" };
+        }
+
+        let probe = await probeSidecarRun(runId);
+
+        // If not found yet on a reachable sidecar, retry over ~5s (10 x 500ms)
+        if (probe.status === "not_found") {
+          const maxRetries = 10;
+          const retryDelayMs = 500;
+          for (let i = 0; i < maxRetries; i++) {
+            await new Promise((r) => setTimeout(r, retryDelayMs));
+            probe = await probeSidecarRun(runId);
+            if (probe.status === "found" || probe.status === "transport_error" || probe.status === "bad_request") {
+              break;
+            }
+          }
+        }
+
+        if (probe.status === "found" && probe.result) {
+          sidecarResult = probe.result;
+          if (sidecarResult.status === "failed") {
+            const failureError = sidecarResult.error || "Task execution failed on backend.";
+            if (taskType === "UploadCoverImage") {
+              const statusEl = document.getElementById("cover-status");
+              if (statusEl) {
+                statusEl.style.display = "block";
+                statusEl.innerText = `Cover upload failed: ${failureError}`;
+                statusEl.style.color = "#ef4444";
+              }
+            }
+            showStatus(failureError, 0, true);
+            return;
+          } else {
+            const combined = { ...payload, ...sidecarResult };
+            onTaskComplete(taskType, combined);
+            return; // Skip log scans entirely
+          }
+        }
+      }
+
+      // --- Log Sentinel Fallback Path ---
       let candidateLogs = bufferedLogs;
       let usedFallback = false;
       let fallbackFailed = false;
@@ -2893,6 +2988,8 @@
       }
       onTaskComplete(taskType, combined);
     } else if (job.status === "FAILED" || job.status === "CANCELLED") {
+      const jobIdStr = String(job.id);
+      handledJobIds.add(jobIdStr);
       if (wsWatchdog) {
         clearTimeout(wsWatchdog);
         wsWatchdog = null;
@@ -2974,24 +3071,35 @@
     if (taskType === "BuildMegapack" || taskType === "BuildSingleScene") {
       const isSingle = taskType === "BuildSingleScene" || currentMode === "single";
       const packTitle =
-        payload.pack_title || document.getElementById("pack-title")?.value || "";
-      const outputDir =
-        payload.output_dir || document.getElementById("output-dir")?.value || "";
-      const torrentPath = payload.torrent_path || `${outputDir}\\${packTitle}.torrent`;
-      const manifestPath = payload.manifest_path || `${outputDir}\\${packTitle}_manifest.json`;
-      const submissionPath = payload.submission_path || `${outputDir}\\${packTitle}_submission.json`;
+        payload?.pack_title || document.getElementById("pack-title")?.value || "";
+      const torrentPath =
+        typeof payload?.torrent_path === "string" && payload.torrent_path.trim()
+          ? payload.torrent_path.trim()
+          : null;
+      const manifestPath =
+        typeof payload?.manifest_path === "string" && payload.manifest_path.trim()
+          ? payload.manifest_path.trim()
+          : null;
+      const submissionPath =
+        typeof payload?.submission_path === "string" && payload.submission_path.trim()
+          ? payload.submission_path.trim()
+          : null;
+      const bbcodePath =
+        typeof payload?.bbcode_path === "string" && payload.bbcode_path.trim()
+          ? payload.bbcode_path.trim()
+          : null;
 
       // Tracker tags: from payload.tracker_tags or derived scene tags
       // The backend's merge_tags is authoritative. This fallback only runs when
       // the result sentinel was missing, and mirrors it as closely as the
       // browser can: performers and studio are tracker tags too, and Empornium
       // separates words with dots rather than dropping them.
-      let tagsList = payload.tracker_tags;
+      let tagsList = payload?.tracker_tags;
       if (!tagsList || !Array.isArray(tagsList)) {
         const scenes = activeScenes();
         const rawTags = [
-          ...(payload.tags || scenes.flatMap((s) => (s.tags || []).map((t) => t.name))),
-          ...(payload.performers || scenes.flatMap((s) => (s.performers || []).map((p) => p.name))),
+          ...((payload && payload.tags) || scenes.flatMap((s) => (s.tags || []).map((t) => t.name))),
+          ...((payload && payload.performers) || scenes.flatMap((s) => (s.performers || []).map((p) => p.name))),
           ...scenes.map((s) => s.studio?.name)
         ];
         tagsList = [
@@ -3006,24 +3114,24 @@
 
       // Preview status and image count
       const active = activeScenes();
-      const imageUrls = Array.isArray(payload.uploaded_urls) ? payload.uploaded_urls : [];
+      const imageUrls = Array.isArray(payload?.uploaded_urls) ? payload.uploaded_urls : [];
       const imageCount = imageUrls.length || (active.length > 0 ? active.length : 1);
-      const uploadEnabled = Boolean(payload.upload_previews);
+      const uploadEnabled = Boolean(payload?.upload_previews);
       const bbcodeBox = document.getElementById("bbcode-preview");
 
       // The locally-composed preview omits the image block, which is only known
       // once the uploads finish. Replace it with what was actually written to
       // the .bbcode file so "Copy" hands over the real submission text.
-      const finalBBCode = payload.chunked_bbcode || (typeof payload.bbcode === "string" && payload.bbcode ? payload.bbcode : null);
+      const finalBBCode = payload?.chunked_bbcode || (typeof payload?.bbcode === "string" && payload.bbcode ? payload.bbcode : null);
       const bbcodeWarning = document.getElementById("bbcode-warning");
       if (bbcodeBox && finalBBCode) {
         bbcodeBox.innerText = finalBBCode;
         bbcodeIsFinal = true;
         if (bbcodeWarning) bbcodeWarning.style.display = "none";
-      } else if (payload.bbcode_truncated) {
+      } else if (payload?.bbcode_truncated) {
         if (bbcodeWarning) {
-          const bbPath = payload.bbcode_path || `${outputDir}\\${packTitle}_bbcode.txt`;
-          bbcodeWarning.innerText = `⚠️ Preview is provisional (truncated). Read ${bbPath} for the complete BBCode.`;
+          const locationMsg = bbcodePath ? bbcodePath : "the artifact directory";
+          bbcodeWarning.innerText = `⚠️ Preview is provisional (truncated). Read ${bbcodePath ? locationMsg : "the .bbcode file in " + locationMsg} for the complete BBCode.`;
           bbcodeWarning.style.display = "block";
         }
       } else if (bbcodeWarning) {
@@ -3036,9 +3144,9 @@
       const presSizeEl = document.getElementById("presentation-size-line");
       if (presSizeEl) {
         let presBytes = null;
-        if (payload.presentation_bytes !== undefined && payload.presentation_bytes !== null) {
+        if (payload?.presentation_bytes !== undefined && payload.presentation_bytes !== null) {
           presBytes = Number(payload.presentation_bytes);
-        } else if (payload.preflight && Array.isArray(payload.preflight.checks)) {
+        } else if (payload?.preflight && Array.isArray(payload.preflight.checks)) {
           const presCheck = payload.preflight.checks.find((c) => c.id === "presentation_size");
           if (presCheck && presCheck.detail) {
             const match = presCheck.detail.match(/([\d.]+)\s*MiB/);
@@ -3070,7 +3178,7 @@
       }
 
       let isPreviewOnly = false;
-      if (payload.preview_only !== undefined) {
+      if (payload?.preview_only !== undefined) {
         isPreviewOnly = Boolean(payload.preview_only);
       } else {
         isPreviewOnly =
@@ -3081,76 +3189,16 @@
         ? `${imageCount} image(s) (${imageCount} local file:/// preview(s))`
         : `${imageCount} image(s) (all remote on HamsterImg)`;
 
-      // Pre-Flight Checklist evaluation
-      let checks = [];
-      if (payload.preflight && Array.isArray(payload.preflight.checks)) {
-        checks = payload.preflight.checks;
-      } else {
-        checks = [
-          {
-            id: "images_remote",
-            label: "Preview Images",
-            passed: !isPreviewOnly,
-            detail: !isPreviewOnly
-              ? `All ${imageCount} preview image(s) hosted remotely`
-              : `Contains local file:/// URLs. Remote hosting required.`
-          },
-          {
-            id: "tracker_tags",
-            label: "Tracker Tags",
-            passed: tagsList.length > 0,
-            detail: `${tagsList.length} valid tracker tags generated`
-          },
-          {
-            id: "category",
-            label: "Category",
-            passed: true,
-            is_info: true,
-            detail: "Category — you select this on the upload form."
-          },
-          {
-            id: "torrent_valid",
-            label: "Torrent File (torf)",
-            passed: Boolean(torrentPath),
-            detail: "private=True, source=Emp, non-empty pieces"
-          },
-          {
-            id: "payload_files",
-            label: "Media Files Verification",
-            passed: active.length > 0,
-            detail: isSingle
-              ? `Single media file exists on disk`
-              : `All ${active.length} payload file(s) exist on disk`
-          },
-          {
-            id: "root_name",
-            label: isSingle ? "Torrent Name" : "Torrent Root Name",
-            passed: true,
-            is_warning: false,
-            is_info: isSingle,
-            detail: isSingle
-              ? "Single-file torrent — tracker displays media filename"
-              : "Root folder matches pack title"
-          }
-        ];
-        if (payload.presentation_bytes !== undefined && payload.presentation_bytes !== null) {
-          const pb = Number(payload.presentation_bytes);
-          const cap = 23000000;
-          checks.push({
-            id: "presentation_size",
-            label: "Presentation Size",
-            passed: pb <= cap,
-            detail: `${(pb / 1048576).toFixed(2)} MiB of ${(cap / 1048576).toFixed(2)} MiB budget (Empornium cap 25.00 MiB)`
-          });
-        }
-      }
-
-      const isReady =
-        payload.ready !== undefined
+      // Pre-Flight Checklist evaluation (fail-closed if preflight checks missing)
+      const isUnverified = !payload?.preflight || !Array.isArray(payload.preflight.checks);
+      const checks = isUnverified ? [] : payload.preflight.checks;
+      const isReady = isUnverified
+        ? false
+        : (payload.ready !== undefined
           ? Boolean(payload.ready)
-          : payload.preflight
-          ? Boolean(payload.preflight.ready)
-          : !isPreviewOnly && checks.every((c) => c.is_info || c.is_warning || c.passed);
+          : (payload.preflight.ready !== undefined
+            ? Boolean(payload.preflight.ready)
+            : false));
 
       let checklistHtml = "";
       for (const c of checks) {
@@ -3172,7 +3220,7 @@
       }
 
       // Resolve upload URL from configured site_url
-      const rawSiteUrl = (payload.site_url || payload.empornium_site_url || "").trim();
+      const rawSiteUrl = (payload?.site_url || payload?.empornium_site_url || "").trim();
       let uploadLinkHtml = "";
       if (rawSiteUrl) {
         let uploadUrl = rawSiteUrl;
@@ -3188,7 +3236,7 @@
         }" title="${
           isReady
             ? "Open Empornium upload form and copy torrent path to clipboard"
-            : "Upload disabled: Pre-flight checks did not pass"
+            : (isUnverified ? "Upload disabled: Build result is unverified" : "Upload disabled: Pre-flight checks did not pass")
         }">
               🌐 Open Empornium Upload Form
             </a>
@@ -3223,15 +3271,40 @@
       const summaryBox = document.getElementById("artifact-summary");
       const detailsBox = document.getElementById("artifact-details");
 
+      const headerHtml = isUnverified
+        ? `<div id="handoff-status-header" style="font-weight: 600; color: var(--danger); margin-bottom: 4px;">⚠️ Build Result Unverified — no result received from the backend</div>`
+        : `<div id="handoff-status-header" style="font-weight: 600; color: ${
+            isReady ? "var(--success)" : "var(--danger)"
+          }; margin-bottom: 4px;">${
+            isReady
+              ? "🎉 Build Complete! — Ready for Manual Upload"
+              : "⚠️ Build Complete! — " + (isSingle ? "Release" : "Pack") + " Not Ready for Upload"
+          }</div>`;
+
+      const unverifiedAlertHtml = isUnverified
+        ? `<div id="unverified-build-alert" style="padding: 6px 10px; background: rgba(239, 68, 68, 0.1); border: 1px solid var(--danger); border-radius: 4px; color: var(--danger); font-size: 0.8rem; margin-bottom: 8px;">
+            The build task finished in Stash, but no result payload was received from the backend sidecar or logs. The build may have failed. Please check the Stash logs.
+          </div>`
+        : "";
+
+      const torrentDisplayHtml = torrentPath
+        ? `<code id="handoff-torrent">${escapeHtml(torrentPath)}</code>`
+        : `<span id="handoff-torrent" style="color: var(--text-muted); font-style: italic;">— not reported —</span>`;
+
+      const manifestDisplayHtml = manifestPath
+        ? `<code id="handoff-manifest">${escapeHtml(manifestPath)}</code>`
+        : `<span id="handoff-manifest" style="color: var(--text-muted); font-style: italic;">— not reported —</span>`;
+
+      const submissionDisplayHtml = submissionPath
+        ? `<code id="handoff-submission">${escapeHtml(submissionPath)}</code>`
+        : `<span id="handoff-submission" style="color: var(--text-muted); font-style: italic;">— not reported —</span>`;
+
       detailsBox.innerHTML = `
-        <div id="handoff-status-header" style="font-weight: 600; color: ${
-          isReady ? "var(--success)" : "var(--danger)"
-        }; margin-bottom: 4px;">
-          ${isReady ? "🎉 Build Complete! — Ready for Manual Upload" : "⚠️ Build Complete! — " + (isSingle ? "Release" : "Pack") + " Not Ready for Upload"}
-        </div>
+        ${headerHtml}
+        ${unverifiedAlertHtml}
 
         <div id="preview-gate-alert" class="preview-gate-alert" style="display: ${
-          isPreviewOnly ? "block" : "none"
+          !isUnverified && isPreviewOnly ? "block" : "none"
         };">
           🚫 <strong>${isSingle ? "Release" : "Pack"} Not Ready for Upload:</strong> BBCode contains local <code>file:///</code> URLs. Remote hosting is required so images render for other users and do not disclose local paths.<br>
           <em>Remedy: Enable preview upload, or re-run once the image host is reachable.</em>
@@ -3242,7 +3315,7 @@
         <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px;">
           <div><strong>${isSingle ? "Release Title" : "Pack Title"}:</strong> <span id="handoff-title">${escapeHtml(packTitle)}</span></div>
           <button id="btn-copy-title" class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;" ${
-            !isReady ? 'disabled title="Copy disabled: ' + (isSingle ? "Release" : "Pack") + ' is not ready for upload"' : ""
+            !isReady ? 'disabled title="Copy disabled: ' + (isUnverified ? "Build result is unverified" : (isSingle ? "Release" : "Pack") + " is not ready for upload") + '"' : ""
           }>📋 Copy Title</button>
         </div>
 
@@ -3251,27 +3324,23 @@
             tagsString
           )}</span></div>
           <button id="btn-copy-tags" class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;" ${
-            !isReady ? 'disabled title="Copy disabled: ' + (isSingle ? "Release" : "Pack") + ' is not ready for upload"' : ""
+            !isReady ? 'disabled title="Copy disabled: ' + (isUnverified ? "Build result is unverified" : (isSingle ? "Release" : "Pack") + " is not ready for upload") + '"' : ""
           }>📋 Copy Tags</button>
         </div>
 
         <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px;">
-          <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px;"><strong>Torrent File:</strong> <code id="handoff-torrent">${escapeHtml(
-            torrentPath
-          )}</code></div>
-          <button id="btn-copy-torrent-path" class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;">📋 Copy Path</button>
+          <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px;"><strong>Torrent File:</strong> ${torrentDisplayHtml}</div>
+          <button id="btn-copy-torrent-path" class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;" ${
+            isUnverified || !torrentPath ? 'disabled title="Copy disabled: ' + (!torrentPath ? "Path not reported" : "Build result is unverified") + '"' : ""
+          }>📋 Copy Path</button>
         </div>
 
         <div style="margin-top: 4px;"><strong>Preview Images:</strong> <span id="handoff-images">${escapeHtml(
           imageSummary
         )}</span></div>
         ${imageLinksHtml}
-        <div style="margin-top: 2px;"><strong>Manifest:</strong> <code id="handoff-manifest">${escapeHtml(
-          manifestPath
-        )}</code></div>
-        <div style="margin-top: 2px;"><strong>Submission JSON:</strong> <code id="handoff-submission">${escapeHtml(
-          submissionPath
-        )}</code></div>
+        <div style="margin-top: 2px;"><strong>Manifest:</strong> ${manifestDisplayHtml}</div>
+        <div style="margin-top: 2px;"><strong>Submission JSON:</strong> ${submissionDisplayHtml}</div>
 
         <!-- Pre-Flight Checklist Section -->
         <div id="preflight-section" style="margin-top: 8px; border-top: 1px solid var(--card-border); padding-top: 6px;">
@@ -3291,7 +3360,9 @@
       if (copyBbcodeBtn) {
         copyBbcodeBtn.disabled = !isReady;
         if (!isReady) {
-          copyBbcodeBtn.title = `Copy disabled: ${isSingle ? "Release" : "Pack"} is not ready for upload`;
+          copyBbcodeBtn.title = isUnverified
+            ? "Copy disabled: Build result is unverified"
+            : `Copy disabled: ${isSingle ? "Release" : "Pack"} is not ready for upload`;
         } else {
           copyBbcodeBtn.title = "";
         }
@@ -3299,12 +3370,12 @@
 
       setupCopyButton("btn-copy-title", () => document.getElementById("handoff-title")?.innerText || "");
       setupCopyButton("btn-copy-tags", () => document.getElementById("handoff-tags")?.innerText || "");
-      setupCopyButton("btn-copy-torrent-path", () => document.getElementById("handoff-torrent")?.innerText || "");
+      setupCopyButton("btn-copy-torrent-path", () => (torrentPath ? document.getElementById("handoff-torrent")?.innerText || "" : ""));
 
       const uploadLink = document.getElementById("btn-open-upload");
       if (uploadLink) {
         uploadLink.addEventListener("click", () => {
-          if (!isReady) return;
+          if (!isReady || !torrentPath) return;
           const torPath = document.getElementById("handoff-torrent")?.innerText || "";
           if (torPath && navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(torPath).catch(() => {});
@@ -3787,6 +3858,7 @@
   window.removeCoverImage = removeCoverImage;
   window.getCurrentCoverUrl = () => currentCoverUrl;
   window.getWizardStage = getWizardStage;
+  window.handledJobIds = handledJobIds;
 
   // Prefill the scratch dir from the backend /health payload (todo 8 added
   // the field there). Best-effort: a down sidecar, non-200, or missing field

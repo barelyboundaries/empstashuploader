@@ -109,71 +109,6 @@ def check_dependencies():
         sys.stderr.flush()
 
 
-def ensure_python_env():
-    """
-    Re-exec this script into a sibling venv when the current interpreter cannot
-    import the heavy dependencies.
-
-    Trigger: 'import empornium_megapack' OR 'import torf' fails.
-    Interpreter search order:
-      1. EMPORNIUM_VENV environment variable
-      2. A venv directory beside the plugin
-         (Scripts/python.exe on Windows, bin/python elsewhere)
-      3. A venv directory in the current working directory
-      4. VIRTUAL_ENV environment variable
-    The first candidate whose python differs from sys.executable (and has not
-    already been tried) re-execs this script by its ABSOLUTE path -- a relative
-    argv[1] breaks when the new process inherits a different cwd. If no
-    candidate qualifies, fall through: check_dependencies() reports the exact
-    problem with an actionable message.
-    """
-    for mod_name in ("empornium_megapack", "torf"):
-        try:
-            __import__(mod_name)
-        except ImportError:
-            break
-    else:
-        return  # dependencies already importable in this interpreter
-
-    if os.name == "nt":
-        python_rel = Path("Scripts", "python.exe")
-    else:
-        python_rel = Path("bin", "python")
-
-    visited = {
-        p for p in os.environ.get("EMPORNIUM_REEXEC_VISITED", "").split(os.pathsep) if p
-    }
-    # Installer-contract venv dir name, assembled from parts: the distribution
-    # leak-grep (deny list) flags the joined literal even though the directory
-    # itself is never committed (install.ps1/install.sh create it, todo 8).
-    venv_dirname = "." + "venv"
-    for venv_dir in (
-        os.environ.get("EMPORNIUM_VENV"),
-        str(CURRENT_DIR / venv_dirname),
-        str(Path.cwd() / venv_dirname),
-        os.environ.get("VIRTUAL_ENV"),
-    ):
-        if not venv_dir:
-            continue
-        python_exe = Path(venv_dir) / python_rel
-        if not python_exe.is_file():
-            continue
-        resolved = str(python_exe.resolve())
-        if resolved == str(Path(sys.executable).resolve()) or resolved in visited:
-            continue  # re-execing into this interpreter cannot change anything
-        os.environ["EMPORNIUM_REEXEC_VISITED"] = os.pathsep.join(sorted(visited | {resolved}))
-        sys.stderr.write(
-            f"\x01i\x02[Bootstrap] Python dependencies missing from this interpreter; "
-            f"re-executing task via venv: {python_exe}\n"
-        )
-        sys.stderr.flush()
-        os.execv(str(python_exe), [str(python_exe), str(Path(__file__).resolve()), *sys.argv[1:]])
-
-
-ensure_python_env()
-check_dependencies()
-
-
 def resolve_backend(package_name: str = "empornium_megapack"):
     """
     4-Tier Ordered Discovery Protocol:
@@ -239,43 +174,140 @@ def resolve_backend(package_name: str = "empornium_megapack"):
     return None
 
 
+def ensure_python_env():
+    """
+    Re-exec this script into a sibling venv when the current interpreter cannot
+    import the heavy dependencies.
+
+    Trigger: 'import empornium_megapack' OR 'import torf' fails.
+    Interpreter search order:
+      1. EMPORNIUM_VENV environment variable
+      2. A venv directory beside the plugin
+         (Scripts/python.exe on Windows, bin/python elsewhere)
+      3. A venv directory in the current working directory
+      4. VIRTUAL_ENV environment variable
+    The first candidate whose python differs from sys.executable (and has not
+    already been tried) re-execs this script by its ABSOLUTE path -- a relative
+    argv[1] breaks when the new process inherits a different cwd. If no
+    candidate qualifies, fall through: check_dependencies() reports the exact
+    problem with an actionable message.
+    """
+    for mod_name in ("empornium_megapack", "torf"):
+        try:
+            __import__(mod_name)
+        except ImportError:
+            break
+    else:
+        return  # dependencies already importable in this interpreter
+
+    if os.name == "nt":
+        python_rel = Path("Scripts", "python.exe")
+    else:
+        python_rel = Path("bin", "python")
+
+    visited = {
+        p for p in os.environ.get("EMPORNIUM_REEXEC_VISITED", "").split(os.pathsep) if p
+    }
+    # Installer-contract venv dir name, assembled from parts: the distribution
+    # leak-grep (deny list) flags the joined literal even though the directory
+    # itself is never committed (install.ps1/install.sh create it, todo 8).
+    venv_dirname = "." + "venv"
+    for venv_dir in (
+        os.environ.get("EMPORNIUM_VENV"),
+        str(CURRENT_DIR / venv_dirname),
+        str(Path.cwd() / venv_dirname),
+        os.environ.get("VIRTUAL_ENV"),
+    ):
+        if not venv_dir:
+            continue
+        python_exe = Path(venv_dir) / python_rel
+        if not python_exe.is_file():
+            continue
+        resolved = str(python_exe.resolve())
+        if resolved == str(Path(sys.executable).resolve()) or resolved in visited:
+            continue  # re-execing into this interpreter cannot change anything
+        os.environ["EMPORNIUM_REEXEC_VISITED"] = os.pathsep.join(sorted(visited | {resolved}))
+        sys.stderr.write(
+            f"\x01i\x02[Bootstrap] Python dependencies missing from this interpreter; "
+            f"re-executing task via venv: {python_exe}\n"
+        )
+        sys.stderr.flush()
+        os.execv(str(python_exe), [str(python_exe), str(Path(__file__).resolve()), *sys.argv[1:]])
+
+
 resolve_backend()
+ensure_python_env()
+check_dependencies()
 
 import urllib.parse
+import urllib.request
+import urllib.error
 import torf
-from empornium_megapack import images as _domain_images
-from empornium_megapack import config as _domain_config
-from empornium_megapack import torrents as _domain_torrents
-from empornium_megapack.torrents import (
-    create_torrent,
-    calculate_piece_size,
-    piece_size_for,
-    validate_announce_url,
-    sanitize_announce_url,
-    source_for_announce,
-    TorrentError,
-)
-from empornium_megapack.images import generate_contact_sheet as _domain_generate_contact_sheet
-from empornium_megapack.images import (
-    extract_screens as _domain_extract_screens,
-    fetch_stash_image as _domain_fetch_stash_image,
-    probe_duration as _domain_probe_duration,
-    make_thumbnail as _domain_make_thumbnail,
-    fit_presentation_budget as _domain_fit_presentation_budget,
-)
-from empornium_megapack.build import sanitize_name, write_manifest, verify_preflight_checklist
-from empornium_megapack.metadata import (
-    bbcode_escape,
-    resolution_for,
-    format_duration,
-    join_names,
-    pack_performer_union,
-    pack_studio,
-    merge_tags,
-    empify,
-    THUMB_WIDTH,
-    THUMB_RENDER_WIDTH,
-)
+
+try:
+    from empornium_megapack import images as _domain_images
+    from empornium_megapack import config as _domain_config
+    from empornium_megapack import torrents as _domain_torrents
+    from empornium_megapack.torrents import (
+        create_torrent,
+        calculate_piece_size,
+        piece_size_for,
+        validate_announce_url,
+        sanitize_announce_url,
+        source_for_announce,
+        TorrentError,
+    )
+    from empornium_megapack.images import generate_contact_sheet as _domain_generate_contact_sheet
+    from empornium_megapack.images import (
+        extract_screens as _domain_extract_screens,
+        fetch_stash_image as _domain_fetch_stash_image,
+        probe_duration as _domain_probe_duration,
+        make_thumbnail as _domain_make_thumbnail,
+        fit_presentation_budget as _domain_fit_presentation_budget,
+    )
+    from empornium_megapack.build import sanitize_name, write_manifest, verify_preflight_checklist
+    from empornium_megapack.metadata import (
+        bbcode_escape,
+        resolution_for,
+        format_duration,
+        join_names,
+        pack_performer_union,
+        pack_studio,
+        merge_tags,
+        empify,
+        THUMB_WIDTH,
+        THUMB_RENDER_WIDTH,
+    )
+except ImportError:
+    _domain_images = None
+    _domain_config = None
+    _domain_torrents = None
+    _domain_generate_contact_sheet = None
+    _domain_extract_screens = None
+    _domain_fetch_stash_image = None
+    _domain_probe_duration = None
+    _domain_make_thumbnail = None
+    _domain_fit_presentation_budget = None
+    sanitize_name = None
+    write_manifest = None
+    verify_preflight_checklist = None
+    bbcode_escape = None
+    resolution_for = None
+    format_duration = None
+    join_names = None
+    pack_performer_union = None
+    pack_studio = None
+    merge_tags = None
+    empify = None
+    THUMB_WIDTH = 150
+    THUMB_RENDER_WIDTH = 300
+    create_torrent = None
+    calculate_piece_size = None
+    piece_size_for = None
+    validate_announce_url = None
+    sanitize_announce_url = None
+    source_for_announce = None
+    TorrentError = Exception
 
 # Performer portraits sit inline beside their names, so they run narrower
 # than the screens grid.
@@ -2014,6 +2046,84 @@ _SENTINEL_MAX_CHARS = 100000
 _BBCODE_CHUNK_CHARS = 4000
 
 
+def post_result_to_sidecar(payload: Any, result: Any) -> None:
+    """
+    Posts task execution result to the sidecar run store via HTTP POST.
+    Best-effort: timeout <= 3s, catches all errors, never raises or delays the build.
+    """
+    try:
+        if not isinstance(result, dict):
+            return
+        run_id = payload.get("run_id") if isinstance(payload, dict) else None
+        if not run_id or not isinstance(run_id, str):
+            return
+        run_id = str(run_id).strip()
+        if not run_id:
+            return
+
+        compact = {k: v for k, v in result.items() if k not in _SENTINEL_EXCLUDED_KEYS}
+
+        # Port resolution with fallback
+        # Coupling note: Port 9941 is currently pinned by the plugin CSP (plugin/empornium-megapack.yml)
+        # and by backendEndpoints() (plugin/assets/review.js).
+        port = 9941
+        env_port = os.environ.get("EMPORNIUM_PORT")
+        if env_port:
+            try:
+                port = int(env_port)
+            except (ValueError, TypeError):
+                port = 9941
+        elif _domain_config is not None:
+            try:
+                settings = _domain_config.get_settings()
+                port = getattr(settings, "port", 9941)
+            except Exception:
+                port = 9941
+
+        host = "127.0.0.1"
+        url = f"http://{host}:{port}/api/run/{urllib.parse.quote(run_id)}"
+
+        body_bytes = json.dumps(compact, ensure_ascii=False).encode("utf-8")
+        if len(body_bytes) > 2 * 1024 * 1024:
+            sys.stderr.write(
+                f"\x01w\x02[Sidecar] Result payload ({len(body_bytes)} bytes) exceeds 2MB limit; skipping sidecar POST\n"
+            )
+            sys.stderr.flush()
+            return
+
+        req = urllib.request.Request(
+            url,
+            data=body_bytes,
+            headers={
+                "Content-Type": "application/json; charset=utf-8",
+                "Host": f"{host}:{port}",
+            },
+            method="POST",
+        )
+
+        with urllib.request.urlopen(req, timeout=3.0) as resp:
+            if resp.status not in (200, 201, 204):
+                sys.stderr.write(
+                    f"\x01w\x02[Sidecar] HTTP {resp.status} posting run result for {run_id}\n"
+                )
+                sys.stderr.flush()
+    except urllib.error.HTTPError as http_err:
+        sys.stderr.write(
+            f"\x01w\x02[Sidecar] HTTP {http_err.code} posting run result for {run_id}: {http_err.reason}\n"
+        )
+        sys.stderr.flush()
+    except urllib.error.URLError as url_err:
+        sys.stderr.write(
+            f"\x01w\x02[Sidecar] Transport error posting run result for {run_id}: {url_err.reason}\n"
+        )
+        sys.stderr.flush()
+    except Exception as exc:
+        sys.stderr.write(
+            f"\x01w\x02[Sidecar] Failed to post run result for {run_id}: {exc}\n"
+        )
+        sys.stderr.flush()
+
+
 def emit_result_sentinel(payload, result):
     """
     Publishes a successful task result to stderr as a log sentinel so the review
@@ -2091,6 +2201,7 @@ def main():
         else:
             result = run_build_megapack(payload, server_connection)
         
+        post_result_to_sidecar(payload, result)
         emit_result_sentinel(payload, result)
         emit_bbcode_sentinel(payload, result)
 
@@ -2101,6 +2212,13 @@ def main():
     except Exception as err:
         run_id = payload.get("run_id") if isinstance(payload, dict) else None
         if run_id:
+            fail_result = {
+                "status": "failed",
+                "run_id": str(run_id),
+                "error": str(err),
+                "traceback": traceback.format_exc(),
+            }
+            post_result_to_sidecar(payload, fail_result)
             sys.stderr.write(f"\x01e\x02EMPORNIUM_TASK_FAILED {run_id}: {err}\n")
         else:
             sys.stderr.write(f"\x01e\x02EMPORNIUM_TASK_FAILED: {err}\n")

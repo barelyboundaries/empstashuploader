@@ -1,4 +1,4 @@
-﻿import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -51,6 +51,12 @@ function setupMocks(page) {
       contentType: 'application/json',
       body: JSON.stringify({ results }),
     });
+  });
+
+  // Isolate sidecar run endpoint: fail over immediately to log sentinel testing
+  // regardless of whether a local backend sidecar process is currently active on :9941.
+  page.route('**/api/run/**', async (route) => {
+    return route.abort('connectionrefused');
   });
 }
 

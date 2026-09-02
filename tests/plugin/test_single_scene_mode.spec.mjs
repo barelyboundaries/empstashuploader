@@ -1,4 +1,4 @@
-﻿import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -419,7 +419,18 @@ test.describe('Stage 7 Feature 2 — Single-Scene Mode Switch & Pre-Dispatch Val
         preview_only: false,
         ready: true,
         tracker_tags: ['soloist', '4k'],
-        site_url: 'https://www.empornium.is'
+        site_url: 'https://www.empornium.is',
+        preflight: {
+          ready: true,
+          checks: [
+            { id: "images_remote", label: "Preview Images", passed: true, detail: "All remote on HamsterImg" },
+            { id: "tracker_tags", label: "Tracker Tags", passed: true, detail: "2 valid tags" },
+            { id: "category", label: "Category", passed: true, is_info: true, detail: "Category — you select this on the upload form." },
+            { id: "torrent_valid", label: "Torrent File", passed: true, detail: "Valid torrent" },
+            { id: "payload_files", label: "Media Files Verification", passed: true, detail: "Single media file exists on disk" },
+            { id: "root_name", label: "Torrent Name", passed: true, detail: "Single-file torrent — tracker displays media filename" }
+          ]
+        }
       });
     });
 

@@ -1,4 +1,4 @@
-﻿import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -50,6 +50,8 @@ function setupMocks(page) {
       body: JSON.stringify({ results })
     });
   });
+
+  page.route("**/api/run/**", async (route) => route.abort("connectionrefused"));
 }
 
 

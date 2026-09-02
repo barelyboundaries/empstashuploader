@@ -1,4 +1,4 @@
-﻿import { test, expect } from "@playwright/test";
+import { test, expect } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -24,6 +24,7 @@ function serveAssets(page) {
   page.route("**/*review.js*", (route) =>
     route.fulfill({ status: 200, contentType: "application/javascript", body: fs.readFileSync(path.resolve("plugin/assets/review.js"), "utf8") })
   );
+  page.route("**/api/run/**", async (route) => route.abort("connectionrefused"));
 }
 
 // `emitResult` controls whether the backend's result sentinel appears in the

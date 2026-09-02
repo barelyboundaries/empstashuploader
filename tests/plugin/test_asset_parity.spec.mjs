@@ -22,9 +22,8 @@ const __dirname = path.dirname(__filename);
 // mismatch — that is the signal to refresh ASSET_RECORD below in the same
 // commit, so unreviewed or truncated asset changes can never slip through.
 const ASSET_RECORD = {
-  // review.js: stashUiOrigin comment now documents the sidecar :9999 fallback
-  // as a limitation (todo 8 of the ship audit); no logic change
-  'review.js': '87322fafa3994fa84df9704892f121c827eb4413914aa6433fd61add02752edd',
+  // review.js: updated for false-build prevention (R1-R4 sidecar and fail-closed readiness)
+  'review.js': '8af981c00573d0fcb4b6d4e59c972674c55e5f243f6277d390faf8c107fbbb26',
   // review.html: updated brand strings to Empornium Megapack Builder
   'review.html': 'd2c0c2953cf96794b0011c823edd8d95becda07505c90e91c9897d530e81b797',
 };
@@ -50,4 +49,25 @@ test.describe('Single-source asset integrity — plugin/assets hash-of-record', 
       ).toBe(recorded);
     });
   }
+});
+
+test.describe('Suite-level test harness invariants', () => {
+  test('every spec referencing FINISHED also routes /api/run to isolate sidecar', () => {
+    const specsDir = __dirname;
+    const specFiles = fs.readdirSync(specsDir).filter((f) => f.endsWith('.spec.mjs'));
+
+    const unmocked = [];
+    for (const specFile of specFiles) {
+      const content = fs.readFileSync(path.join(specsDir, specFile), 'utf8');
+      if (content.includes('FINISHED') && !content.includes('api/run')) {
+        unmocked.push(specFile);
+      }
+    }
+
+    expect(
+      unmocked,
+      `The following specs drive a FINISHED job without mocking /api/run/**. ` +
+        `They will absorb a 5s retry loop when the sidecar is active:\n${unmocked.join('\n')}`
+    ).toEqual([]);
+  });
 });

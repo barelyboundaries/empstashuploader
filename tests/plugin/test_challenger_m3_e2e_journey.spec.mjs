@@ -1,4 +1,4 @@
-﻿import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -120,6 +120,43 @@ test.describe("Milestone 3 Challenger 2: Full End-to-End User Journey & Fault In
         contentType: "application/json",
         body: JSON.stringify({ results })
       });
+    });
+
+    await page.route("**/api/run/*", async (route) => {
+      if (route.request().method() === "GET") {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            found: true,
+            result: {
+              status: "success",
+              pack_title: "Alpha Scene 🌸 (Ultra HD)",
+              torrent_path: "C:\\Packs\\Alpha Scene 🌸 (Ultra HD).torrent",
+              manifest_path: "C:\\Packs\\Alpha Scene 🌸 (Ultra HD)_manifest.json",
+              submission_path: "C:\\Packs\\Alpha Scene 🌸 (Ultra HD)_submission.json",
+              bbcode_path: "C:\\Packs\\Alpha Scene 🌸 (Ultra HD)_bbcode.txt",
+              upload_previews: true,
+              preview_only: false,
+              ready: true,
+              tracker_tags: ["4k", "hevc", "vr"],
+              uploaded_urls: ["https://hamsterimg.net/images/preview1.jpg", "https://hamsterimg.net/images/preview2.jpg"],
+              preflight: {
+                ready: true,
+                checks: [
+                  { id: "images_remote", label: "Preview Images", passed: true, detail: "All remote on HamsterImg" },
+                  { id: "tracker_tags", label: "Tracker Tags", passed: true, detail: "Tags valid" },
+                  { id: "category", label: "Category", passed: true, is_info: true, detail: "Category selected" },
+                  { id: "torrent_valid", label: "Torrent File", passed: true, detail: "Valid torrent" },
+                  { id: "payload_files", label: "Media Files Verification", passed: true, detail: "Files exist" },
+                  { id: "root_name", label: "Torrent Root Name", passed: true, detail: "Matches title" }
+                ]
+              }
+            }
+          })
+        });
+      }
+      return route.fallback();
     });
 
     await page.route("**/graphql", async (route) => {
@@ -337,6 +374,42 @@ test.describe("Milestone 3 Challenger 2: Full End-to-End User Journey & Fault In
         contentType: "application/json",
         body: JSON.stringify({ results })
       });
+    });
+
+    await page.route("**/api/run/*", async (route) => {
+      if (route.request().method() === "GET") {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            found: true,
+            result: {
+              status: "success",
+              pack_title: "Socket Drop Scene",
+              torrent_path: "C:\\Packs\\Socket Drop Scene.torrent",
+              manifest_path: "C:\\Packs\\Socket Drop Scene_manifest.json",
+              submission_path: "C:\\Packs\\Socket Drop Scene_submission.json",
+              bbcode_path: "C:\\Packs\\Socket Drop Scene_bbcode.txt",
+              upload_previews: false,
+              preview_only: true,
+              ready: true,
+              tracker_tags: ["socket.drop"],
+              preflight: {
+                ready: true,
+                checks: [
+                  { id: "images_remote", label: "Preview Images", passed: true, detail: "All remote" },
+                  { id: "tracker_tags", label: "Tracker Tags", passed: true, detail: "Tags valid" },
+                  { id: "category", label: "Category", passed: true, is_info: true, detail: "Category selected" },
+                  { id: "torrent_valid", label: "Torrent File", passed: true, detail: "Valid torrent" },
+                  { id: "payload_files", label: "Media Files Verification", passed: true, detail: "Files exist" },
+                  { id: "root_name", label: "Torrent Root Name", passed: true, detail: "Matches title" }
+                ]
+              }
+            }
+          })
+        });
+      }
+      return route.fallback();
     });
 
     await page.route("**/graphql", async (route) => {

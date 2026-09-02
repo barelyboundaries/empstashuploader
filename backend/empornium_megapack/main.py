@@ -1,4 +1,5 @@
 import asyncio
+import json
 import os
 from contextlib import asynccontextmanager
 
@@ -12,7 +13,9 @@ from .models import (
     TokenCreateResponse,
     TokenGetResponse,
 )
+from .run_store import run_store, RUN_ID_REGEX
 from .token_store import token_store
+from .torrents import sanitize_announce_url
 
 settings = get_settings()
 
@@ -24,6 +27,7 @@ async def lifespan(app: FastAPI):
             try:
                 await asyncio.sleep(600)  # Every 10 minutes
                 token_store.sweep_expired()
+                run_store.sweep_expired()
             except asyncio.CancelledError:
                 break
             except Exception:
@@ -184,3 +188,51 @@ async def fs_exists(request: Request):
 
     results = {p: await asyncio.to_thread(os.path.isfile, p) for p in paths}
     return {"results": results}
+
+
+_MAX_RUN_BODY_BYTES = 2 * 1024 * 1024
+
+
+@app.post("/api/run/{run_id}")
+async def post_run_result(run_id: str, request: Request):
+    if not RUN_ID_REGEX.match(run_id):
+        raise HTTPException(status_code=400, detail="Invalid run_id format")
+
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > _MAX_RUN_BODY_BYTES:
+                raise HTTPException(status_code=400, detail="Payload exceeds 2MB limit")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid Content-Length header")
+
+    raw_body = await request.body()
+    if len(raw_body) > _MAX_RUN_BODY_BYTES:
+        raise HTTPException(status_code=400, detail="Payload exceeds 2MB limit")
+
+    try:
+        data = json.loads(raw_body)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=400, detail="Payload must be a JSON object")
+
+    # Defense-in-depth sanitization of announce_url field if present
+    if "announce_url" in data and isinstance(data["announce_url"], str):
+        data["announce_url"] = sanitize_announce_url(data["announce_url"])
+
+    run_store.store_run(run_id, data)
+    return {"status": "ok", "run_id": run_id}
+
+
+@app.get("/api/run/{run_id}")
+def get_run_result(run_id: str):
+    if not RUN_ID_REGEX.match(run_id):
+        raise HTTPException(status_code=400, detail="Invalid run_id format")
+
+    result = run_store.get_run(run_id)
+    if result is None:
+        return {"found": False}
+    return {"found": True, "result": result}
+

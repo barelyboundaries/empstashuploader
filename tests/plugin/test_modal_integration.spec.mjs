@@ -1,4 +1,4 @@
-﻿import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -378,6 +378,42 @@ test.describe("Empornium Megapack Builder Frontend - Full Integration Suite", ()
     });
 
     let pollCount = 0;
+
+    await page.route("**/api/run/*", async (route) => {
+      if (route.request().method() === "GET") {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            found: true,
+            result: {
+              status: "success",
+              pack_title: "My Awesome Megapack",
+              torrent_path: "C:\\Packs\\My Awesome Megapack.torrent",
+              manifest_path: "C:\\Packs\\My Awesome Megapack_manifest.json",
+              submission_path: "C:\\Packs\\My Awesome Megapack_submission.json",
+              bbcode_path: "C:\\Packs\\My Awesome Megapack_bbcode.txt",
+              upload_previews: false,
+              preview_only: true,
+              ready: true,
+              tracker_tags: ["scene.one"],
+              preflight: {
+                ready: true,
+                checks: [
+                  { id: "images_remote", label: "Preview Images", passed: true, detail: "All remote" },
+                  { id: "tracker_tags", label: "Tracker Tags", passed: true, detail: "Tags valid" },
+                  { id: "category", label: "Category", passed: true, is_info: true, detail: "Category selected" },
+                  { id: "torrent_valid", label: "Torrent File", passed: true, detail: "Valid torrent" },
+                  { id: "payload_files", label: "Media Files Verification", passed: true, detail: "Files exist" },
+                  { id: "root_name", label: "Torrent Root Name", passed: true, detail: "Matches title" }
+                ]
+              }
+            }
+          })
+        });
+      }
+      return route.fallback();
+    });
 
     await page.route("**/graphql", async (route) => {
       const postData = JSON.parse(route.request().postData() || "{}");
