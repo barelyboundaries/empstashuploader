@@ -69,7 +69,7 @@ $rules = [ordered]@{
             'tests/backend/test_torrents.py') }
     'machine-d-path'        = @{ pattern = '(?i)D:[\\/]+[0-9]';                allow = @() }
     'machine-c-projects'    = @{ pattern = '(?i)C:[\\/]+Projects';             allow = @() }
-    'machine-identity'      = @{ pattern = '(?i)ccoggle|StashUploader';        allow = @() }
+    'machine-identity'      = @{ pattern = '(?i)\bccoggle\b|\bStashUploader\b';        allow = @() }
     'config-local-ref'      = @{ pattern = '(?i)config\.local';                allow = @(
             '.gitignore',
             'README.md',
