@@ -66,7 +66,9 @@
       padding: 16px;
       overflow-y: auto;
       min-height: 0;
+      border: 1px solid transparent;
       border-right: 1px solid var(--card-border);
+      transition: border-color 0.2s, background-color 0.2s;
     }
 
     .options-panel {
@@ -80,12 +82,22 @@
       gap: 16px;
     }
 
+    #scene-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(245px, 1fr));
+      gap: 12px;
+    }
+
+    #scene-list > :not(.scene-card) {
+      grid-column: 1 / -1;
+    }
+
     .scene-card {
       background-color: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: 8px;
       padding: 12px;
-      margin-bottom: 12px;
+      margin-bottom: 0;
       display: flex;
       gap: 12px;
       cursor: grab;
@@ -867,8 +879,8 @@
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      padding: 5px 10px;
-      border-radius: 6px;
+      padding: 5px 12px;
+      border-radius: 999px;
       background: transparent;
       border: 1px solid transparent;
       color: var(--text-muted);
@@ -889,10 +901,38 @@
       border-color: var(--card-border);
     }
 
+    .stage-rail-item.stage-completed {
+      background-color: rgba(16, 185, 129, 0.12);
+      border-color: rgba(16, 185, 129, 0.4);
+      color: var(--success);
+    }
+
+    .stage-rail-item.stage-completed .stage-num {
+      background-color: rgba(16, 185, 129, 0.25);
+      color: var(--success);
+    }
+
+    .stage-rail-item.stage-completed.reached:hover {
+      background-color: rgba(16, 185, 129, 0.2);
+      border-color: var(--success);
+    }
+
     .stage-rail-item.stage-current {
-      background-color: rgba(59, 130, 246, 0.15);
+      background-color: var(--accent);
       border-color: var(--accent);
-      color: var(--text-main);
+      color: #ffffff;
+    }
+
+    .stage-rail-item.stage-current .stage-num {
+      background-color: #ffffff;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .stage-rail-item.stage-current.reached:hover {
+      background-color: var(--accent-hover);
+      border-color: var(--accent-hover);
+      color: #ffffff;
     }
 
     .stage-num {
@@ -906,11 +946,6 @@
       color: var(--text-main);
       font-size: 0.7rem;
       flex-shrink: 0;
-    }
-
-    .stage-rail-item.stage-current .stage-num {
-      background-color: var(--accent);
-      color: #ffffff;
     }
 
     .stage-check {
@@ -941,16 +976,16 @@
 
     .stage-panel.stage-current {
       opacity: 1;
-      border-color: var(--card-border);
-      background-color: rgba(59, 130, 246, 0.04);
+      border-color: var(--accent);
+      background-color: rgba(59, 130, 246, 0.08);
     }
 
     /* The Scenes stage IS the existing scene-list panel: highlight it in
        place on stage 3; never dim it (it is primary content on every
        stage). */
     .scene-list-panel.stage-current {
-      border-right-color: var(--accent);
-      box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.35);
+      border-color: var(--accent);
+      background-color: rgba(59, 130, 246, 0.08);
     }
 
     .sidecar-status {

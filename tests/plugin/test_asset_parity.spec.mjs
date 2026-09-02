@@ -22,10 +22,10 @@ const __dirname = path.dirname(__filename);
 // mismatch — that is the signal to refresh ASSET_RECORD below in the same
 // commit, so unreviewed or truncated asset changes can never slip through.
 const ASSET_RECORD = {
-  // review.js: updated for debounced 3-state sidecar status machine, StartBackend dispatch & polling, and stopSidecar affordance
-  'review.js': 'ef2e92c0edbe07d58ea9b74cef5e50295c7d1aca7f6c52f18f753923892c32ae',
-  // review.html: updated with #btn-sidecar-stop affordance and sidecar status badge classes
-  'review.html': 'fefecc57fef561e56be0d63464c2a9a4308b14874d95ecfbf9d2dccbb31827f7',
+  // review.js: updated with 2D row-banded drag-and-drop hit-test
+  'review.js': '46fbc0d197a18a12aad9f7b22dea6234d366d1bb8d1498c40133b3af6f3630a6',
+  // review.html: updated with responsive scene grid (#scene-list), stage rail chips, and solid accent stage panels
+  'review.html': 'b38127a6fbcc097d2456a5757a5f58c72a38f1e808ae1433ac2d77826b0b114a',
 };
 
 function sha256(filePath) {

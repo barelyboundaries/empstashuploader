@@ -1820,7 +1820,7 @@
         e.preventDefault();
         const dragging = document.querySelector(".dragging");
         if (!dragging) return;
-        const afterElement = getDragAfterElement(container, e.clientY);
+        const afterElement = getDragAfterElement(container, e.clientX, e.clientY);
         if (afterElement == null) {
           container.appendChild(dragging);
         } else {
@@ -1830,20 +1830,92 @@
     }
   }
 
-  function getDragAfterElement(container, y) {
+  function getDragAfterElement(container, x, y) {
+    if (y === undefined) {
+      y = x;
+      x = 0;
+    }
     const draggableElements = [...container.querySelectorAll(".scene-card:not(.dragging)")];
-    return draggableElements.reduce(
-      (closest, child) => {
-        const box = child.getBoundingClientRect();
-        const offset = y - box.top - box.height / 2;
-        if (offset < 0 && offset > closest.offset) {
-          return { offset: offset, element: child };
+    if (draggableElements.length === 0) return null;
+
+    // Group cards into visual row bands using vertical overlap tolerance (~5px)
+    const rows = [];
+    let currentRow = [];
+    let rowTop = 0;
+    let rowBottom = 0;
+
+    for (const el of draggableElements) {
+      const box = el.getBoundingClientRect();
+      if (currentRow.length === 0) {
+        currentRow.push({ el, box });
+        rowTop = box.top;
+        rowBottom = box.bottom;
+      } else {
+        const overlapsVertically = box.top <= rowBottom - 5 && box.bottom >= rowTop + 5;
+        const topsAligned = Math.abs(box.top - rowTop) <= 10;
+        if (overlapsVertically || topsAligned) {
+          currentRow.push({ el, box });
+          rowTop = Math.min(rowTop, box.top);
+          rowBottom = Math.max(rowBottom, box.bottom);
         } else {
-          return closest;
+          rows.push({
+            items: currentRow,
+            top: rowTop,
+            bottom: rowBottom
+          });
+          currentRow = [{ el, box }];
+          rowTop = box.top;
+          rowBottom = box.bottom;
         }
-      },
-      { offset: Number.NEGATIVE_INFINITY }
-    ).element;
+      }
+    }
+    if (currentRow.length > 0) {
+      rows.push({
+        items: currentRow,
+        top: rowTop,
+        bottom: rowBottom
+      });
+    }
+
+    // Determine target row based on y coordinate
+    let targetRowIndex = 0;
+    if (y < rows[0].top) {
+      targetRowIndex = 0;
+    } else if (y > rows[rows.length - 1].bottom) {
+      return null;
+    } else {
+      for (let i = 0; i < rows.length; i++) {
+        const nextRow = rows[i + 1];
+        const bandBottom = nextRow ? (rows[i].bottom + nextRow.top) / 2 : rows[i].bottom;
+        if (y <= bandBottom) {
+          targetRowIndex = i;
+          break;
+        }
+        targetRowIndex = i;
+      }
+    }
+
+    const targetRow = rows[targetRowIndex];
+    const items = targetRow.items;
+
+    if (items.length === 1) {
+      const box = items[0].box;
+      const centerY = box.top + box.height / 2;
+      if (y < centerY) {
+        return items[0].el;
+      } else {
+        return targetRowIndex < rows.length - 1 ? rows[targetRowIndex + 1].items[0].el : null;
+      }
+    }
+
+    for (const item of items) {
+      const centerX = item.box.left + item.box.width / 2;
+      if (x < centerX) {
+        return item.el;
+      }
+    }
+
+    return targetRowIndex < rows.length - 1 ? rows[targetRowIndex + 1].items[0].el : null;
   }
 
   function reorderScenes() {
