@@ -667,4 +667,208 @@ test.describe('Responsive Scene List Grid & 2D Drag-and-Drop Hit-Testing', () =>
     await expect(stage1).toHaveClass(/stage-current/);
   });
 
+  test('R4 Adversarial: Multi-row drag across 3 rows in 9-scene grid (Row 2 to Row 0 and Row 0 to Row 2)', async ({ page }) => {
+    // 9 scenes in 3-column layout creates 3 full rows:
+    // Row 0: 0 (Alpha), 1 (Beta), 2 (Gamma)
+    // Row 1: 3 (Delta), 4 (Epsilon), 5 (Zeta)
+    // Row 2: 6 (Eta), 7 (Theta), 8 (Iota)
+    await bootHarness(page, { sceneCount: 9, viewport: { width: 1400, height: 900 } });
+
+    let titles = await getCardTitles(page);
+    expect(titles.length).toBe(9);
+    expect(titles[0]).toContain("Alpha");
+    expect(titles[8]).toContain("Scene 9");
+
+    // 1. Drag Scene 9 (index 8, Row 2) between Alpha (index 0) and Beta (index 1) in Row 0
+    const betaLeft = await page.evaluate(() => {
+      const beta = document.querySelectorAll("#scene-list .scene-card")[1];
+      const r = beta.getBoundingClientRect();
+      return { x: r.left + r.width * 0.2, y: r.top + r.height * 0.5 };
+    });
+    await simulateDrag(page, 8, betaLeft.x, betaLeft.y);
+
+    titles = await getCardTitles(page);
+    // Order: Alpha, Scene 9, Beta, Gamma, Delta, Epsilon, Zeta, Eta, Theta
+    expect(titles[0]).toContain("Alpha");
+    expect(titles[1]).toContain("Scene 9");
+    expect(titles[2]).toContain("Beta");
+    expect(titles[3]).toContain("Gamma");
+    expect(titles[4]).toContain("Delta");
+    expect(titles[5]).toContain("Epsilon");
+    expect(titles[6]).toContain("Zeta");
+    expect(titles[7]).toContain("Eta");
+    expect(titles[8]).toContain("Theta");
+
+    // 2. Drag Alpha (index 0, Row 0) after Theta (index 8, Row 2)
+    const thetaRight = await page.evaluate(() => {
+      const cards = document.querySelectorAll("#scene-list .scene-card");
+      const theta = cards[8];
+      const r = theta.getBoundingClientRect();
+      return { x: r.right + 20, y: r.top + r.height * 0.5 };
+    });
+    await simulateDrag(page, 0, thetaRight.x, thetaRight.y);
+
+    titles = await getCardTitles(page);
+    // Order: Scene 9, Beta, Gamma, Delta, Epsilon, Zeta, Eta, Theta, Alpha
+    expect(titles[0]).toContain("Scene 9");
+    expect(titles[1]).toContain("Beta");
+    expect(titles[7]).toContain("Theta");
+    expect(titles[8]).toContain("Alpha");
+  });
+
+  test('R4 Adversarial: Drag reordering under conflict filter mode preserves non-conflicting scene order', async ({ page }) => {
+    await page.setViewportSize({ width: 1400, height: 900 });
+    serveAssets(page);
+
+    // 4 scenes: Scene 1 & 3 are unique, Scene 2 & 4 share duplicate file basename "collision.mp4"
+    const scenes = [
+      makeScene("1", "Unique Scene Alpha"),
+      {
+        id: "2",
+        title: "Duplicate Scene Beta",
+        date: "2026-01-01",
+        paths: { screenshot: "", preview: "" },
+        files: [{ id: "f-2", path: "D:\\Seed\\collision.mp4", size: 100, height: 1080, width: 1920, duration: 600, video_codec: "h264", oshash: "h2" }],
+        performers: [],
+        tags: [],
+        studio: null
+      },
+      makeScene("3", "Unique Scene Gamma"),
+      {
+        id: "4",
+        title: "Duplicate Scene Delta",
+        date: "2026-01-01",
+        paths: { screenshot: "", preview: "" },
+        files: [{ id: "f-4", path: "D:\\Seed\\collision.mp4", size: 100, height: 1080, width: 1920, duration: 600, video_codec: "h264", oshash: "h4" }],
+        performers: [],
+        tags: [],
+        studio: null
+      }
+    ];
+
+    await page.route("**/graphql", async (route) => {
+      const postData = JSON.parse(route.request().postData() || "{}");
+      const query = postData.query || "";
+      if (query.includes("FindScenes")) {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({ data: { findScenes: { scenes } } })
+        });
+      }
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: {} }) });
+    });
+
+    await page.route("**/api/fs/exists", async (route) => {
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ results: {} }) });
+    });
+    await page.route("**/health", async (route) => {
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ status: "connected" }) });
+    });
+
+    const url = `http://localhost:9999/plugin/empornium-megapack/assets/review.html?scenes=1,2,3,4`;
+    await page.goto(url);
+    await page.waitForSelector(".scene-card");
+
+    // Filter to conflicts only
+    await page.click("#btn-filter-conflicts");
+
+    let titles = await getCardTitles(page);
+    expect(titles.length).toBe(2);
+    expect(titles[0]).toContain("Duplicate Scene Beta");
+    expect(titles[1]).toContain("Duplicate Scene Delta");
+
+    // Drag Duplicate Scene Delta (index 1 of visible) before Duplicate Scene Beta (index 0 of visible)
+    const betaLeft = await page.evaluate(() => {
+      const beta = document.querySelectorAll("#scene-list .scene-card")[0];
+      const r = beta.getBoundingClientRect();
+      return { x: r.left + r.width * 0.2, y: r.top + r.height * 0.5 };
+    });
+    await simulateDrag(page, 1, betaLeft.x, betaLeft.y);
+
+    titles = await getCardTitles(page);
+    expect(titles[0]).toContain("Duplicate Scene Delta");
+    expect(titles[1]).toContain("Duplicate Scene Beta");
+
+    // Unfilter: click Show all active scenes
+    await page.click("#btn-filter-conflicts");
+
+    titles = await getCardTitles(page);
+    expect(titles.length).toBe(4);
+    // Relative order: Scene 1 (Alpha), Scene 4 (Delta), Scene 3 (Gamma), Scene 2 (Beta)
+    expect(titles[0]).toContain("Unique Scene Alpha");
+    expect(titles[1]).toContain("Duplicate Scene Delta");
+    expect(titles[2]).toContain("Unique Scene Gamma");
+    expect(titles[3]).toContain("Duplicate Scene Beta");
+  });
+
+  test('R4 Adversarial: Drag and drop onto own card position is a stable no-op', async ({ page }) => {
+    await bootHarness(page, { sceneCount: 6, viewport: { width: 1400, height: 900 } });
+
+    const initialTitles = await getCardTitles(page);
+    expect(initialTitles[0]).toContain("Alpha");
+    expect(initialTitles[1]).toContain("Beta");
+
+    // Drag Alpha (index 0) over its own center
+    const alphaCenter = await page.evaluate(() => {
+      const c = document.querySelectorAll("#scene-list .scene-card")[0];
+      const r = c.getBoundingClientRect();
+      return { x: r.left + r.width * 0.5, y: r.top + r.height * 0.5 };
+    });
+    await simulateDrag(page, 0, alphaCenter.x, alphaCenter.y);
+
+    const postTitles = await getCardTitles(page);
+    expect(postTitles).toEqual(initialTitles);
+  });
+
+  test('R4 Adversarial: Rapid consecutive drag reorders in sequence maintain consistency', async ({ page }) => {
+    await bootHarness(page, { sceneCount: 6, viewport: { width: 1400, height: 900 } });
+
+    // Initial: 0:Alpha, 1:Beta, 2:Gamma, 3:Delta, 4:Epsilon, 5:Zeta
+
+    // Step 1: Move Alpha (0) after Gamma (2)
+    const gammaRight = await page.evaluate(() => {
+      const g = document.querySelectorAll("#scene-list .scene-card")[2];
+      const r = g.getBoundingClientRect();
+      return { x: r.left + r.width * 0.75, y: r.top + r.height * 0.5 };
+    });
+    await simulateDrag(page, 0, gammaRight.x, gammaRight.y);
+
+    let titles = await getCardTitles(page);
+    expect(titles[0]).toContain("Beta");
+    expect(titles[1]).toContain("Gamma");
+    expect(titles[2]).toContain("Alpha");
+
+    // Step 2: Move Zeta (5) to first position before Beta (0)
+    const betaLeft = await page.evaluate(() => {
+      const b = document.querySelectorAll("#scene-list .scene-card")[0];
+      const r = b.getBoundingClientRect();
+      return { x: r.left + r.width * 0.2, y: r.top + r.height * 0.5 };
+    });
+    await simulateDrag(page, 5, betaLeft.x, betaLeft.y);
+
+    titles = await getCardTitles(page);
+    expect(titles[0]).toContain("Zeta");
+    expect(titles[1]).toContain("Beta");
+    expect(titles[2]).toContain("Gamma");
+    expect(titles[3]).toContain("Alpha");
+
+    // Step 3: Move Alpha (3) to second position before Beta (1)
+    const betaLeftStep3 = await page.evaluate(() => {
+      const b = document.querySelectorAll("#scene-list .scene-card")[1];
+      const r = b.getBoundingClientRect();
+      return { x: r.left + r.width * 0.2, y: r.top + r.height * 0.5 };
+    });
+    await simulateDrag(page, 3, betaLeftStep3.x, betaLeftStep3.y);
+
+    titles = await getCardTitles(page);
+    // Final order: Zeta, Alpha, Beta, Gamma, Delta, Epsilon
+    expect(titles[0]).toContain("Zeta");
+    expect(titles[1]).toContain("Alpha");
+    expect(titles[2]).toContain("Beta");
+    expect(titles[3]).toContain("Gamma");
+    expect(titles[4]).toContain("Delta");
+    expect(titles[5]).toContain("Epsilon");
+  });
+
 });
