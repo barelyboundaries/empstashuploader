@@ -148,13 +148,53 @@ def get_build_stamp() -> Optional[str]:
     return None
 
 
+# Resolved once, at import, and never re-read.
+#
+# /health used to call get_build_stamp() per request, which reads BUILD_STAMP
+# off disk. Deploying a new plugin build rewrites that file underneath the
+# already-running sidecar, so the OLD process immediately began reporting the
+# NEW stamp. The plugin's StartBackend task compares /health's build_stamp
+# against the installed stamp to decide whether a sidecar is stale and needs
+# restarting -- so after any upgrade the two always matched, StartBackend
+# adopted the old process, and the check could never fire in the one situation
+# it exists for. Freezing the value at process start is what makes that
+# comparison mean "the code this process is running" instead of "whatever is
+# on disk right now".
+_build_stamp_cache: Optional[str] = None
+_build_stamp_cached: bool = False
+
+
+def current_build_stamp() -> Optional[str]:
+    """The build stamp as of this process's start.
+
+    Deliberately does NOT track later changes to BUILD_STAMP on disk; see the
+    note above. Use get_build_stamp() for a live read of what is on disk.
+    """
+    global _build_stamp_cache, _build_stamp_cached
+    if not _build_stamp_cached:
+        _build_stamp_cache = get_build_stamp()
+        _build_stamp_cached = True
+    return _build_stamp_cache
+
+
+def reset_build_stamp_cache() -> None:
+    """Drop the cached stamp so the next call re-resolves. Tests only."""
+    global _build_stamp_cache, _build_stamp_cached
+    _build_stamp_cache = None
+    _build_stamp_cached = False
+
+
+# Prime at import so the value reflects process start, not first request.
+current_build_stamp()
+
+
 @app.get("/health")
 def health():
     return {
         "status": "ok",
         "track": "Empornium Megapack Builder",
         "version": app.version,
-        "build_stamp": get_build_stamp(),
+        "build_stamp": current_build_stamp(),
         "stash_url": settings.stash_url,
         "staging_dir": str(settings.staging_dir),
         "output_dir": str(settings.output_dir),
