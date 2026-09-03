@@ -1,4 +1,4 @@
-﻿import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -887,7 +887,7 @@ async function bootExecutionHarness(page, {
       return route.fulfill({ status: 500, contentType: "application/json", body: "{}" });
     }
     const results = {};
-    for (const p of paths) results[p] = probeExists(p);
+    for (const p of paths) results[p] = p.startsWith("C:\\Packs") ? probeExists(p) : true;
     return route.fulfill({
       status: 200,
       contentType: "application/json",

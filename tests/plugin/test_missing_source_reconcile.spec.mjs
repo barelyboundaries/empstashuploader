@@ -50,15 +50,22 @@ function scene(id, title, files) {
   return { id, title, date: "2026-01-01", paths: { screenshot: "" }, files, performers: [], tags: [], studio: null };
 }
 
-async function bootHarness(page, { scenes, probeExists = () => false, mode = "megapack" }) {
+async function bootHarness(page, { scenes, probeExists = () => false, probeStatus = 200, mode = "megapack" }) {
   serveAssets(page);
-  const wire = { probes: [], builds: [] };
+  const wire = { probes: [], builds: [], moves: [] };
 
   await page.route("**/graphql", async (route) => {
     const postData = JSON.parse(route.request().postData() || "{}");
     const query = postData.query || "";
     if (query.includes("FindScenes")) {
       return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: { findScenes: { scenes } } }) });
+    }
+    if (query.includes("FindDestinationCollisions")) {
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: { findScenes: { scenes: [] } } }) });
+    }
+    if (query.includes("MoveFiles")) {
+      wire.moves.push(postData.variables);
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: { moveFiles: true } }) });
     }
     if (query.includes("runPluginTask")) {
       wire.builds.push(postData.variables);
@@ -68,6 +75,9 @@ async function bootHarness(page, { scenes, probeExists = () => false, mode = "me
   });
 
   await page.route("**/api/fs/exists", async (route) => {
+    if (probeStatus !== 200) {
+      return route.fulfill({ status: probeStatus, contentType: "application/json", body: JSON.stringify({ error: "Probe failed" }) });
+    }
     const postData = JSON.parse(route.request().postData() || "{}");
     const paths = postData.paths || [];
     wire.probes.push(paths);
@@ -161,5 +171,100 @@ test.describe("reconcileSourceFiles — auto-relink to a sibling file on disk", 
     const status = await page.locator("#status-text").innerText();
     expect(status).not.toContain("Auto-relinked");
     expect(status).not.toContain("Build aborted");
+  });
+
+  test("stale primary + existing sibling OUTSIDE the seed dir -> Build blocked naming scene, pointing to Consolidate; no dispatch", async ({ page }) => {
+    const OUTSIDE = "E:\\Outside";
+    const scenes = [
+      scene(70, "Outside Sibling Scene", [
+        file(700, `${SEED}\\stale-in-seed.mp4`),
+        file(701, `${OUTSIDE}\\surviving-outside.mp4`)
+      ]),
+      scene(80, "Fine Scene", [file(800, `${SEED}\\fine.mp4`)])
+    ];
+
+    const { wire } = await bootHarness(page, {
+      scenes,
+      probeExists: (p) => p === `${OUTSIDE}\\surviving-outside.mp4` || p === `${SEED}\\fine.mp4`
+    });
+
+    await page.evaluate(() => window.buildMegapack());
+
+    // Build does NOT dispatch
+    expect(wire.builds).toHaveLength(0);
+
+    const statusText = await page.locator("#status-text").innerText();
+    expect(statusText).toContain("Build aborted");
+    expect(statusText).toContain("Outside Sibling Scene");
+    expect(statusText).toContain("surviving-outside.mp4");
+    expect(statusText).toContain("run Consolidate to move them");
+  });
+
+  test("Consolidate on a scene whose primary is gone but a sibling exists -> move list carries the sibling, not the stale path", async ({ page }) => {
+    page.on("dialog", async (dialog) => { await dialog.accept(); });
+    const OUTSIDE = "E:\\Outside";
+    const scenes = [
+      scene(90, "Move Sibling Scene", [
+        file(900, `${OUTSIDE}\\stale-primary.mp4`),
+        file(901, `${OUTSIDE}\\surviving-sibling.mp4`)
+      ]),
+      scene(91, "In Place Scene", [file(910, `${SEED}\\in-place.mp4`)])
+    ];
+
+    const { wire } = await bootHarness(page, {
+      scenes,
+      probeExists: (p) => p === `${OUTSIDE}\\surviving-sibling.mp4` || p === `${SEED}\\in-place.mp4`
+    });
+
+    await page.locator("#btn-consolidate").click();
+
+    await expect(page.locator("#status-text")).toContainText("Files moved successfully!");
+    expect(wire.moves).toHaveLength(1);
+    expect(wire.moves[0].input.ids).toEqual([901]);
+    expect(wire.moves[0].input.destination_folder).toBe(SEED);
+  });
+
+  test("Consolidate on a scene with no file anywhere -> blocked with a clear reason, no move attempted", async ({ page }) => {
+    const OUTSIDE = "E:\\Outside";
+    const scenes = [
+      scene(92, "Missing Everywhere Scene", [file(920, `${OUTSIDE}\\missing.mp4`)]),
+      scene(93, "Second Scene", [file(930, `${OUTSIDE}\\fine.mp4`)])
+    ];
+
+    const { wire } = await bootHarness(page, {
+      scenes,
+      probeExists: (p) => p === `${OUTSIDE}\\fine.mp4`
+    });
+
+    await page.locator("#btn-consolidate").click();
+
+    expect(wire.moves).toHaveLength(0);
+    const status = page.locator("#status-text");
+    await expect(status).toContainText("Consolidation aborted");
+    await expect(status).toContainText("Missing Everywhere Scene (missing.mp4)");
+    await expect(status).toContainText("no file on disk anywhere");
+
+    const badge = page.locator('.scene-card[data-scene-id="92"] .badge-danger');
+    await expect(badge).toContainText("Source file missing");
+  });
+
+  test("Consolidate when sidecar probe fails (500) -> aborts fail-closed, no move attempted", async ({ page }) => {
+    const OUTSIDE = "E:\\Outside";
+    const scenes = [
+      scene(94, "Probe Error Scene", [file(940, `${OUTSIDE}\\scene.mp4`)]),
+      scene(95, "Second Scene", [file(950, `${OUTSIDE}\\second.mp4`)])
+    ];
+
+    const { wire } = await bootHarness(page, {
+      scenes,
+      probeStatus: 500
+    });
+
+    await page.locator("#btn-consolidate").click();
+
+    expect(wire.moves).toHaveLength(0);
+    const status = page.locator("#status-text");
+    await expect(status).toContainText("Consolidation aborted");
+    await expect(status).toContainText("filesystem check failed");
   });
 });

@@ -22,11 +22,9 @@ const __dirname = path.dirname(__filename);
 // mismatch — that is the signal to refresh ASSET_RECORD below in the same
 // commit, so unreviewed or truncated asset changes can never slip through.
 const ASSET_RECORD = {
-  // review.js: pre-Build reconcileSourceFiles() — probes every file record
-  // (not just the chosen primary) for each active scene, auto-relinks a
-  // stale primary to a sibling file confirmed present on disk, and blocks
-  // Build by scene name when nothing for a scene exists anywhere
-  'review.js': '4031d4b29b07a57e00e46734d561aef843b12f2c4c7d143f5c1661677293341d',
+  // review.js: reconcileSourceFiles() blocks out-of-seed relink from dispatching,
+  // and consolidateFiles() reconciles source files before building move list
+  'review.js': 'baa519429d63715540eee7e7564f580051547133cac5ea14bc07248998a868c0',
   // review.html: added #bbcode-edited-notice markup and styling above the BBCode toolbar
   'review.html': 'e20e40bdcf7cc21cafa078bdb30f2a8cfad4d425ed4aa4430e4c840f4eddf62d',
 };

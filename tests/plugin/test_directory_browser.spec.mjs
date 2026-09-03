@@ -1,4 +1,4 @@
-﻿import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -369,7 +369,7 @@ test.describe("Empornium Megapack Builder - Server Filesystem Directory Browser"
     await page.route("**/api/fs/exists", async (route) => {
       const postData = JSON.parse(route.request().postData() || "{}");
       const results = {};
-      for (const p of postData.paths || []) results[p] = false;
+      for (const p of postData.paths || []) results[p] = p.startsWith("E:\\TargetStorage") ? false : true;
       return route.fulfill({
         status: 200,
         contentType: "application/json",

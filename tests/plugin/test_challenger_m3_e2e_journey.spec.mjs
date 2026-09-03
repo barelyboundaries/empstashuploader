@@ -114,7 +114,7 @@ test.describe("Milestone 3 Challenger 2: Full End-to-End User Journey & Fault In
     await page.route("**/api/fs/exists", async (route) => {
       const postData = JSON.parse(route.request().postData() || "{}");
       const results = {};
-      for (const p of postData.paths || []) results[p] = false;
+      for (const p of postData.paths || []) results[p] = p.startsWith("C:\\Packs") ? false : true;
       return route.fulfill({
         status: 200,
         contentType: "application/json",

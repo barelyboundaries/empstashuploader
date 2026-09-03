@@ -1476,7 +1476,7 @@
     }
     if (allPaths.length === 0) {
       missingSourceSceneIds = new Set();
-      return { relinked: [], missing: [] };
+      return { relinked: [], missing: [], outsideSeed: [] };
     }
 
     let existsMap;
@@ -1485,11 +1485,12 @@
     } catch (err) {
       if (failClosed) throw err;
       showStatus(`Source-file check skipped: ${err.message}`, 0, true);
-      return { relinked: [], missing: [], skipped: true };
+      return { relinked: [], missing: [], outsideSeed: [], skipped: true };
     }
 
     const seedDir = (document.getElementById("output-dir")?.value || "").trim();
     const relinked = [];
+    const outsideSeed = [];
     const missing = [];
     for (const s of scenesToCheck) {
       const files = s.files || [];
@@ -1504,19 +1505,33 @@
       const underSeed = seedDir ? existingCandidates.filter((f) => isPathUnderSeed(f.path, seedDir)) : [];
       const best = pickBestFile(underSeed.length > 0 ? underSeed : existingCandidates);
       selectedFileBySceneId.set(String(s.id), String(best.id ?? best.path));
-      relinked.push({ sceneId: s.id, sceneTitle: s.title, from: current.path || "", to: best.path });
+      if (seedDir && underSeed.length === 0) {
+        outsideSeed.push({ sceneId: s.id, sceneTitle: s.title, from: current.path || "", to: best.path, path: best.path });
+      } else {
+        relinked.push({ sceneId: s.id, sceneTitle: s.title, from: current.path || "", to: best.path });
+      }
     }
     missingSourceSceneIds = new Set(missing.map((m) => String(m.sceneId)));
-    return { relinked, missing };
+    return { relinked, missing, outsideSeed };
   }
 
-  function describeReconcile({ relinked, missing }) {
+  function describeReconcile({ relinked = [], missing = [], outsideSeed = [] } = {}) {
     const parts = [];
     if (relinked.length > 0) {
       const detail = relinked
         .map((r) => `${r.sceneTitle || `Scene ${r.sceneId}`} → ${(r.to.split(/[\\/]/).pop() || r.to)}`)
         .join("; ");
       parts.push(`Auto-relinked ${relinked.length} scene(s) to a renamed file found on disk: ${detail}`);
+    }
+    if (outsideSeed.length > 0) {
+      const detail = outsideSeed
+        .map((o) => {
+          const label = o.sceneTitle || `Scene ${o.sceneId}`;
+          const base = o.to ? (o.to.split(/[\\/]/).pop() || o.to) : (o.path ? (o.path.split(/[\\/]/).pop() || o.path) : null);
+          return base ? `${label} (${base})` : label;
+        })
+        .join(", ");
+      parts.push(`${outsideSeed.length} scene(s) only have surviving files outside the seed directory — run Consolidate to move them: ${detail}`);
     }
     if (missing.length > 0) {
       const detail = missing
@@ -2625,7 +2640,7 @@
     // Split BEFORE the backstop: only files NOT already under the seed dir
     // (recursive containment — nested files count as in-place) are missing
     // and get moved; only they can clobber each other at the destination.
-    const toMove = fileItems.filter((item) => !isPathUnderSeed(item.path, destinationFolder));
+    let toMove = fileItems.filter((item) => !isPathUnderSeed(item.path, destinationFolder));
     const inPlaceItems = fileItems.filter((item) => isPathUnderSeed(item.path, destinationFolder));
     // In-place files need no move — mark them so the build gate sees the pack
     // as complete. Truthful regardless of how the rest of the run ends.
@@ -2633,26 +2648,82 @@
       consolidatedFileIds.add(item.id);
     }
 
-    // Pre-move basename collision check: MUST BLOCK BEFORE DESTRUCTIVE moveFiles
-    const basenameCounts = {};
-    for (const item of toMove) {
-      if (!item.path) continue;
-      const parts = item.path.split(/[\\/]/);
-      const bname = parts[parts.length - 1];
-      if (!bname) continue;
-      const norm = bname.toLowerCase();
-      basenameCounts[norm] = (basenameCounts[norm] || 0) + 1;
+    // Nothing missing: every primary already sits inside the seed dir —
+    // ZERO mutations and no confirm (there is no move to confirm).
+    if (toMove.length === 0) {
+      showStatus(`All ${fileItems.length} file(s) are already in '${destinationFolder}' — nothing to move.`, 1.0);
+      return;
     }
 
-    const collidingEntries = Object.keys(basenameCounts).filter((k) => basenameCounts[k] > 1);
-    if (collidingEntries.length > 0) {
+    function findBasenameCollisions(items) {
+      const counts = {};
+      for (const item of items) {
+        if (!item.path) continue;
+        const parts = item.path.split(/[\\/]/);
+        const bname = parts[parts.length - 1];
+        if (!bname) continue;
+        const norm = bname.toLowerCase();
+        counts[norm] = (counts[norm] || 0) + 1;
+      }
+      return Object.keys(counts).filter((k) => counts[k] > 1);
+    }
+    function reportBasenameCollisions(collidingEntries) {
       const errorMsg = `Consolidation blocked: Basename collision detected (${collidingEntries.length} duplicate filenames across active scenes): ${collidingEntries.join(", ")}. Multiple files cannot be moved to '${destinationFolder}' with identical names without clobbering. Please resolve conflicting scenes using the banner above.`;
       showStatus(errorMsg, 0, true);
       const banner = document.getElementById("collision-banner");
       if (banner) {
         banner.scrollIntoView({ behavior: "smooth", block: "center" });
       }
+    }
+
+    const initialCollisions = findBasenameCollisions(toMove);
+    if (initialCollisions.length > 0) {
+      reportBasenameCollisions(initialCollisions);
       return;
+    }
+
+    let reconciled;
+    try {
+      reconciled = await reconcileSourceFiles({ failClosed: true });
+    } catch (err) {
+      showStatus(`Consolidation aborted: filesystem check failed — ${err.message}`, 0, true);
+      return;
+    }
+    if (reconciled.missing.length > 0) {
+      showStatus(`Consolidation aborted: ${describeReconcile(reconciled)}`, 0, true);
+      renderScenes();
+      return;
+    }
+    if (reconciled.relinked.length > 0 || (reconciled.outsideSeed && reconciled.outsideSeed.length > 0)) {
+      renderScenes();
+      const updatedActive = activeScenes();
+      const updatedFileItems = updatedActive
+        .map((s) => {
+          const f = getPrimaryFile(s);
+          return {
+            id: f.id,
+            path: (f.path || "").trim(),
+            sceneId: s.id,
+            sceneTitle: s.title,
+            file: f
+          };
+        })
+        .filter((item) => item.id != null && item.path.length > 0);
+
+      toMove = updatedFileItems.filter((item) => !isPathUnderSeed(item.path, destinationFolder));
+      const newlyInPlace = updatedFileItems.filter((item) => isPathUnderSeed(item.path, destinationFolder));
+      for (const item of newlyInPlace) {
+        consolidatedFileIds.add(item.id);
+      }
+      if (toMove.length === 0) {
+        showStatus(`All ${updatedFileItems.length} file(s) are already in '${destinationFolder}' — nothing to move.`, 1.0);
+        return;
+      }
+      const updatedCollisions = findBasenameCollisions(toMove);
+      if (updatedCollisions.length > 0) {
+        reportBasenameCollisions(updatedCollisions);
+        return;
+      }
     }
 
     const sep = destinationFolder.includes("/") ? "/" : "\\";
@@ -3042,7 +3113,7 @@
       showStatus(`Build aborted: filesystem check failed — ${err.message}`, 0, true);
       return;
     }
-    if (reconciled.missing.length > 0) {
+    if (reconciled.missing.length > 0 || (reconciled.outsideSeed && reconciled.outsideSeed.length > 0)) {
       showStatus(`Build aborted: ${describeReconcile(reconciled)}`, 0, true);
       renderScenes();
       return;

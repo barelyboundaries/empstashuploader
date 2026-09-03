@@ -43,7 +43,7 @@ function setupMocks(page) {
   page.route("**/api/fs/exists*", async (route) => {
     const postData = JSON.parse(route.request().postData() || "{}");
     const results = {};
-    for (const p of postData.paths || []) results[p] = false;
+    for (const p of postData.paths || []) results[p] = p.startsWith("C:\\Packs") ? false : true;
     return route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -275,7 +275,7 @@ test.describe("Empornium Megapack Builder Milestone 2 — Adversarial Stress & E
     await page.route("**/api/fs/exists*", async (route) => {
       const postData = JSON.parse(route.request().postData() || "{}");
       const results = {};
-      for (const p of postData.paths || []) results[p] = false;
+      for (const p of postData.paths || []) results[p] = p.startsWith("C:\\Packs") ? false : true;
       return route.fulfill({
         status: 200,
         contentType: "application/json",

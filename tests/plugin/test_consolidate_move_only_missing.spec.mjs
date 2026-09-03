@@ -1,4 +1,4 @@
-﻿import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -130,7 +130,7 @@ async function bootHarness(page, {
     const paths = postData.paths || [];
     wire.probes.push(paths);
     const results = {};
-    for (const p of paths) results[p] = probeExists(p);
+    for (const p of paths) results[p] = p.startsWith(SEED) ? probeExists(p) : true;
     return route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -234,10 +234,15 @@ test.describe("consolidateFiles — move-only-missing into the seed dir", () => 
     expect(wire.moves[0].input.destination_basename).toBeUndefined();
     expect(wire.deletes).toHaveLength(0);
 
-    // The in-place files were never collision-probed: the discovery probe
-    // covers only the moved files' destination paths.
+    // The in-place files were never probed: source reconciliation and discovery
+    // probes cover only the moved files' source and destination paths.
     const probed = wire.probes.flat();
-    expect(probed).toEqual([`${SEED}\\missing_one.mp4`, `${SEED}\\missing_two.mp4`]);
+    expect(probed).toEqual([
+      "E:\\Elsewhere\\missing_one.mp4",
+      "C:\\Other\\missing_two.mp4",
+      `${SEED}\\missing_one.mp4`,
+      `${SEED}\\missing_two.mp4`
+    ]);
 
     // The overall confirm names the seed dir and only the moved count.
     expect(wire.nativeDialogs).toHaveLength(1);
@@ -301,9 +306,9 @@ test.describe("consolidateFiles — move-only-missing into the seed dir", () => 
     expect(wire.collisionQueries).toHaveLength(1);
     expect(wire.collisionQueries[0].path).toBe(SEED);
 
-    // ...and only the MOVED file's destination path was probed — the
-    // in-place file needed no collision check against its own location.
-    expect(wire.probes.flat()).toEqual([`${SEED}\\collide.mp4`]);
+    // ...and only the MOVED file was probed (source reconciliation + destination
+    // collision check) — the in-place file needed no check against its own location.
+    expect(wire.probes.flat()).toEqual(["E:\\Src\\collide.mp4", `${SEED}\\collide.mp4`]);
 
     // Default resolution: Keep existing -> no mutation for that file.
     await page.click("#btn-confirm-dest-collision");
