@@ -27,8 +27,8 @@ synthetic/legitimate. A new hit anywhere else fails the sweep. Dispositions:
   - passkey-credential / announce-shaped-hex32: torrents.py implements
     masking with "x" * 32; the listed tests exercise synthetic sequential
     hex tokens (0123...cdef, a1b2...cdef) and "passkey=" + "x" * 32 strings.
-  - config-local-ref: README.md / install.ps1 / install.sh DOCUMENT the
-    gitignored config.local.toml convention; .gitignore and
+  - config-local-ref: README.md / docs/*.md / install.ps1 / install.sh
+    DOCUMENT the gitignored config.local.toml convention; .gitignore and
     scripts/build_plugin_zip.mjs carry the deny rule itself. References are
     not secrets; the ignore rule denies the actual file (probe:
     git check-ignore -v config.local.toml).
@@ -73,6 +73,9 @@ $rules = [ordered]@{
     'config-local-ref'      = @{ pattern = '(?i)config\.local';                allow = @(
             '.gitignore',
             'README.md',
+            'docs/CONFIGURATION.md',
+            'docs/DEVELOPMENT.md',
+            'docs/TROUBLESHOOTING.md',
             'install.ps1',
             'install.sh',
             'scripts/build_plugin_zip.mjs') }

@@ -1,274 +1,200 @@
-# Empornium Megapack Builder
+<h1 align="center">Empornium Megapack Builder</h1>
 
-A Stash plugin that turns selected scenes into Empornium-ready releases. Pick
-scenes in Stash, open the in-Stash review UI, and build a megapack or a
-single-scene release: contact sheets, a torrent, and the BBCode post, all in
-one pass. An optional helper sidecar handles very large selections and folder
-browsing.
+<p align="center">
+  <strong>A Stash plugin that turns selected scenes into an upload-ready release.</strong><br>
+  Contact sheets, a torrent, and the finished BBCode post — in one pass, without leaving Stash.
+</p>
 
-This README is the single source of truth for the plugin. It replaces the
-older project docs.
+<p align="center">
+  <a href="#install"><img alt="Stash 0.31+" src="https://img.shields.io/badge/Stash-0.31%2B-2ea44f"></a>
+  <a href="#requirements"><img alt="Python 3.12+" src="https://img.shields.io/badge/Python-3.12%2B-3776ab"></a>
+  <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey">
+  <a href="LICENSE"><img alt="MIT" src="https://img.shields.io/badge/license-MIT-blue"></a>
+</p>
 
-## What it is
+<p align="center">
+  <img src="docs/screenshots/05-build-complete.png" alt="The review wizard after a completed build: artifact paths, tracker tags, and a green pre-flight checklist" width="100%">
+</p>
 
-- **In-Stash UI.** A bulk-action button on the Scenes page opens a review
-  wizard inside Stash. The wizard walks through setup, locations, scene
-  ordering, and the build actions.
-- **Two release modes.** Megapack (many scenes, one torrent) or Single Scene
-  (one scene, a full screens grid).
-- **Contact sheets.** Each scene gets a contact sheet generated with vcsi and
-  uploaded to HamsterImg. The image URLs land in the BBCode.
-- **Torrent + BBCode.** The build produces a torrent (private, with the
-  announce URL) and the formatted BBCode post ready to paste into Empornium.
-- **Optional sidecar.** A small local backend that carries large scene
-  selections (66+ scenes) past browser URL limits, offers a directory browser,
-  and prefills health checks. See [Sidecar](#sidecar).
+---
+
+## The problem
+
+Preparing a release by hand is a dozen manual steps across as many tools: generate a
+contact sheet for every scene, upload each one somewhere, copy the URLs back, gather
+performers and studio and resolution into tags, write the BBCode by hand, make the
+torrent, then check you didn't get any of it wrong.
+
+Doing that for one scene is tedious. Doing it for a forty-scene pack is a lost evening,
+and a single missed image or a stray `file:///` URL means re-doing the post.
+
+## What this does
+
+You select scenes in Stash and press one button. The plugin walks you through a
+four-stage review, then builds everything at once:
+
+- **Contact sheets** — one per scene, generated with `vcsi`/`ffmpeg` and uploaded to
+  an image host, with the returned URLs written into the post.
+- **A torrent** — private, with your announce URL embedded and the correct `source` tag.
+- **The BBCode post** — performers, studio, tags, resolution, duration and every image
+  embed, formatted and ready to paste.
+- **A pre-flight checklist** — every check must pass before the release is marked ready,
+  so you find the problem here rather than on the upload form.
+
+> [!IMPORTANT]
+> **This plugin never uploads to the tracker.** It prepares the release and hands you
+> the torrent, the title, the tags and the BBCode. You do the upload yourself, on the
+> tracker's own form. Nothing is posted on your behalf.
+
+## How it works
+
+```mermaid
+flowchart TD
+    A["Stash · Scenes page<br/>select scenes"] --> B["Review wizard<br/>4 stages, inside Stash"]
+    B --> BUILD(["Build"])
+
+    BUILD --> CS["Contact sheets<br/><i>vcsi + ffmpeg</i>"]
+    BUILD --> TOR[".torrent<br/><i>private, announce embedded</i>"]
+    CS --> IMG["Image host<br/><i>HamsterImg</i>"]
+    IMG --> BBC["BBCode post<br/><i>tags, specs, image embeds</i>"]
+
+    TOR --> CHK{"Pre-flight<br/>checklist"}
+    BBC --> CHK
+    CHK -->|all checks pass| OUT["Ready for manual upload"]
+    CHK -->|something failed| FIX["Blocked, with the reason"]
+```
+
+### Two release modes
+
+|  | **Megapack** | **Single Scene** |
+|---|---|---|
+| Scope | Many scenes, one torrent | One scene, one torrent |
+| Images | One contact sheet per scene | A full screens grid (10 by default) |
+| Consolidation | Can move scattered files into one seed folder | Not needed |
+
+## The four-stage wizard
+
+The wizard opens inside Stash as a bulk action on the Scenes page. Each stage is gated:
+**Next** validates what you just did and refuses to advance if something is wrong, so a
+build never starts from a bad state.
+
+| | |
+|---|---|
+| **1 · Setup**<br>Release mode, pack title, notes, and an optional cover image you can paste straight from the clipboard. | <img src="docs/screenshots/01-setup.png" alt="Stage 1, Setup" width="460"> |
+| **2 · Locations**<br>The **seed directory** the torrent is built over, and a **scratch directory** for generated artifacts. Both are verified to exist before you can continue. | <img src="docs/screenshots/02-locations.png" alt="Stage 2, Locations" width="460"> |
+| **3 · Scenes**<br>Drag to reorder, drop scenes you don't want, and resolve filename collisions. Two scenes with the same filename would overwrite each other, so the stage blocks until you choose. | <img src="docs/screenshots/03-scenes.png" alt="Stage 3, Scenes" width="460"> |
+| **4 · Actions**<br>Probe the filesystem, consolidate files into the seed folder, build, and review the generated BBCode — editable in place — before you copy it. | <img src="docs/screenshots/04-actions.png" alt="Stage 4, Actions" width="460"> |
+
+<sub>Screenshots use placeholder scenes and blank thumbnails — see
+<a href="scripts/capture_readme_screenshots.mjs"><code>scripts/capture_readme_screenshots.mjs</code></a>.</sub>
+
+### What you get
+
+When the build finishes, the panel hands you everything the upload form asks for:
+
+- The **`.torrent`**, written next to the seed directory.
+- The **pack title** and the **tracker tags**, dot-normalized and deduplicated, each with a copy button.
+- The **BBCode**, editable in place, with a size readout against the tracker's post budget.
+- A **manifest** and **submission JSON** in the scratch folder, for your own records.
+- The **pre-flight checklist**, itemised: preview images, presentation size, tracker tags,
+  torrent validity, media file verification, and torrent root name.
+
+If any check fails — most often BBCode still containing local `file:///` URLs because the
+image upload didn't happen — the release is marked **not ready** and the copy buttons are
+disabled. That is deliberate: it is easier to fix here than to edit a live post.
 
 ## Requirements
 
-- **Stash v0.31 or newer.**
-- **Python 3.12+ on PATH.** The plugin task runs as a child of the Stash
-  process and Stash execs `python` literally. On Linux distros that ship only
-  `python3`, install `python-is-python3` (or an equivalent symlink) so the
-  `python` command resolves.
-- **ffmpeg, optional with fallbacks.** The backend looks for ffmpeg in this
-  order: the `ffmpeg_binary` setting, then PATH, then the cove install, then
-  `~/.stash`. ffprobe is derived from the ffmpeg location automatically. If
-  none of those exist, contact sheets fail but the rest of the build still
-  runs.
-- **vcsi.** Auto-installed by the installer into the plugin's virtual
-  environment. You do not install it yourself.
-- **Installer-mandatory dependencies.** `plugin/requirements.txt` is not
-  pip-installable standalone: vcsi 7.0.17 pins pillow==11.2.1 and
-  numpy==2.2.6, which conflict with pillow>=12. Always install via
-  `install.ps1`/`install.sh`, which handle vcsi with `--no-deps`.
+| | |
+|---|---|
+| **Stash** | v0.31 or newer |
+| **Python** | 3.12+, on the PATH that Stash itself sees |
+| **ffmpeg** | Optional but needed for contact sheets. Found via the `ffmpeg_binary` setting, then PATH, then the cove install, then `~/.stash`. `ffprobe` is derived automatically. |
+| **vcsi** | Installed for you by the installer — don't install it yourself |
+| **An image host account** | A HamsterImg API key, so images are hosted remotely rather than as local paths |
+
+> [!NOTE]
+> Stash execs `python` literally. On distributions that ship only `python3`, install
+> `python-is-python3` (or add an equivalent symlink) or the task will not start.
+
+> [!WARNING]
+> **Always install through the installer script.** `plugin/requirements.txt` is not
+> pip-installable on its own: vcsi 7.0.17 pins `pillow==11.2.1` and `numpy==2.2.6`,
+> which conflict with `pillow>=12`. `install.ps1` / `install.sh` handle vcsi with
+> `--no-deps`; a plain `pip install -r` will fail or produce a broken environment.
 
 ## Install
 
-### Option A: from the Stash plugin source
+### From within Stash (recommended)
 
-1. In Stash, go to **Settings → Plugins → Add Source** and enter
-   `https://barelyboundaries.github.io/empstashuploader/index.yml`.
+1. In Stash, go to **Settings → Plugins → Add Source** and add:
 
-   GitHub Pages must be enabled on the `barelyboundaries/empstashuploader`
-   repository. The site is served by `.github/workflows/pages.yml`, which
-   builds the plugin zip and publishes `index.yml` on every push to `main`.
+   ```
+   https://barelyboundaries.github.io/empstashuploader/index.yml
+   ```
 
-2. Install the plugin from that source.
+2. Install **Empornium Megapack Builder** from that source.
 3. Open the installed plugin folder and run the installer:
-   - Windows: `install.ps1`
-   - macOS/Linux: `./install.sh`
 
-### Option B: manual
+   ```bash
+   ./install.sh
+   ```
 
-1. Download the release zip.
-2. Copy its contents to `~/.stash/plugins/empornium-megapack`.
-3. Run the installer from that folder (`install.ps1` on Windows,
-   `./install.sh` on macOS/Linux).
+   ```powershell
+   .\install.ps1
+   ```
 
-The installer verifies Python 3.12+, creates a virtual environment inside the
-plugin folder, installs the requirements, probes for ffmpeg, and prints next
-steps. It writes nothing outside the plugin folder.
+4. Reload plugins from **Settings → Plugins** (or restart Stash), then hard-refresh
+   your browser.
 
-After installing, reload plugins from **Settings → Plugins** (or restart
-Stash) and hard-refresh the browser.
+### Manual
 
-## Sidecar
+Download the release zip, extract it to `~/.stash/plugins/empornium-megapack`, and run
+the installer from that folder as above.
 
-Consolidation and its collision pre-check REQUIRES the sidecar to be running.
+The installer verifies your Python version, creates a virtual environment *inside the
+plugin folder*, installs the requirements, probes for ffmpeg, and prints what to do
+next. It writes nothing outside the plugin folder.
 
-The sidecar is a small FastAPI backend that binds to `127.0.0.1:9941`. It
-serves three things:
+### First run
 
-- **Large-selection transport.** Scene selections of 66+ scenes are carried
-  through a short-lived token instead of a URL, so browser URL length limits
-  and CSP iframe blocking never bite.
-- **Directory browser.** Browse folders when choosing seed and scratch
-  directories.
-- **Health prefill.** The review UI prefills directory fields from the
-  sidecar's health endpoint.
+Add your image host key and announce URL to `config.local.toml` in the plugin folder
+(next to `task.py`), then set the seed and scratch directories in stage 2 of the wizard.
+See **[Configuration](docs/CONFIGURATION.md)** for the full template.
 
-Port 9941 is a fixed constant: the CSP, the frontend, and the backend are all
-pinned to it. If the port is already occupied, the start scripts print a
-port-in-use error and exit.
+## The sidecar
 
-When the review UI is opened through the sidecar itself (port 9941),
-"Open scene in Stash" links fall back to Stash's default port 9999 — a
-documented limitation; if your Stash listens on a different port, those
-links will point to the wrong place.
+A small local FastAPI service, bound to `127.0.0.1:9941`. It is optional for ordinary
+builds and **required for consolidation**, and it provides three things:
 
-Start it with `start_backend.ps1` (Windows) or `start_backend.sh`
-(macOS/Linux) from the distribution root. The script uses the virtual
-environment the installer created under `plugin\.venv`; if that is missing it
-tells you to run the installer first.
+- **Large selections.** Packs of 66+ scenes are carried through a short-lived token
+  instead of the URL, so browser URL limits never truncate your selection.
+- **A directory browser.** Pick seed and scratch folders instead of typing paths.
+- **Health prefill.** The wizard fills directory fields from the sidecar on open.
 
-The sidecar binds to `127.0.0.1` only and has no authentication. Never expose
-it beyond the local machine.
+Start it with `start_backend.ps1` or `start_backend.sh`. It binds to loopback only and
+has no authentication — **never expose it beyond the local machine**.
 
-### Troubleshooting
+See **[Sidecar](docs/SIDECAR.md)** for the port policy and its specific error messages.
 
-If you see one of these errors when running consolidation:
+## Security
 
-- `Consolidation aborted: destination check failed — Filesystem probe failed (HTTP 404)`
-- `Consolidation aborted: destination check failed — Filesystem probe failed: destination not reachable`
+- The **announce URL exists only inside the built `.torrent`**. It never appears in the
+  UI, the logs, or the BBCode; passkeys are masked in sanitized output.
+- Secrets live only in `config.local.toml` (gitignored) or `EMPORNIUM_` environment
+  variables. They are never written to committed files.
+- The sidecar is loopback-only and unauthenticated. Treat it accordingly.
+- Rotate your image host API key periodically.
 
-**Cause:** The sidecar is not running, or the installed version is outdated.
+## Documentation
 
-**Fix:** Run `start_backend.ps1` (Windows) or `start_backend.sh` (macOS/Linux)
-from the distribution root. If the virtual environment is missing, run
-`install.ps1` (or `install.sh`) first to create it.
-
-## Configuration
-
-The backend reads `config.local.toml`. It looks for the file in this order:
-
-1. The repository root (a dev checkout).
-2. The package's parent directory, which is the plugin folder when the package
-   is vendored at `~/.stash/plugins/empornium-megapack`.
-
-So in an installed plugin, put `config.local.toml` next to `task.py` in the
-plugin folder. In a dev checkout, put it at the repo root.
-
-Runtime directories (staging, output, scratch) default to
-`~/.empornium-megapack/runtime/` on end-user machines. They are never placed
-under `~/.stash`, which Stash watches and would churn on plugin reloads. In a
-dev checkout they stay under the repo's `runtime/` folder.
-
-Every setting can also be set through an environment variable with the
-`EMPORNIUM_` prefix. For example `EMPORNIUM_HAMSTER_API_KEY` overrides
-`hamster_api_key`.
-
-Here is the full template. Every field from the backend's `Settings` class is
-listed with an empty or default value. Fill in only what you need. **Never
-commit this file**; it is gitignored (`config.local.*`).
-
-```toml
-[backend]
-host = "127.0.0.1"
-port = 9941
-stash_url = "http://localhost:9999"
-stash_api_key = ""
-staging_dir = ""
-output_dir = ""
-scratch_dir = ""
-allow_origins = ["http://localhost:9999"]
-file_time_policy = "creation"
-file_time_ascending = true
-stash_fetch_workers = 8
-debug_harness = false
-hamster_api_key = ""
-contact_sheet_layout = "3x6"
-contact_sheet_vcsi_timeout = 900
-contact_sheet_upload_timeout = 60
-contact_sheet_upload_retries = 3
-contact_sheet_upload_backoff_base = 0.5
-contact_sheet_upload_backoff_max = 15.0
-contact_sheet_max_bytes = 10000000
-upload_image_max_bytes = 10000000
-presentation_max_bytes = 23000000
-presentation_min_image_bytes = 120000
-single_scene_screens = 10
-screen_extract_timeout = 120
-include_performer_images = true
-include_scene_cover = true
-vcsi_binary = ""
-ffmpeg_binary = ""
-empornium_announce_url = ""
-empornium_site_url = ""
-torrent_source = ""
-bundle_after_build = false
-pack_download_timeout = 3600
-path_mappings = []
-```
-
-Secrets (the HamsterImg API key, the Empornium announce URL) live only in this
-file or in `EMPORNIUM_` environment variables. They never appear in committed
-files.
-
-## Updates & uninstall
-
-**Update.** Re-run the Add Source install, or re-copy the zip over the plugin
-folder. Whether the in-app installer wipes the folder depends on the Stash
-version, so back up `config.local.toml` before updating. If the virtual
-environment is gone after an update, re-run the installer script in the plugin
-folder to recreate it.
-
-**Uninstall.** Delete the plugin folder (`~/.stash/plugins/empornium-megapack`)
-and, if present, `~/.empornium-megapack/`.
-
-## Releases
-
-Each release bumps the `version:` field in `empornium-megapack.yml`. The
-published index version derives from it as `<version>-<shortsha>`, so keep the
-field in sync with the release you are publishing.
-
-## Behavior notes
-
-- **Contact sheets degrade and continue.** If an image fails, the build
-  continues with an explicit placeholder rather than aborting. This is the
-  default and by design; there is no strictness toggle.
-- **The announce URL lives only inside the built `.torrent`.** It never
-  appears in the UI, the logs, or the BBCode.
-
-## Security notes
-
-- **Rotate the HamsterImg API key periodically.** The announce passkey is
-  masked in logs and sanitized output, never logged in place.
-- **The sidecar has no authentication.** It binds to `127.0.0.1` only. Never
-  expose it.
-- **Secrets live only in `config.local.toml`** (gitignored) or in `EMPORNIUM_`
-  environment variables.
-
-## Troubleshooting
-
-| Symptom | Cause / fix |
+| | |
 |---|---|
-| Plugin missing from `{ plugins { id } }` | Manifest failed to parse. Check `empornium-megapack.yml`. |
-| Registered as ID `plugin` | The manifest was renamed to `plugin.yml`. Keep it named `empornium-megapack.yml`; the ID comes from the filename. |
-| Modal opens blank / iframe 404 | `ui.assets` mapping missing, or `/plugins/` used instead of `/plugin/`. |
-| Task dispatch returns HTTP 400 | Plugin task args must be objects, not raw strings. |
-| Progress bar hangs at 5% forever | WebSocket subprotocol mismatch. The subscription must use `graphql-transport-ws`. |
-| `python` not found when a task runs | Python 3.12+ is not on the PATH Stash sees. Install it and reload plugins. |
-| `fork/exec ...{pluginDir}...` not found | `{pluginDir}` was used in the `exec` element 0 position. Put a real binary there and the placeholder in an argument. |
-| Contact sheets fail | `vcsi` or `ffmpeg` missing from the PATH of the Stash process. See Requirements. |
-| Friendly missing-packages message at task start | Run the installer script in the plugin folder to set up the virtual environment. |
-| Seed/scratch directory empty at first run | Set them in Stage 2 of the wizard. They no longer carry machine defaults. |
+| **[Configuration](docs/CONFIGURATION.md)** | Every setting, the full `config.local.toml` template, environment variables, runtime directories |
+| **[Sidecar](docs/SIDECAR.md)** | What it does, the fixed port, and its specific failure messages |
+| **[Troubleshooting](docs/TROUBLESHOOTING.md)** | Symptom-to-cause table for install and runtime problems |
+| **[Development](docs/DEVELOPMENT.md)** | Test suites, GraphQL schema conformance, the `deleteFiles` contract, release process |
 
-## Development
+## License
 
-Run the backend tests:
-
-```bash
-pytest tests/backend tests/e2e -q
-```
-
-Run the Playwright UI tests:
-
-```bash
-npx playwright test
-```
-
-**GraphQL schema conformance.** The Playwright suite mocks every GraphQL
-response, so a query the real Stash rejects still looks green. This script
-validates each embedded GraphQL document against the live schema by
-introspection:
-
-```bash
-node scripts/check_graphql_schema.mjs
-```
-
-It requires a live Stash on port 9999 for the introspection. Everything else
-in the repo is offline-safe. Exit 1 means a new violation. Pre-existing
-violations covered by runtime fallbacks are recorded in
-`scripts/graphql_schema_baseline.json`; shrink that list, don't grow it.
-
-**deleteFiles contract.** Schema conformance proves a call is well-formed, not
-that the server will allow it. This script pins the server-side rules the
-consolidation path depends on:
-
-```bash
-node scripts/contract_delete_files_live.mjs --i-know-this-writes-to-stash
-```
-
-It writes to Stash, so it refuses to run without the opt-in flag. It generates
-its own clip, never touches a pre-existing scene, and cleans up after itself.
+[MIT](LICENSE)
