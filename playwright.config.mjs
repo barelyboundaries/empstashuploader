@@ -38,7 +38,8 @@ export default defineConfig({
     'test_adversarial_preview_challenger_2.spec.mjs',
     'test_scene_grid_drag.spec.mjs',
     'test_scene_card_interior.spec.mjs',
-    'test_bbcode_toolbar.spec.mjs'
+    'test_bbcode_toolbar.spec.mjs',
+    'test_missing_source_reconcile.spec.mjs'
   ],
   outputDir: path.join(evidenceDir, 'test-results'),
   fullyParallel: false,

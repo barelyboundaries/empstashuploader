@@ -22,8 +22,11 @@ const __dirname = path.dirname(__filename);
 // mismatch — that is the signal to refresh ASSET_RECORD below in the same
 // commit, so unreviewed or truncated asset changes can never slip through.
 const ASSET_RECORD = {
-  // review.js: added the edited-preview notice (paused live updates) and its reset-to-generated affordance
-  'review.js': '4a66092ca8b30238a68583d1c4cf886172e0de97c2c66bf44e83551fe2c80489',
+  // review.js: pre-Build reconcileSourceFiles() — probes every file record
+  // (not just the chosen primary) for each active scene, auto-relinks a
+  // stale primary to a sibling file confirmed present on disk, and blocks
+  // Build by scene name when nothing for a scene exists anywhere
+  'review.js': '4031d4b29b07a57e00e46734d561aef843b12f2c4c7d143f5c1661677293341d',
   // review.html: added #bbcode-edited-notice markup and styling above the BBCode toolbar
   'review.html': 'e20e40bdcf7cc21cafa078bdb30f2a8cfad4d425ed4aa4430e4c840f4eddf62d',
 };

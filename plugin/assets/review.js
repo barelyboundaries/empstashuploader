@@ -19,6 +19,7 @@
   let selectedFileBySceneId = new Map(); // sceneId -> fileId / filePath
   let sceneSuperioritiesMap = new Map(); // sceneId -> [{ type, label, title }]
   let consolidatedFileIds = new Set(); // file ids successfully moved to output_dir
+  let missingSourceSceneIds = new Set(); // sceneId (string) -> no known file exists on disk, per reconcileSourceFiles()
   let showOnlyConflicts = false;
   let probeResultsMap = {};
   let activeJobId = null;
@@ -1405,17 +1406,13 @@
     return `Group ${label}`;
   }
 
-  function getPrimaryFile(scene) {
-    if (!scene || !scene.files || !Array.isArray(scene.files) || scene.files.length === 0) return {};
-    const sId = String(scene.id);
-    if (selectedFileBySceneId.has(sId)) {
-      const targetId = String(selectedFileBySceneId.get(sId));
-      const found = scene.files.find((f) => (f.id != null && String(f.id) === targetId) || f.path === targetId);
-      if (found) return found;
-    }
-    let best = scene.files[0];
-    for (let i = 1; i < scene.files.length; i++) {
-      const f = scene.files[i];
+  // Highest-resolution, then largest-size, file among the given candidates.
+  // Shared by getPrimaryFile() (all of a scene's files) and
+  // reconcileSourceFiles() (only the candidates confirmed present on disk).
+  function pickBestFile(files) {
+    let best = files[0];
+    for (let i = 1; i < files.length; i++) {
+      const f = files[i];
       const bestRes = getEffectiveResolution(best.height, best.width);
       const fRes = getEffectiveResolution(f.height, f.width);
       if (fRes > bestRes) {
@@ -1425,6 +1422,113 @@
       }
     }
     return best;
+  }
+
+  function getPrimaryFile(scene) {
+    if (!scene || !scene.files || !Array.isArray(scene.files) || scene.files.length === 0) return {};
+    const sId = String(scene.id);
+    if (selectedFileBySceneId.has(sId)) {
+      const targetId = String(selectedFileBySceneId.get(sId));
+      const found = scene.files.find((f) => (f.id != null && String(f.id) === targetId) || f.path === targetId);
+      if (found) return found;
+    }
+    return pickBestFile(scene.files);
+  }
+
+  // Cross-checks EVERY known file of every active scene (not just the
+  // currently chosen primary) against the real filesystem in one batched
+  // call. Fixes the class of bug where Stash's primary file record for a
+  // scene has gone stale (renamed/deduped outside Stash) while a sibling
+  // file record for the same scene still points at something real:
+  //   - If the current pick is confirmed present, the scene is untouched.
+  //   - If it's gone but another file Stash already knows about for that
+  //     scene IS present, auto-repoint selectedFileBySceneId at it (the fix
+  //     a human would otherwise make by hand via the version dropdown),
+  //     preferring one already under the seed dir when there's a choice.
+  //   - If nothing for the scene exists anywhere, the scene is recorded in
+  //     missingSourceSceneIds instead of only failing later, deep in Build
+  //     or (worse) inside task.py.
+  // failClosed mirrors pathExistsBatch's own contract: when true (the
+  // pre-Build gate), a probe failure re-throws so Build aborts rather than
+  // risk treating "couldn't check" as "exists". When false (the passive
+  // post-load pass), a probe failure is swallowed with a warning so an
+  // unreachable sidecar doesn't brand every scene in the pack as missing
+  // during ordinary review.
+  async function reconcileSourceFiles({ failClosed = false } = {}) {
+    const active = activeScenes();
+    // Session-consolidated scenes are excluded from the probe ENTIRELY (not
+    // just their result): moveFiles already placed the file and its
+    // locally-known path may still be the pre-move one (moveFiles returns
+    // only Boolean!, never an echoed path), so a probe would look stale for
+    // no reason. This also matches the old build-time check's behavior of
+    // making zero network calls once every active scene is consolidated.
+    const scenesToCheck = [];
+    const allPaths = [];
+    for (const s of active) {
+      const files = s.files || [];
+      if (files.length === 0) continue;
+      const current = getPrimaryFile(s);
+      if (current.id && consolidatedFileIds.has(current.id)) continue;
+      scenesToCheck.push(s);
+      for (const f of files) {
+        if (f && f.path) allPaths.push(f.path.trim());
+      }
+    }
+    if (allPaths.length === 0) {
+      missingSourceSceneIds = new Set();
+      return { relinked: [], missing: [] };
+    }
+
+    let existsMap;
+    try {
+      existsMap = await pathExistsBatch(allPaths);
+    } catch (err) {
+      if (failClosed) throw err;
+      showStatus(`Source-file check skipped: ${err.message}`, 0, true);
+      return { relinked: [], missing: [], skipped: true };
+    }
+
+    const seedDir = (document.getElementById("output-dir")?.value || "").trim();
+    const relinked = [];
+    const missing = [];
+    for (const s of scenesToCheck) {
+      const files = s.files || [];
+      const current = getPrimaryFile(s);
+      if (current.path && existsMap[current.path.trim()] === true) continue;
+
+      const existingCandidates = files.filter((f) => f.path && existsMap[f.path.trim()] === true);
+      if (existingCandidates.length === 0) {
+        missing.push({ sceneId: s.id, sceneTitle: s.title, path: current.path || (files[0] && files[0].path) || "" });
+        continue;
+      }
+      const underSeed = seedDir ? existingCandidates.filter((f) => isPathUnderSeed(f.path, seedDir)) : [];
+      const best = pickBestFile(underSeed.length > 0 ? underSeed : existingCandidates);
+      selectedFileBySceneId.set(String(s.id), String(best.id ?? best.path));
+      relinked.push({ sceneId: s.id, sceneTitle: s.title, from: current.path || "", to: best.path });
+    }
+    missingSourceSceneIds = new Set(missing.map((m) => String(m.sceneId)));
+    return { relinked, missing };
+  }
+
+  function describeReconcile({ relinked, missing }) {
+    const parts = [];
+    if (relinked.length > 0) {
+      const detail = relinked
+        .map((r) => `${r.sceneTitle || `Scene ${r.sceneId}`} → ${(r.to.split(/[\\/]/).pop() || r.to)}`)
+        .join("; ");
+      parts.push(`Auto-relinked ${relinked.length} scene(s) to a renamed file found on disk: ${detail}`);
+    }
+    if (missing.length > 0) {
+      const detail = missing
+        .map((m) => {
+          const label = m.sceneTitle || `Scene ${m.sceneId}`;
+          const base = m.path ? (m.path.split(/[\\/]/).pop() || m.path) : null;
+          return base ? `${label} (${base})` : label;
+        })
+        .join(", ");
+      parts.push(`${missing.length} scene(s) have no file on disk anywhere — remove them from the pack or restore the source: ${detail}`);
+    }
+    return parts.join(" | ");
   }
 
   function computeDuplicateGroups() {
@@ -1731,6 +1835,9 @@
       } else if (rawAllFiles.length > 1) {
         buildDisabled = true;
         buildReason = `Single Scene mode requires exactly 1 media file (found ${rawAllFiles.length})`;
+      } else if (missingSourceSceneIds.has(String(active[0].id))) {
+        buildDisabled = true;
+        buildReason = "This scene's file was not found on disk under any known path. Restore the source or remove the scene.";
       } else {
         // In-place parity (todo 7): the single scene's primary must sit under
         // the seed dir too — same recursive containment as megapack mode.
@@ -1770,6 +1877,15 @@
 
         buildDisabled = true;
         buildReason = `${collisionCount} filename collision${collisionCount > 1 ? "s" : ""} must be resolved first`;
+      } else if (missingSourceSceneIds.size > 0) {
+        const names = active
+          .filter((s) => missingSourceSceneIds.has(String(s.id)))
+          .map((s) => s.title || `Scene ${s.id}`);
+        const reason = `${missingSourceSceneIds.size} scene(s) have no file on disk anywhere: ${names.join(", ")}. Restore the source(s) or remove the scene(s) from the pack.`;
+        consolidateDisabled = true;
+        consolidateReason = reason;
+        buildDisabled = true;
+        buildReason = reason;
       } else {
         // In-place gating (todo 7): Build is enabled iff every active scene's
         // chosen primary sits under the seed dir (recursive). The old
@@ -1958,6 +2074,13 @@
         duplicateBadge = `<span class="badge badge-danger" title="Filename collision with other scene(s) in pack">⚠️ Duplicate filename · ${escapeHtml(dupInfo.label)} (${dupInfo.ordinal} of ${dupInfo.total})</span>`;
       }
 
+      // Missing Source Badge: reconcileSourceFiles() found no file for this
+      // scene anywhere on disk (not just outside the seed dir — gone).
+      let missingSourceBadge = "";
+      if (missingSourceSceneIds.has(String(scene.id))) {
+        missingSourceBadge = `<span class="badge badge-danger" title="No file for this scene was found on disk under any known path. Restore the source file or remove this scene from the pack.">🚫 Source file missing</span>`;
+      }
+
       // Quality / Superiority Badges
       let superiorBadgesHtml = "";
       if (dupInfo && currentMode !== "single") {
@@ -2046,6 +2169,7 @@
             <span>👤 ${escapeHtml(performers)}</span>
             <span>📅 ${escapeHtml(scene.date || "Unknown date")}</span>
             ${duplicateBadge}
+            ${missingSourceBadge}
             ${superiorBadgesHtml}
             ${capabilityBadge}
           </div>
@@ -2893,6 +3017,9 @@
     // In-place gating (todo 7): every active scene's chosen primary must sit
     // under the seed dir (recursive). Mirrors task.py's
     // validate_pack_files_present so the UI blocks before the backend does.
+    // This is a cheap, local string check — it runs BEFORE the network
+    // disk-existence probe below so a file that's simply not consolidated
+    // yet (the common, expected case) never triggers a filesystem call.
     const { missing } = computeMissingSeedFiles();
     if (missing.length > 0) {
       showStatus(`Build aborted: ${formatMissingSeedFilesReason(missing)}`, 0, true);
@@ -2900,27 +3027,29 @@
     }
 
     // Authoritative on-disk existence probe (POST /api/fs/exists, chunked at
-    // 100 paths, fail-closed on non-200/network error via pathExistsBatch).
-    // A file the Stash metadata places under the seed dir may still be absent
-    // on disk (stale DB, deleted file) — block here, not deep in task.py.
-    // Session-consolidated files are skipped: moveFiles already placed them
-    // and their local paths may predate the move.
-    const probePaths = active
-      .map((s) => getPrimaryFile(s))
-      .filter((f) => f.path && !(f.id && consolidatedFileIds.has(f.id)))
-      .map((f) => f.path.trim());
-    let existsMap = null;
+    // 100 paths, fail-closed on non-200/network error). A file the Stash
+    // metadata places under the seed dir may still be absent on disk (stale
+    // DB, deleted/renamed file) — block here, not deep in task.py. Checks
+    // every file record Stash knows about for each scene, not just the
+    // chosen primary: if the primary has gone stale but a sibling file for
+    // the same scene is confirmed present, auto-relinks to it instead of
+    // failing; only a scene with nothing left on disk anywhere aborts the
+    // build, named exactly.
+    let reconciled;
     try {
-      existsMap = await pathExistsBatch(probePaths);
+      reconciled = await reconcileSourceFiles({ failClosed: true });
     } catch (err) {
       showStatus(`Build aborted: filesystem check failed — ${err.message}`, 0, true);
       return;
     }
-    const notOnDisk = probePaths.filter((p) => existsMap[p] !== true);
-    if (notOnDisk.length > 0) {
-      const names = notOnDisk.map((p) => p.split(/[\\/]/).pop() || p);
-      showStatus(`Build aborted: ${names.length} file(s) missing from the seed directory on disk: ${names.join(", ")}. Run Consolidate or add the missing files.`, 0, true);
+    if (reconciled.missing.length > 0) {
+      showStatus(`Build aborted: ${describeReconcile(reconciled)}`, 0, true);
+      renderScenes();
       return;
+    }
+    if (reconciled.relinked.length > 0) {
+      renderScenes();
+      showStatus(describeReconcile(reconciled), 0, false);
     }
 
     const packTitle = document.getElementById("pack-title")?.value || (isSingle ? "Untitled Scene" : "Megapack");
