@@ -1785,11 +1785,21 @@ def run_build_megapack(payload: Any, server_connection: Optional[Dict[str, Any]]
         else:
             if safe_override_cover_url:
                 bbcode_lines.append(f"\n[center][img]{safe_override_cover_url}[/img][/center]\n")
+            # Emit every thumbnail on ONE logical line. The tracker runs the
+            # description through nl2br, so a newline between two [img] tags
+            # becomes a <br> and forces one thumbnail per row -- a 130-sheet
+            # pack then renders roughly 6x taller than it needs to be. Joined
+            # with no separator the thumbnails still wrap on their own and
+            # fill the post width, which is what the single-scene "Screens"
+            # section above already does.
+            sheets_markup = []
             for i, full_u in enumerate(contact_sheet_urls):
                 safe_full = _sanitize_image_url(full_u)
                 thumb_u = contact_sheet_thumb_urls[i] if i < len(contact_sheet_thumb_urls) and contact_sheet_thumb_urls[i] else full_u
                 safe_thumb = _sanitize_image_url(thumb_u)
-                bbcode_lines.append(f"[url={safe_full}][img={THUMB_WIDTH}]{safe_thumb}[/img][/url]")
+                sheets_markup.append(f"[url={safe_full}][img={THUMB_WIDTH}]{safe_thumb}[/img][/url]")
+            if sheets_markup:
+                bbcode_lines.append("".join(sheets_markup))
 
         bbcode_content = "\n".join(bbcode_lines)
         bbcode_path = os.path.join(artifact_dir, f"{safe_title}_bbcode.txt")
