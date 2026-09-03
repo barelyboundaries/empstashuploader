@@ -587,7 +587,48 @@ test.describe('BBCode Formatting Toolbar & Textarea Single Source of Truth', () 
     const scrollAfter = await page.evaluate(() => document.getElementById('bbcode-preview').scrollTop);
     expect(scrollAfter).toBe(scrollBefore);
   });
+  // 20. Editing the preview surfaces a paused notice instead of freezing silently
+  test('20. Editing surfaces a paused notice naming the frozen live preview', async ({ page }) => {
+    await page.goto('http://localhost:9999/plugins/empornium-megapack/review.html?scenes=1,2&mode=megapack');
+    await expect(page.locator('.scene-card')).toHaveCount(2);
+
+    const notice = page.locator('#bbcode-edited-notice');
+    const textarea = page.locator('#bbcode-preview');
+
+    // Nothing edited yet: no notice.
+    await expect(notice).toBeHidden();
+
+    await textarea.fill('[b]My own layout[/b]');
+    await textarea.dispatchEvent('input');
+
+    // The user must be told the live preview has stopped, with a way back.
+    await expect(notice).toBeVisible();
+    await expect(page.locator('#bbcode-edited-notice-text')).toContainText('stopped updating');
+    await expect(page.locator('#btn-bbcode-reset')).toContainText('Resume live preview');
+  });
+
+  // 21. Reset discards the edit, restores generated text, and resumes live updates
+  test('21. Reset restores the generated preview and live updates resume afterwards', async ({ page }) => {
+    await page.goto('http://localhost:9999/plugins/empornium-megapack/review.html?scenes=1,2&mode=megapack');
+    await expect(page.locator('.scene-card')).toHaveCount(2);
+
+    const notice = page.locator('#bbcode-edited-notice');
+    const textarea = page.locator('#bbcode-preview');
+    const generated = await textarea.inputValue();
+
+    await textarea.fill('[b]Throwaway edit[/b]');
+    await textarea.dispatchEvent('input');
+    await expect(notice).toBeVisible();
+
+    await page.locator('#btn-bbcode-reset').click();
+
+    // Edit discarded, generated text back, notice gone.
+    await expect(textarea).toHaveValue(generated);
+    await expect(notice).toBeHidden();
+
+    // And the latch really cleared: a title change flows through again.
+    await page.locator('#pack-title').fill('Resumed Pack Title');
+    await expect(textarea).toHaveValue(/Resumed Pack Title/);
+    await expect(notice).toBeHidden();
+  });
 });
-
-
-

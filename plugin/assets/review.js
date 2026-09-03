@@ -45,6 +45,50 @@
   let savedSelection = { start: 0, end: 0 };
   let savedScrollTop = 0;
   let currentPopoverTag = null;
+  // Last BBCode written programmatically, so "reset" can put it back.
+  let lastFinalBBCode = null;
+
+  // updateBBCode() stops regenerating as soon as bbcodeUserEdited latches.
+  // That is deliberate -- it is what stops a scene-selection change wiping
+  // the user's edit -- but silently freezing the preview reads as a bug, so
+  // say so on screen and offer the way back.
+  function refreshBBCodeEditedNotice() {
+    const notice = document.getElementById("bbcode-edited-notice");
+    if (!notice) return;
+    if (!bbcodeUserEdited) {
+      notice.style.display = "none";
+      return;
+    }
+    const label = document.getElementById("bbcode-edited-notice-text");
+    const btn = document.getElementById("btn-bbcode-reset");
+    if (label) {
+      label.innerText = bbcodeIsFinal
+        ? "✏️ Edited — this no longer matches the build output."
+        : "✏️ Edited — the live preview has stopped updating.";
+    }
+    if (btn) {
+      btn.innerText = bbcodeIsFinal ? "Restore build output" : "Resume live preview";
+    }
+    notice.style.display = "flex";
+  }
+
+  function markBBCodeEdited() {
+    bbcodeUserEdited = true;
+    refreshBBCodeEditedNotice();
+  }
+
+  // Discard the user's edits and go back to the generated text. Writes via
+  // .value on purpose: that fires no input event, so the latch stays clear.
+  function resetBBCodeToGenerated() {
+    bbcodeUserEdited = false;
+    const previewEl = document.getElementById("bbcode-preview");
+    if (bbcodeIsFinal && lastFinalBBCode !== null) {
+      if (previewEl) previewEl.value = lastFinalBBCode;
+    } else {
+      updateBBCode();
+    }
+    refreshBBCodeEditedNotice();
+  }
 
   function initBBCodeToolbar() {
     const textarea = document.getElementById("bbcode-preview");
@@ -52,9 +96,15 @@
     textarea.dataset.toolbarBound = "true";
 
     textarea.addEventListener("input", () => {
-      bbcodeUserEdited = true;
+      markBBCodeEdited();
       updateSavedSelection();
     });
+
+    const resetBtn = document.getElementById("btn-bbcode-reset");
+    if (resetBtn && !resetBtn.dataset.bound) {
+      resetBtn.dataset.bound = "true";
+      resetBtn.addEventListener("click", resetBBCodeToGenerated);
+    }
 
     const updateSavedSelection = () => {
       savedSelection.start = textarea.selectionStart;
@@ -79,7 +129,7 @@
     });
 
     function applyBBCodeFormat(openTag, closeTag) {
-      bbcodeUserEdited = true;
+      markBBCodeEdited();
       if (popover && popover.style.display !== "none") {
         popover.style.display = "none";
         currentPopoverTag = null;
@@ -2805,6 +2855,8 @@
   async function buildMegapack() {
     bbcodeIsFinal = false;
     bbcodeUserEdited = false;
+    lastFinalBBCode = null;
+    refreshBBCodeEditedNotice();
     updateBBCode();
 
     const active = activeScenes();
@@ -3443,6 +3495,8 @@
       if (bbcodeBox && finalBBCode) {
         bbcodeBox.value = finalBBCode;
         bbcodeIsFinal = true;
+        lastFinalBBCode = finalBBCode;
+        refreshBBCodeEditedNotice();
         if (bbcodeWarning) bbcodeWarning.style.display = "none";
       } else if (payload?.bbcode_truncated) {
         if (bbcodeWarning) {

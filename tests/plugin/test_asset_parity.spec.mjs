@@ -22,10 +22,10 @@ const __dirname = path.dirname(__filename);
 // mismatch — that is the signal to refresh ASSET_RECORD below in the same
 // commit, so unreviewed or truncated asset changes can never slip through.
 const ASSET_RECORD = {
-  // review.js: removed SCEditor wiring, implemented BBCode formatting toolbar, native execCommand undo, R4 user edit preservation, and robust selection/popover tracking
-  'review.js': '500dde50b3d37b5e86c14111d5823744f0dd51b372add7af9c59c4981b2d3f0b',
-  // review.html: removed SCEditor assets, added BBCode formatting toolbar markup and styles, textarea responsive sizing in .bbcode-box
-  'review.html': 'efba51090665a90451d7b725ed15dd2493628b12f877f3300fa21281b5d14f42',
+  // review.js: added the edited-preview notice (paused live updates) and its reset-to-generated affordance
+  'review.js': '4a66092ca8b30238a68583d1c4cf886172e0de97c2c66bf44e83551fe2c80489',
+  // review.html: added #bbcode-edited-notice markup and styling above the BBCode toolbar
+  'review.html': 'e20e40bdcf7cc21cafa078bdb30f2a8cfad4d425ed4aa4430e4c840f4eddf62d',
 };
 
 function sha256(filePath) {

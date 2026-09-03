@@ -389,6 +389,31 @@
       display: none;
     }
 
+    /* Shown while bbcodeUserEdited is latched. Without it the live preview
+       silently stops regenerating the moment the user types, and nothing on
+       screen says so. */
+    .bbcode-edited-notice {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 6px;
+      padding: 6px 8px;
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      border-radius: 6px;
+      background-color: rgba(245, 158, 11, 0.1);
+      color: #f59e0b;
+      font-size: 0.8rem;
+    }
+
+    .bbcode-reset-btn {
+      padding: 3px 8px;
+      font-size: 0.75rem;
+      line-height: 1.2;
+      flex-shrink: 0;
+    }
+
     .bbcode-toolbar {
       display: flex;
       flex-wrap: wrap;
@@ -1309,6 +1334,10 @@
           </div>
           <div id="presentation-size-line" class="status-text" style="display: none; font-size: 0.8rem; margin-bottom: 6px;"></div>
           <div id="bbcode-warning" class="status-text" style="display: none; color: #f59e0b; font-size: 0.8rem; margin-bottom: 6px;"></div>
+          <div id="bbcode-edited-notice" class="bbcode-edited-notice" role="status" aria-live="polite">
+            <span id="bbcode-edited-notice-text"></span>
+            <button type="button" id="btn-bbcode-reset" class="btn btn-secondary bbcode-reset-btn"></button>
+          </div>
           <div class="bbcode-toolbar" id="bbcode-toolbar" role="toolbar" aria-label="BBCode formatting">
             <button type="button" class="toolbar-btn" id="btn-tag-b" data-tag="b" title="Bold [b]"><b>B</b></button>
             <button type="button" class="toolbar-btn" id="btn-tag-i" data-tag="i" title="Italic [i]"><i>I</i></button>
