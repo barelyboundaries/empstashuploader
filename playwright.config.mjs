@@ -39,7 +39,8 @@ export default defineConfig({
     'test_scene_grid_drag.spec.mjs',
     'test_scene_card_interior.spec.mjs',
     'test_bbcode_toolbar.spec.mjs',
-    'test_missing_source_reconcile.spec.mjs'
+    'test_missing_source_reconcile.spec.mjs',
+    'test_sidecar_queue_flood.spec.mjs'
   ],
   outputDir: path.join(evidenceDir, 'test-results'),
   fullyParallel: false,

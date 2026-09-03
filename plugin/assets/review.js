@@ -4462,6 +4462,75 @@
 
   // Sidecar refresh state & candidate probe helper
   let activeSidecarRefreshPromise = null;
+  const MAX_START_BACKEND_DISPATCHES = 3;
+  let startBackendDispatchCount = 0;
+
+  const JOB_QUEUE_QUERY = `
+    query JobQueue {
+      jobQueue {
+        id
+        status
+        description
+        startTime
+      }
+    }
+  `;
+
+  async function fetchJobQueue() {
+    try {
+      const data = await executeGraphQL(JOB_QUEUE_QUERY);
+      if (!data) return null;
+      if (data.jobQueue === null || data.jobQueue === undefined) {
+        return [];
+      }
+      if (Array.isArray(data.jobQueue)) {
+        return data.jobQueue;
+      }
+      return null;
+    } catch (err) {
+      // Fail safe: return null on query error or network failure
+      return null;
+    }
+  }
+
+  function isStartBackendDescription(desc) {
+    if (typeof desc !== "string") return false;
+    return /^Running plugin task:\s*StartBackend(?:\s|$)/.test(desc.trim());
+  }
+
+  function isPendingStartBackend(job) {
+    if (!job || typeof job !== "object") return false;
+    if (job.status !== "READY" && job.status !== "RUNNING") return false;
+    return isStartBackendDescription(job.description);
+  }
+
+  function formatAheadTaskName(desc) {
+    if (!desc || typeof desc !== "string") return "";
+    return desc.replace(/^Running plugin task:\s*/, "").trim();
+  }
+
+  function formatStartTime(st) {
+    if (!st) return "";
+    try {
+      const d = new Date(st);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleTimeString([], { hour12: false });
+      }
+    } catch (_) {}
+    return String(st);
+  }
+
+  function getQueuedStatusText(queue, targetJob) {
+    if (!Array.isArray(queue)) return "Sidecar: start queued — waiting in job queue";
+    const runningJob = queue.find((j) => j.status === "RUNNING" && j !== targetJob);
+    const aheadJob = runningJob || queue.find((j) => (j.status === "READY" || j.status === "RUNNING") && j !== targetJob);
+    if (aheadJob) {
+      const name = formatAheadTaskName(aheadJob.description) || "another job";
+      const time = formatStartTime(aheadJob.startTime);
+      return `Sidecar: start queued — waiting on ${name}${time ? ` (started ${time})` : ""}`;
+    }
+    return "Sidecar: start queued — waiting in job queue";
+  }
 
   async function probeHealthCandidates() {
     const endpoints = backendEndpoints("/health");
@@ -4496,6 +4565,7 @@
 
     const initialProbe = await probeHealthCandidates();
     if (initialProbe.ok) {
+      startBackendDispatchCount = 0;
       if (initialProbe.version === EXPECTED_SIDECAR_VERSION) {
         badge.textContent = `Sidecar: connected (v${initialProbe.version})`;
         badge.className = "sidecar-status sidecar-ok";
@@ -4508,31 +4578,59 @@
       return;
     }
 
-    // Health probe failed: transition to starting and dispatch StartBackend
-    badge.textContent = "Sidecar: starting…";
-    badge.className = "sidecar-status sidecar-warn";
     if (btnStop) btnStop.style.display = "none";
 
-    try {
-      const query = `
-        mutation RunStartBackend($plugin_id: ID!, $task_name: String!, $args: [PluginArgInput!]) {
-          runPluginTask(
-            plugin_id: $plugin_id,
-            task_name: $task_name,
-            args: $args
-          )
-        }
-      `;
-      await executeGraphQL(query, {
-        plugin_id: PLUGIN_ID,
-        task_name: "StartBackend",
-        args: [{ key: "mode", value: { str: "start_backend" } }]
-      });
-    } catch (err) {
-      badge.textContent = "Sidecar: failed to start — run start_backend.ps1";
-      badge.className = "sidecar-status sidecar-bad";
-      if (btnStop) btnStop.style.display = "none";
-      return;
+    const queue = await fetchJobQueue();
+    const pendingJob = Array.isArray(queue) ? queue.find(isPendingStartBackend) : null;
+
+    if (pendingJob) {
+      // F1: Skip dispatch if StartBackend is already READY or RUNNING
+      if (pendingJob.status === "RUNNING") {
+        badge.textContent = "Sidecar: starting…";
+        badge.className = "sidecar-status sidecar-warn";
+      } else {
+        badge.textContent = getQueuedStatusText(queue, pendingJob);
+        badge.className = "sidecar-status sidecar-warn";
+      }
+    } else {
+      // F3: Bound the retry loop
+      if (startBackendDispatchCount >= MAX_START_BACKEND_DISPATCHES) {
+        badge.textContent = "Sidecar: failed to start — run start_backend.ps1";
+        badge.className = "sidecar-status sidecar-bad";
+        return;
+      }
+
+      // Initial badge state before dispatching
+      const runningJob = Array.isArray(queue) ? queue.find((j) => j.status === "RUNNING") : null;
+      if (runningJob) {
+        badge.textContent = getQueuedStatusText(queue, null);
+        badge.className = "sidecar-status sidecar-warn";
+      } else {
+        badge.textContent = "Sidecar: starting…";
+        badge.className = "sidecar-status sidecar-warn";
+      }
+
+      try {
+        const query = `
+          mutation RunStartBackend($plugin_id: ID!, $task_name: String!, $args: [PluginArgInput!]) {
+            runPluginTask(
+              plugin_id: $plugin_id,
+              task_name: $task_name,
+              args: $args
+            )
+          }
+        `;
+        await executeGraphQL(query, {
+          plugin_id: PLUGIN_ID,
+          task_name: "StartBackend",
+          args: [{ key: "mode", value: { str: "start_backend" } }]
+        });
+        startBackendDispatchCount++;
+      } catch (err) {
+        badge.textContent = "Sidecar: failed to start — run start_backend.ps1";
+        badge.className = "sidecar-status sidecar-bad";
+        return;
+      }
     }
 
     // Poll /health with bounded timeout (~10s, 500ms intervals)
@@ -4552,6 +4650,7 @@
     }
 
     if (running) {
+      startBackendDispatchCount = 0;
       if (runningVersion === EXPECTED_SIDECAR_VERSION) {
         badge.textContent = `Sidecar: connected (v${runningVersion})`;
         badge.className = "sidecar-status sidecar-ok";
@@ -4562,8 +4661,26 @@
       if (btnStop) btnStop.style.display = "inline-flex";
       prefillScratchDirFromHealth();
     } else {
-      badge.textContent = "Sidecar: failed to start — run start_backend.ps1";
-      badge.className = "sidecar-status sidecar-bad";
+      // Health probe timed out. Consult queue before claiming failure.
+      const finalQueue = await fetchJobQueue();
+      const stillPending = Array.isArray(finalQueue) ? finalQueue.find(isPendingStartBackend) : null;
+      const blockingJob = Array.isArray(finalQueue) ? finalQueue.find((j) => j.status === "RUNNING" && j !== stillPending) : null;
+
+      if (stillPending) {
+        if (stillPending.status === "RUNNING") {
+          badge.textContent = "Sidecar: starting…";
+          badge.className = "sidecar-status sidecar-warn";
+        } else {
+          badge.textContent = getQueuedStatusText(finalQueue, stillPending);
+          badge.className = "sidecar-status sidecar-warn";
+        }
+      } else if (blockingJob) {
+        badge.textContent = getQueuedStatusText(finalQueue, null);
+        badge.className = "sidecar-status sidecar-warn";
+      } else {
+        badge.textContent = "Sidecar: failed to start — run start_backend.ps1";
+        badge.className = "sidecar-status sidecar-bad";
+      }
       if (btnStop) btnStop.style.display = "none";
     }
   }

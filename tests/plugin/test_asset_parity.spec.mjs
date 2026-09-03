@@ -22,9 +22,9 @@ const __dirname = path.dirname(__filename);
 // mismatch — that is the signal to refresh ASSET_RECORD below in the same
 // commit, so unreviewed or truncated asset changes can never slip through.
 const ASSET_RECORD = {
-  // review.js: reconcileSourceFiles() blocks out-of-seed relink from dispatching,
-  // and consolidateFiles() reconciles source files before building move list
-  'review.js': 'baa519429d63715540eee7e7564f580051547133cac5ea14bc07248998a868c0',
+  // review.js: Brief F — query jobQueue before StartBackend dispatch, show truthful
+  // badge state, and bound client-side retry loop to prevent queue flooding
+  'review.js': '422192dd688303dec36b136bef51dfbe30138735d96cee62ee62331f19280bfe',
   // review.html: added #bbcode-edited-notice markup and styling above the BBCode toolbar
   'review.html': 'e20e40bdcf7cc21cafa078bdb30f2a8cfad4d425ed4aa4430e4c840f4eddf62d',
 };
