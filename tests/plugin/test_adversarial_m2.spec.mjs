@@ -363,9 +363,9 @@ test.describe("Empornium Megapack Builder Milestone 2 — Adversarial Stress & E
 
     await page.goto("http://localhost:9999/plugins/empornium-megapack/review.html?scenes=1&mode=single");
     await expect(page.locator(".scene-card")).toHaveCount(1);
-    await expect(page.locator("#bbcode-preview")).toContainText("Lone Scene");
-    await expect(page.locator("#bbcode-preview")).toContainText("[b]Performers:[/b] Solo");
-    await expect(page.locator("#bbcode-preview")).not.toContainText("1. [b]");
+    await expect(page.locator("#bbcode-preview")).toHaveValue(/Lone Scene/);
+    await expect(page.locator("#bbcode-preview")).toHaveValue(/\[b\]Performers:\[\/b\] Solo/);
+    await expect(page.locator("#bbcode-preview")).not.toHaveValue(/1\. \[b\]/);
   });
 
   test("4.2 Multi-scene DOM reordering and BBCode preview sync", async ({ page }) => {
@@ -397,7 +397,7 @@ test.describe("Empornium Megapack Builder Milestone 2 — Adversarial Stress & E
     await expect(cards.nth(1)).toContainText("Second Scene");
     await expect(cards.nth(2)).toContainText("Third Scene");
 
-    const bbcode = await page.locator("#bbcode-preview").innerText();
+    const bbcode = await page.locator("#bbcode-preview").inputValue();
     expect(bbcode).toContain("1. [b]First Scene [/b] (Alice)");
     expect(bbcode).toContain("2. [b]Second Scene [/b] (Bob)");
     expect(bbcode).toContain("3. [b]Third Scene [/b] (Charlie)");
@@ -433,7 +433,7 @@ test.describe("Empornium Megapack Builder Milestone 2 — Adversarial Stress & E
     await expect(page.locator(".scene-card")).toHaveCount(100);
 
     // Verify BBCode contains total scenes 100
-    const bbcode = await page.locator("#bbcode-preview").innerText();
+    const bbcode = await page.locator("#bbcode-preview").inputValue();
     expect(bbcode).toContain("[b]Total Scenes:[/b] 100");
     expect(bbcode).toContain("1. [b]Stress Scene 1 [/b]");
     expect(bbcode).toContain("100. [b]Stress Scene 100 [/b]");
@@ -471,7 +471,7 @@ test.describe("Empornium Megapack Builder Milestone 2 — Adversarial Stress & E
     // Renders fast (well within 5 seconds)
     expect(duration).toBeLessThan(5000);
 
-    const bbcode = await page.locator("#bbcode-preview").innerText();
+    const bbcode = await page.locator("#bbcode-preview").inputValue();
     expect(bbcode).toContain("[b]Total Scenes:[/b] 250");
     expect(bbcode).toContain("250. [b]Bulk Scene 250 [/b]");
   });
@@ -518,7 +518,7 @@ test.describe("Empornium Megapack Builder Milestone 2 — Adversarial Stress & E
     await page.locator("#pack-title").fill("Mega Pack [4K] ~ Special Edition! 🔥");
     await page.locator("#pack-notes").fill("Line 1 with quotes \"hello\"\nLine 2 with [url]http://example.com[/url]");
 
-    const bbcodeText = await page.locator("#bbcode-preview").innerText();
+    const bbcodeText = await page.locator("#bbcode-preview").inputValue();
     expect(bbcodeText).toContain("[center][b][size=5]Mega Pack [4K] ~ Special Edition! 🔥[/size][/b][/center]");
     expect(bbcodeText).toContain("Artist <A>, Artist [B]");
     expect(bbcodeText).toContain('[quote]Line 1 with quotes "hello"\nLine 2 with [url]http://example.com[/url][/quote]');

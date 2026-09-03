@@ -41,6 +41,235 @@
   const sceneIdsParam = urlParams.get("scenes") || "";
   const modeParam = urlParams.get("mode") || "";
   let sceneIds = [];
+  let bbcodeUserEdited = false;
+  let savedSelection = { start: 0, end: 0 };
+  let savedScrollTop = 0;
+  let currentPopoverTag = null;
+
+  function initBBCodeToolbar() {
+    const textarea = document.getElementById("bbcode-preview");
+    if (!textarea || textarea.dataset.toolbarBound) return;
+    textarea.dataset.toolbarBound = "true";
+
+    textarea.addEventListener("input", () => {
+      bbcodeUserEdited = true;
+      updateSavedSelection();
+    });
+
+    const updateSavedSelection = () => {
+      savedSelection.start = textarea.selectionStart;
+      savedSelection.end = textarea.selectionEnd;
+    };
+
+    textarea.addEventListener("keyup", updateSavedSelection);
+    textarea.addEventListener("mouseup", updateSavedSelection);
+    textarea.addEventListener("select", updateSavedSelection);
+    textarea.addEventListener("focus", () => {
+      if (popover && popover.style.display !== "none") {
+        popover.style.display = "none";
+        currentPopoverTag = null;
+      }
+      updateSavedSelection();
+    });
+
+    document.addEventListener("selectionchange", () => {
+      if (document.activeElement === textarea) {
+        updateSavedSelection();
+      }
+    });
+
+    function applyBBCodeFormat(openTag, closeTag) {
+      bbcodeUserEdited = true;
+      if (popover && popover.style.display !== "none") {
+        popover.style.display = "none";
+        currentPopoverTag = null;
+      }
+
+      const wasFocused = document.activeElement === textarea;
+      textarea.focus({ preventScroll: true });
+
+      let start = textarea.selectionStart;
+      let end = textarea.selectionEnd;
+      if (!wasFocused) {
+        start = savedSelection.start;
+        end = savedSelection.end;
+        textarea.setSelectionRange(start, end);
+      }
+
+      const val = textarea.value;
+      const selected = val.substring(start, end);
+      const scrollTop = savedScrollTop !== undefined && !wasFocused ? savedScrollTop : textarea.scrollTop;
+
+      if (openTag === "[hr]") {
+        const replacement = "[hr]";
+        document.execCommand("insertText", false, replacement);
+        const caret = start + replacement.length;
+        textarea.setSelectionRange(caret, caret);
+      } else if (openTag === "[list]") {
+        const trimmedSelected = selected.trim();
+        if (trimmedSelected.length > 0) {
+          const lines = trimmedSelected.split(/\r?\n/);
+          const formatted = lines.map((line) => {
+            const trimmed = line.trim();
+            if (!trimmed) return "";
+            return trimmed.startsWith("[*]") ? trimmed : `[*]${trimmed}`;
+          }).join("\n");
+          const replacement = `[list]\n${formatted}\n[/list]`;
+          document.execCommand("insertText", false, replacement);
+          const newStart = start + 7;
+          const newEnd = newStart + formatted.length;
+          textarea.setSelectionRange(newStart, newEnd);
+        } else {
+          const replacement = "[list]\n[*]\n[/list]";
+          document.execCommand("insertText", false, replacement);
+          const caret = start + 10;
+          textarea.setSelectionRange(caret, caret);
+        }
+      } else if (selected.length > 0) {
+        // Selection wrapping: wrap selection and keep text selected
+        const replacement = `${openTag}${selected}${closeTag}`;
+        document.execCommand("insertText", false, replacement);
+        const newStart = start + openTag.length;
+        const newEnd = newStart + selected.length;
+        textarea.setSelectionRange(newStart, newEnd);
+      } else {
+        // Empty selection: insert tag pair and place caret between them
+        const replacement = `${openTag}${closeTag}`;
+        document.execCommand("insertText", false, replacement);
+        const caret = start + openTag.length;
+        textarea.setSelectionRange(caret, caret);
+      }
+
+      textarea.scrollTop = scrollTop;
+      savedScrollTop = undefined;
+      updateSavedSelection();
+    }
+
+    // Simple tag buttons
+    const simpleTags = ["b", "i", "u", "s", "center", "img", "quote", "code", "hr", "list"];
+    simpleTags.forEach((tag) => {
+      const btn = document.getElementById(`btn-tag-${tag}`);
+      if (btn) {
+        btn.addEventListener("mousedown", (e) => e.preventDefault());
+        btn.addEventListener("click", () => applyBBCodeFormat(`[${tag}]`, `[/${tag}]`));
+      }
+    });
+
+    // Fixed choice selects: size & color
+    const sizeSelect = document.getElementById("toolbar-size");
+    if (sizeSelect) {
+      sizeSelect.addEventListener("change", () => {
+        const val = sizeSelect.value;
+        if (val) {
+          applyBBCodeFormat(`[size=${val}]`, "[/size]");
+          sizeSelect.selectedIndex = 0;
+        }
+      });
+    }
+
+    const colorSelect = document.getElementById("toolbar-color");
+    if (colorSelect) {
+      colorSelect.addEventListener("change", () => {
+        const val = colorSelect.value;
+        if (val) {
+          applyBBCodeFormat(`[color=${val}]`, "[/color]");
+          colorSelect.selectedIndex = 0;
+        }
+      });
+    }
+
+    // Popover for url and spoiler
+    const popover = document.getElementById("toolbar-popover");
+    const popoverLabel = document.getElementById("toolbar-popover-label");
+    const popoverInput = document.getElementById("toolbar-popover-input");
+    const popoverConfirm = document.getElementById("toolbar-popover-confirm");
+    const popoverCancel = document.getElementById("toolbar-popover-cancel");
+
+    function openPopover(tag) {
+      currentPopoverTag = tag;
+      if (document.activeElement === textarea) {
+        updateSavedSelection();
+      }
+      savedScrollTop = textarea.scrollTop;
+      if (tag === "url") {
+        if (popoverLabel) popoverLabel.textContent = "URL:";
+        if (popoverInput) popoverInput.placeholder = "https://...";
+      } else if (tag === "spoiler") {
+        if (popoverLabel) popoverLabel.textContent = "Spoiler Title:";
+        if (popoverInput) popoverInput.placeholder = "Optional title...";
+      }
+      if (popoverInput) popoverInput.value = "";
+      if (popover) popover.style.display = "flex";
+      if (popoverInput) popoverInput.focus();
+    }
+
+    function closePopover() {
+      if (popover) popover.style.display = "none";
+      currentPopoverTag = null;
+      textarea.focus({ preventScroll: true });
+      textarea.setSelectionRange(savedSelection.start, savedSelection.end);
+      if (savedScrollTop !== undefined) {
+        textarea.scrollTop = savedScrollTop;
+      }
+    }
+
+    function submitPopover() {
+      const tag = currentPopoverTag;
+      const rawVal = popoverInput ? popoverInput.value : "";
+      const val = rawVal.replace(/\s+/g, " ").trim();
+      if (popover) popover.style.display = "none";
+      currentPopoverTag = null;
+
+      textarea.focus({ preventScroll: true });
+      textarea.setSelectionRange(savedSelection.start, savedSelection.end);
+
+      if (tag === "url") {
+        const openTag = val ? `[url=${val}]` : "[url]";
+        applyBBCodeFormat(openTag, "[/url]");
+      } else if (tag === "spoiler") {
+        const openTag = val ? `[spoiler=${val}]` : "[spoiler]";
+        applyBBCodeFormat(openTag, "[/spoiler]");
+      }
+    }
+
+    const urlBtn = document.getElementById("btn-tag-url");
+    if (urlBtn) {
+      urlBtn.addEventListener("mousedown", (e) => e.preventDefault());
+      urlBtn.addEventListener("click", () => openPopover("url"));
+    }
+
+    const spoilerBtn = document.getElementById("btn-tag-spoiler");
+    if (spoilerBtn) {
+      spoilerBtn.addEventListener("mousedown", (e) => e.preventDefault());
+      spoilerBtn.addEventListener("click", () => openPopover("spoiler"));
+    }
+
+    if (popoverConfirm) {
+      popoverConfirm.addEventListener("click", submitPopover);
+    }
+
+    if (popoverCancel) {
+      popoverCancel.addEventListener("click", closePopover);
+    }
+
+    if (popoverInput) {
+      popoverInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          submitPopover();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          closePopover();
+        }
+      });
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initBBCodeToolbar);
+  } else {
+    initBBCodeToolbar();
+  }
 
   function escapeHtml(str) {
     if (!str) return "";
@@ -1957,7 +2186,7 @@
 
   // 5. Update BBCode Preview
   function updateBBCode() {
-    if (bbcodeIsFinal) return;
+    if (bbcodeIsFinal || bbcodeUserEdited) return;
     const packTitleInput = document.getElementById("pack-title");
     const title = packTitleInput?.value || "";
     const notes = document.getElementById("pack-notes")?.value;
@@ -2036,7 +2265,7 @@
 
     const previewEl = document.getElementById("bbcode-preview");
     if (previewEl) {
-      previewEl.innerText = bbcode;
+      previewEl.value = bbcode;
     }
   }
 
@@ -2575,6 +2804,7 @@
   // 8. Trigger Megapack or Single-Scene Build Task (BuildMegapack / BuildSingleScene) & Track Progress
   async function buildMegapack() {
     bbcodeIsFinal = false;
+    bbcodeUserEdited = false;
     updateBBCode();
 
     const active = activeScenes();
@@ -3211,7 +3441,7 @@
       const finalBBCode = payload?.chunked_bbcode || (typeof payload?.bbcode === "string" && payload.bbcode ? payload.bbcode : null);
       const bbcodeWarning = document.getElementById("bbcode-warning");
       if (bbcodeBox && finalBBCode) {
-        bbcodeBox.innerText = finalBBCode;
+        bbcodeBox.value = finalBBCode;
         bbcodeIsFinal = true;
         if (bbcodeWarning) bbcodeWarning.style.display = "none";
       } else if (payload?.bbcode_truncated) {
@@ -3224,7 +3454,7 @@
         bbcodeWarning.style.display = "none";
       }
 
-      const bbcodeText = bbcodeBox ? bbcodeBox.innerText : "";
+      const bbcodeText = bbcodeBox ? bbcodeBox.value : "";
 
       // Presentation size indicator next to BBCode preview
       const presSizeEl = document.getElementById("presentation-size-line");
@@ -4261,7 +4491,7 @@
       copyBbcodeBtn.dataset.bound = "true";
       copyBbcodeBtn.addEventListener("click", () => {
         if (copyBbcodeBtn.disabled) return;
-        const text = document.getElementById("bbcode-preview")?.innerText || "";
+        const text = document.getElementById("bbcode-preview")?.value || "";
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard
             .writeText(text)
@@ -4439,6 +4669,7 @@
     }
 
     renderStageState();
+    initBBCodeToolbar();
   }
 
   if (document.readyState === "loading") {

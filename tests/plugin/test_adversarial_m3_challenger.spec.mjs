@@ -121,7 +121,7 @@ test.describe('Empornium Megapack Builder Challenger 1 M3 Adversarial Suite', ()
 
     const bbcodePreview = page.locator('#bbcode-preview');
     await expect(bbcodePreview).toBeVisible();
-    const bbcodeText = await bbcodePreview.innerText();
+    const bbcodeText = await bbcodePreview.inputValue();
     expect(bbcodeText).toContain('XSS Scene');
     expect(bbcodeText).toContain('Bold Performer');
   });
@@ -159,7 +159,7 @@ test.describe('Empornium Megapack Builder Challenger 1 M3 Adversarial Suite', ()
     const cards = page.locator('.scene-card');
     await expect(cards).toHaveCount(150);
 
-    const bbcode = await page.locator('#bbcode-preview').innerText();
+    const bbcode = await page.locator('#bbcode-preview').inputValue();
     expect(bbcode).toContain('[b]Total Scenes:[/b] 150');
     expect(bbcode).toContain('1. [b]Bulk Scene 1 [/b]');
     expect(bbcode).toContain('150. [b]Bulk Scene 150 [/b]');

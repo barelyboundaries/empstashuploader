@@ -37,7 +37,8 @@ export default defineConfig({
     'test_sidecar_probe_diagnostics.spec.mjs',
     'test_adversarial_preview_challenger_2.spec.mjs',
     'test_scene_grid_drag.spec.mjs',
-    'test_scene_card_interior.spec.mjs'
+    'test_scene_card_interior.spec.mjs',
+    'test_bbcode_toolbar.spec.mjs'
   ],
   outputDir: path.join(evidenceDir, 'test-results'),
   fullyParallel: false,

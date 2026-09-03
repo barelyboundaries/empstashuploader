@@ -306,8 +306,8 @@ test.describe("Milestone 3 Challenger 2: Full End-to-End User Journey & Fault In
 
     // Verify BBCode preview contains performer and scene details
     const bbcodeBox = frame.locator("#bbcode-preview");
-    await expect(bbcodeBox).toContainText("Alpha Scene 🌸 (Ultra HD)");
-    await expect(bbcodeBox).toContainText("Performer One 💖");
+    await expect(bbcodeBox).toHaveValue(/Alpha Scene 🌸 \(Ultra HD\)/);
+    await expect(bbcodeBox).toHaveValue(/Performer One 💖/);
 
     // The seed-dir field starts EMPTY (no machine-path default in the release
     // audit build) — set it before probe/consolidate/build.
@@ -633,9 +633,9 @@ test.describe("Milestone 3 Challenger 2: Full End-to-End User Journey & Fault In
     await notesInput.fill("Emoji notes: 🚀✨ and quotes: \"Special Release\"");
 
     const bbcodePreview = page.locator("#bbcode-preview");
-    await expect(bbcodePreview).toContainText("Mega Megapack 💖 2026 [Special Edition] /\\:?*");
-    await expect(bbcodePreview).toContainText("初音ミク");
-    await expect(bbcodePreview).toContainText("Emoji notes: 🚀✨");
+    await expect(bbcodePreview).toHaveValue(/Mega Megapack 💖 2026 \[Special Edition\] \/\\:\?\*/);
+    await expect(bbcodePreview).toHaveValue(/初音ミク/);
+    await expect(bbcodePreview).toHaveValue(/Emoji notes: 🚀✨/);
   });
 
   test("5. Modal Header Close and Cross-Origin postMessage Dismissal", async ({ page }) => {

@@ -167,7 +167,7 @@ test.describe("Build result sentinel reaches the handoff panel", () => {
     await runBuild(page);
 
     const preview = page.locator("#bbcode-preview");
-    await expect(preview).toContainText(`[img=200]${REMOTE_IMAGE}[/img]`);
+    await expect(preview).toHaveValue(new RegExp(`\\[img=200\\]${REMOTE_IMAGE.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&')}\\[\\/img\\]`));
   });
 
   test("backend pre-flight results are shown rather than the client-side fallback", async ({ page }) => {

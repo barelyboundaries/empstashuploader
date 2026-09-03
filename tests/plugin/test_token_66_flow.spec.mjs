@@ -1,4 +1,4 @@
-﻿import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { execSync } from 'node:child_process';
@@ -196,8 +196,8 @@ test.describe("Empornium Megapack Builder - 66 Scenes POST+Token Transport & Chu
 
     // Assert BBCode reflects 66 scenes
     const bbcode = page.locator("#bbcode-preview");
-    await expect(bbcode).toContainText("[b]Total Scenes:[/b] 66");
-    await expect(bbcode).toContainText("66. [b]Scene #66 Mega [/b]");
+    await expect(bbcode).toHaveValue(/\[b\]Total Scenes:\[\/b\] 66/);
+    await expect(bbcode).toHaveValue(/66\. \[b\]Scene #66 Mega \[\/b\]/);
   });
 
 

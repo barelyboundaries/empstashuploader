@@ -215,7 +215,7 @@ test.describe('Stage 7 Feature 2 — Single-Scene Mode Switch & Pre-Dispatch Val
 
     await page.locator('#pack-notes').fill('Special single-scene release notes!');
 
-    const bbcode = await page.locator('#bbcode-preview').innerText();
+    const bbcode = await page.locator('#bbcode-preview').inputValue();
 
     // Verify Scene Title + Badges
     expect(bbcode).toContain('[center][b][size=5]Solo Starlet Scene [1080p] [30m 0s][/size][/b][/center]');
@@ -483,7 +483,7 @@ test.describe('Stage 7 Feature 2 — Single-Scene Mode Switch & Pre-Dispatch Val
     await expect(page.locator('#pack-title')).toHaveValue('Stash_VIP_Feature_2026');
 
     // BBCode preview should carry the fallback title
-    const bbcode = await page.locator('#bbcode-preview').innerText();
+    const bbcode = await page.locator('#bbcode-preview').inputValue();
     expect(bbcode).toContain('[center][b][size=5]Stash_VIP_Feature_2026 [1080p] [40m 0s][/size][/b][/center]');
     expect(bbcode).toContain('[b]Performers:[/b] VIP Performer');
     expect(bbcode).toContain('[b]Tags:[/b] Exclusive');

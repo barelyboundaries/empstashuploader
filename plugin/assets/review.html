@@ -389,17 +389,108 @@
       display: none;
     }
 
+    .bbcode-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 8px;
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-bottom: none;
+      border-radius: 6px 6px 0 0;
+    }
+
+    .toolbar-btn {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      border: 1px solid var(--card-border);
+      border-radius: 4px;
+      padding: 3px 8px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      cursor: pointer;
+      line-height: 1.2;
+      transition: background-color 0.15s, border-color 0.15s;
+    }
+
+    .toolbar-btn:hover {
+      background-color: var(--card-border);
+      border-color: var(--accent);
+    }
+
+    .toolbar-btn:active {
+      background-color: var(--accent);
+      color: #fff;
+    }
+
+    .toolbar-select {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      border: 1px solid var(--card-border);
+      border-radius: 4px;
+      padding: 2px 4px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      line-height: 1.2;
+    }
+
+    .toolbar-select:hover {
+      border-color: var(--accent);
+    }
+
+    .toolbar-popover {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 8px;
+      background-color: var(--panel-bg);
+      border: 1px solid var(--card-border);
+      border-bottom: none;
+      font-size: 0.75rem;
+    }
+
+    .toolbar-popover-label {
+      color: var(--text-muted);
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    .toolbar-popover-input {
+      flex: 1;
+      background-color: var(--bg-dark);
+      border: 1px solid var(--card-border);
+      border-radius: 4px;
+      color: var(--text-main);
+      padding: 2px 6px;
+      font-size: 0.75rem;
+      outline: none;
+    }
+
+    .toolbar-popover-input:focus {
+      border-color: var(--accent);
+    }
+
+    .toolbar-popover-btn {
+      padding: 2px 8px;
+      font-size: 0.72rem;
+      line-height: 1.2;
+    }
+
     .bbcode-box {
       background-color: #0e1012;
       border: 1px solid var(--card-border);
-      border-radius: 6px;
+      border-radius: 0 0 6px 6px;
       padding: 10px;
       font-family: monospace;
       font-size: 0.8rem;
       color: #a7f3d0;
-      max-height: 150px;
+      width: 100%;
+      height: 350px;
+      min-height: 150px;
+      resize: vertical;
       overflow-y: auto;
-      white-space: pre-wrap;
+      box-sizing: border-box;
     }
 
     .artifact-summary {
@@ -1218,7 +1309,48 @@
           </div>
           <div id="presentation-size-line" class="status-text" style="display: none; font-size: 0.8rem; margin-bottom: 6px;"></div>
           <div id="bbcode-warning" class="status-text" style="display: none; color: #f59e0b; font-size: 0.8rem; margin-bottom: 6px;"></div>
-          <div class="bbcode-box" id="bbcode-preview">[b]Megapack Preview[/b]</div>
+          <div class="bbcode-toolbar" id="bbcode-toolbar" role="toolbar" aria-label="BBCode formatting">
+            <button type="button" class="toolbar-btn" id="btn-tag-b" data-tag="b" title="Bold [b]"><b>B</b></button>
+            <button type="button" class="toolbar-btn" id="btn-tag-i" data-tag="i" title="Italic [i]"><i>I</i></button>
+            <button type="button" class="toolbar-btn" id="btn-tag-u" data-tag="u" title="Underline [u]"><u>U</u></button>
+            <button type="button" class="toolbar-btn" id="btn-tag-s" data-tag="s" title="Strikethrough [s]"><s>S</s></button>
+            <select class="toolbar-select" id="toolbar-size" title="Font Size">
+              <option value="" disabled selected>Size</option>
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+              <option value="7">7</option>
+            </select>
+            <select class="toolbar-select" id="toolbar-color" title="Font Color">
+              <option value="" disabled selected>Color</option>
+              <option value="red">Red</option>
+              <option value="blue">Blue</option>
+              <option value="green">Green</option>
+              <option value="yellow">Yellow</option>
+              <option value="orange">Orange</option>
+              <option value="purple">Purple</option>
+              <option value="gray">Gray</option>
+              <option value="white">White</option>
+            </select>
+            <button type="button" class="toolbar-btn" id="btn-tag-center" data-tag="center" title="Center [center]">Center</button>
+            <button type="button" class="toolbar-btn" id="btn-tag-url" data-tag="url" title="URL Link [url=…]">Link</button>
+            <button type="button" class="toolbar-btn" id="btn-tag-img" data-tag="img" title="Image [img]">Img</button>
+            <button type="button" class="toolbar-btn" id="btn-tag-quote" data-tag="quote" title="Quote [quote]">Quote</button>
+            <button type="button" class="toolbar-btn" id="btn-tag-code" data-tag="code" title="Code [code]">Code</button>
+            <button type="button" class="toolbar-btn" id="btn-tag-spoiler" data-tag="spoiler" title="Spoiler [spoiler=…]">Spoiler</button>
+            <button type="button" class="toolbar-btn" id="btn-tag-hr" data-tag="hr" title="Horizontal Rule [hr]">HR</button>
+            <button type="button" class="toolbar-btn" id="btn-tag-list" data-tag="list" title="List [list]">List</button>
+          </div>
+          <div id="toolbar-popover" class="toolbar-popover" style="display: none;">
+            <span id="toolbar-popover-label" class="toolbar-popover-label">URL:</span>
+            <input type="text" id="toolbar-popover-input" class="toolbar-popover-input" placeholder="https://..." />
+            <button type="button" id="toolbar-popover-confirm" class="btn btn-secondary toolbar-popover-btn">Insert</button>
+            <button type="button" id="toolbar-popover-cancel" class="btn btn-secondary toolbar-popover-btn">Cancel</button>
+          </div>
+          <textarea class="bbcode-box" id="bbcode-preview">[b]Megapack Preview[/b]</textarea>
         </div>
       </div>
 

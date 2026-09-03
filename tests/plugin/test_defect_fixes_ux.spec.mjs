@@ -200,7 +200,7 @@ test.describe("Defect Fixes UX: Chunked BBCode and Pasted Cover Image", () => {
     await page.locator("#btn-build").click();
     await expect(page.locator("#artifact-summary")).toBeVisible({ timeout: 8000 });
 
-    const bbcode = await page.locator("#bbcode-preview").innerText();
+    const bbcode = await page.locator("#bbcode-preview").inputValue();
     expect(bbcode).toBe(FULL_CHUNKED_BBCODE);
     await expect(page.locator("#bbcode-warning")).toBeHidden();
   });
@@ -218,7 +218,7 @@ test.describe("Defect Fixes UX: Chunked BBCode and Pasted Cover Image", () => {
 
     const preview = page.locator("#bbcode-preview");
     // Should NOT contain the full chunked text because it failed to reassemble
-    await expect(preview).not.toContainText("Special Unicode: ★★★★★");
+    await expect(preview).not.toHaveValue(/Special Unicode: ★★★★★/);
     // Warning banner should be visible
     await expect(page.locator("#bbcode-warning")).toBeVisible();
     await expect(page.locator("#bbcode-warning")).toContainText("provisional");

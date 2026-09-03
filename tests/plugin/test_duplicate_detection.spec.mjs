@@ -1,4 +1,4 @@
-﻿import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -230,12 +230,12 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
 
     // BBCode preview should update to 3 scenes
     const bbcodePreview = page.locator("#bbcode-preview");
-    await expect(bbcodePreview).toContainText("[b]Total Scenes:[/b] 3");
-    await expect(bbcodePreview).toContainText("1. [b]Alpha Scene 101");
-    await expect(bbcodePreview).toContainText("2. [b]Beta Scene 102");
-    await expect(bbcodePreview).toContainText("3. [b]Delta Scene 104");
-    await expect(bbcodePreview).not.toContainText("Gamma Scene 103");
-    await expect(bbcodePreview).not.toContainText("Epsilon Scene 105");
+    await expect(bbcodePreview).toHaveValue(/\[b\]Total Scenes:\[\/b\] 3/);
+    await expect(bbcodePreview).toHaveValue(/1\. \[b\]Alpha Scene 101/);
+    await expect(bbcodePreview).toHaveValue(/2\. \[b\]Beta Scene 102/);
+    await expect(bbcodePreview).toHaveValue(/3\. \[b\]Delta Scene 104/);
+    await expect(bbcodePreview).not.toHaveValue(/Gamma Scene 103/);
+    await expect(bbcodePreview).not.toHaveValue(/Epsilon Scene 105/);
   });
 
   test("R2. 'Show only conflicts' toggles view without breaking card order or interactions", async ({ page }) => {
@@ -751,7 +751,7 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
 
     // Verify BBCode preview also reflects new pack order
     const bbcodePreview = page.locator("#bbcode-preview");
-    await expect(bbcodePreview).toContainText("1. [b]Epsilon Scene 105");
+    await expect(bbcodePreview).toHaveValue(/1\. \[b\]Epsilon Scene 105/);
   });
 
   test("ADV-5. Overlapping multi-group collisions: Scene 1 participates in both Group A and Group B, and 'Keep first, remove rest' resolves all groups", async ({ page }) => {
@@ -1231,12 +1231,12 @@ test.describe("Stage 7 Feature 1 — Duplicate Filename Detection & Resolution",
 
     // BBCode preview updated with kept scenes
     const bbcode = page.locator("#bbcode-preview");
-    await expect(bbcode).toContainText("[b]Total Scenes:[/b] 3");
-    await expect(bbcode).toContainText("1. [b]Beta Scene 102");
-    await expect(bbcode).toContainText("2. [b]Gamma Scene 103");
-    await expect(bbcode).toContainText("3. [b]Epsilon Scene 105");
-    await expect(bbcode).not.toContainText("Alpha Scene 101");
-    await expect(bbcode).not.toContainText("Delta Scene 104");
+    await expect(bbcode).toHaveValue(/\[b\]Total Scenes:\[\/b\] 3/);
+    await expect(bbcode).toHaveValue(/1\. \[b\]Beta Scene 102/);
+    await expect(bbcode).toHaveValue(/2\. \[b\]Gamma Scene 103/);
+    await expect(bbcode).toHaveValue(/3\. \[b\]Epsilon Scene 105/);
+    await expect(bbcode).not.toHaveValue(/Alpha Scene 101/);
+    await expect(bbcode).not.toHaveValue(/Delta Scene 104/);
   });
 
   test("R2. One-Click 'Keep This' in Overlapping Multi-Group Collision: Resolves multiple groups simultaneously", async ({ page }) => {

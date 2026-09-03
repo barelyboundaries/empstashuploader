@@ -165,17 +165,17 @@ test.describe("Empornium Megapack Builder Frontend - Full Integration Suite", ()
     // default), so set the title the old default used to provide.
     await page.locator("#pack-title").fill("My Awesome Megapack");
     const bbcodeBox = page.locator("#bbcode-preview");
-    await expect(bbcodeBox).toContainText("My Awesome Megapack");
-    await expect(bbcodeBox).toContainText("Alice Wonderland, Bob Builder");
-    await expect(bbcodeBox).toContainText("[b]Total Scenes:[/b] 2");
-    await expect(bbcodeBox).toContainText("1. [b]Scene Alpha [/b]");
-    await expect(bbcodeBox).toContainText("2. [b]Scene Beta [/b]");
+    await expect(bbcodeBox).toHaveValue(/My Awesome Megapack/);
+    await expect(bbcodeBox).toHaveValue(/Alice Wonderland, Bob Builder/);
+    await expect(bbcodeBox).toHaveValue(/\[b\]Total Scenes:\[\/b\] 2/);
+    await expect(bbcodeBox).toHaveValue(/1\. \[b\]Scene Alpha \[\/b\]/);
+    await expect(bbcodeBox).toHaveValue(/2\. \[b\]Scene Beta \[\/b\]/);
 
     // Change title and notes
     await page.locator("#pack-title").fill("Custom Megapack Title");
     await page.locator("#pack-notes").fill("Special release edition");
-    await expect(bbcodeBox).toContainText("Custom Megapack Title");
-    await expect(bbcodeBox).toContainText("[quote]Special release edition[/quote]");
+    await expect(bbcodeBox).toHaveValue(/Custom Megapack Title/);
+    await expect(bbcodeBox).toHaveValue(/\[quote\]Special release edition\[\/quote\]/);
 
     // Test BBCode Copy button
     const copyBtn = page.locator("#btn-copy-bbcode");

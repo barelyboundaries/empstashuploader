@@ -22,10 +22,10 @@ const __dirname = path.dirname(__filename);
 // mismatch — that is the signal to refresh ASSET_RECORD below in the same
 // commit, so unreviewed or truncated asset changes can never slip through.
 const ASSET_RECORD = {
-  // review.js: updated scene card header markup to use responsive stylesheet classes (.scene-card-header, .scene-card-actions)
-  'review.js': '1f83128a81fee98df1b0c4ead32e58c773e517b4e2da3fc28447ee80fd8d5be3',
-  // review.html: responsive scene-card interior with flex-wrap, tuned flex-basis, header-row wrapping, and title overflow protection
-  'review.html': '095e0572f7942cd5100eee78f1722638ee273047b658b2a4e142ac3db60a3fb9',
+  // review.js: removed SCEditor wiring, implemented BBCode formatting toolbar, native execCommand undo, R4 user edit preservation, and robust selection/popover tracking
+  'review.js': '500dde50b3d37b5e86c14111d5823744f0dd51b372add7af9c59c4981b2d3f0b',
+  // review.html: removed SCEditor assets, added BBCode formatting toolbar markup and styles, textarea responsive sizing in .bbcode-box
+  'review.html': 'efba51090665a90451d7b725ed15dd2493628b12f877f3300fa21281b5d14f42',
 };
 
 function sha256(filePath) {

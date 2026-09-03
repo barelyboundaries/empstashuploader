@@ -454,9 +454,9 @@ test.describe("Empornium Megapack Builder Frontend - Adversarial Stress & Verifi
 
     // Verify initial BBCode structure
     const bbcode = page.locator("#bbcode-preview");
-    await expect(bbcode).toContainText("1. [b]First Scene (Normal) [/b] (Performer One)");
-    await expect(bbcode).toContainText("2. [b]Scene [/b]");
-    await expect(bbcode).toContainText("3. [b]Third Scene (Multi Performer) [/b] (Performer One, Performer Two)");
+    await expect(bbcode).toHaveValue(/1\. \[b\]First Scene \(Normal\) \[\/b\] \(Performer One\)/);
+    await expect(bbcode).toHaveValue(/2\. \[b\]Scene \[\/b\]/);
+    await expect(bbcode).toHaveValue(/3\. \[b\]Third Scene \(Multi Performer\) \[\/b\] \(Performer One, Performer Two\)/);
 
     // Simulate drag and drop reordering: Drag Scene 3 (index 2) before Scene 1 (index 0)
     await page.evaluate(() => {
@@ -469,9 +469,9 @@ test.describe("Empornium Megapack Builder Frontend - Adversarial Stress & Verifi
     });
 
     // Check that BBCode preview updated order immediately: Scene 3 is now #1
-    await expect(bbcode).toContainText("1. [b]Third Scene (Multi Performer) [/b] (Performer One, Performer Two)");
-    await expect(bbcode).toContainText("2. [b]First Scene (Normal) [/b] (Performer One)");
-    await expect(bbcode).toContainText("3. [b]Scene [/b]");
+    await expect(bbcode).toHaveValue(/1\. \[b\]Third Scene \(Multi Performer\) \[\/b\] \(Performer One, Performer Two\)/);
+    await expect(bbcode).toHaveValue(/2\. \[b\]First Scene \(Normal\) \[\/b\] \(Performer One\)/);
+    await expect(bbcode).toHaveValue(/3\. \[b\]Scene \[\/b\]/);
   });
 
   test("ADV-6: WebSocket Disconnect / Error & Seamless HTTP Polling Fallback", async ({ page }) => {
