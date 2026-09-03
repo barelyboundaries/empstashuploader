@@ -1756,9 +1756,9 @@
       card.innerHTML = `
         <img class="scene-thumb" src="${escapeHtml(thumbUrl)}" alt="Thumbnail" />
         <div class="scene-info">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+          <div class="scene-card-header">
             <div class="scene-title">#${activeIdx + 1} - ${escapeHtml(scene.title || "Untitled Scene")}</div>
-            <div style="display: flex; gap: 6px; align-items: center; flex-shrink: 0;">
+            <div class="scene-card-actions">
               ${keepButtonHtml}
               <button type="button" class="btn btn-secondary scene-remove-btn" data-scene-id="${escapeHtml(String(scene.id))}" title="Remove from pack" aria-label="Remove scene #${activeIdx + 1} from pack">✕ Remove</button>
             </div>

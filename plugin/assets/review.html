@@ -99,6 +99,7 @@
       padding: 12px;
       margin-bottom: 0;
       display: flex;
+      flex-wrap: wrap;
       gap: 12px;
       cursor: grab;
       transition: border-color 0.2s, box-shadow 0.2s;
@@ -114,6 +115,7 @@
     }
 
     .scene-thumb {
+      flex: 0 0 120px;
       width: 120px;
       height: 70px;
       border-radius: 4px;
@@ -122,14 +124,33 @@
     }
 
     .scene-info {
-      flex: 1;
+      flex: 1 1 180px;
+      min-width: 0;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
     }
 
+    .scene-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .scene-card-actions {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
     .scene-title {
       font-size: 0.95rem;
+      overflow-wrap: anywhere;
+      min-width: 0;
+      flex: 1 1 auto;
     }
 
     .scene-meta {

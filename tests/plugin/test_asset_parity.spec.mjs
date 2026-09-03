@@ -22,10 +22,10 @@ const __dirname = path.dirname(__filename);
 // mismatch — that is the signal to refresh ASSET_RECORD below in the same
 // commit, so unreviewed or truncated asset changes can never slip through.
 const ASSET_RECORD = {
-  // review.js: updated with 2D row-banded drag-and-drop hit-test and computed-track column detection
-  'review.js': '83db059536d46233011c7fb27b5b187b998f5be43c05793f23b54c0fb431535a',
-  // review.html: updated with responsive scene grid (#scene-list), stage rail chips, and solid accent stage panels
-  'review.html': 'b38127a6fbcc097d2456a5757a5f58c72a38f1e808ae1433ac2d77826b0b114a',
+  // review.js: updated scene card header markup to use responsive stylesheet classes (.scene-card-header, .scene-card-actions)
+  'review.js': '1f83128a81fee98df1b0c4ead32e58c773e517b4e2da3fc28447ee80fd8d5be3',
+  // review.html: responsive scene-card interior with flex-wrap, tuned flex-basis, header-row wrapping, and title overflow protection
+  'review.html': '095e0572f7942cd5100eee78f1722638ee273047b658b2a4e142ac3db60a3fb9',
 };
 
 function sha256(filePath) {
