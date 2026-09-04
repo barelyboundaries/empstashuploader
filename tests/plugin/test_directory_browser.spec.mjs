@@ -38,6 +38,9 @@ function setupMocks(page) {
       body: fs.readFileSync(filePath, "utf8")
     });
   });
+
+  // Isolate sidecar api/run route per test harness invariant
+  page.route("**/api/run/**", async (route) => route.abort("connectionrefused"));
 }
 
 test.describe("Empornium Megapack Builder - Server Filesystem Directory Browser", () => {
@@ -456,6 +459,23 @@ test.describe("Empornium Megapack Builder - Server Filesystem Directory Browser"
         });
       }
 
+      if (query.includes("FindJob") || query.includes("findJob")) {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            data: {
+              findJob: {
+                id: postData.variables?.id || "job-probe-1",
+                status: "FINISHED",
+                progress: 1.0,
+                error: null
+              }
+            }
+          })
+        });
+      }
+
       return route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -480,6 +500,9 @@ test.describe("Empornium Megapack Builder - Server Filesystem Directory Browser"
     await page.locator("#btn-probe").click();
     await expect.poll(() => probePayload).toBeTruthy();
     expect(probePayload.target_dir).toBe("E:\\TargetStorage\\MegapackFolder\\My Awesome Megapack");
+
+    // Wait for the probe job to finish and unlock controls before consolidating
+    await expect(page.locator("#btn-consolidate")).toBeEnabled({ timeout: 10000 });
 
     // 3. Click Consolidate Files -> verify moveFilesInput.destination_folder
     await page.locator("#btn-consolidate").click();

@@ -199,6 +199,28 @@
       border: 1px solid rgba(16, 185, 129, 0.35);
     }
 
+    .busy-banner {
+      background-color: rgba(59, 130, 246, 0.12);
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      color: var(--text-main);
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+
+    .busy-banner button {
+      padding: 3px 10px;
+      font-size: 0.75rem;
+      line-height: 1.3;
+      flex-shrink: 0;
+    }
+
     .collision-banner {
       background-color: rgba(239, 68, 68, 0.12);
       border: 1px solid var(--danger);
@@ -380,6 +402,34 @@
       width: 0%;
       background: linear-gradient(90deg, #3b82f6, #10b981);
       transition: width 0.3s ease;
+    }
+
+    .progress-bar.indeterminate {
+      width: 100% !important;
+      position: relative;
+      overflow: hidden;
+      background: #2c323b;
+    }
+
+    .progress-bar.indeterminate::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: 30%;
+      background: linear-gradient(90deg, transparent, #3b82f6, #10b981, transparent);
+      border-radius: 8px;
+      animation: progress-bar-indeterminate 1.2s infinite linear;
+    }
+
+    @keyframes progress-bar-indeterminate {
+      0% {
+        transform: translateX(-100%);
+      }
+      100% {
+        transform: translateX(350%);
+      }
     }
 
     .status-text {
@@ -1231,6 +1281,12 @@
          wizard's stage containers (todo 8). Existing controls keep their IDs;
          non-current stages are de-emphasized, never hidden. -->
     <div class="options-panel">
+      <!-- Change B: Busy banner shown while an operation is in flight -->
+      <div id="busy-banner" class="busy-banner" role="status" aria-live="polite" style="display:none;">
+        <span id="busy-banner-text"></span>
+        <button type="button" id="btn-busy-unlock" class="btn btn-secondary" style="display:none;">Unlock anyway</button>
+      </div>
+
       <!-- Stage 1: Setup — what the post is. The mode switcher moved here
            from the header (same IDs); all controls keep their IDs. -->
       <div class="stage-panel stage-current" id="stage-panel-1" data-stage-panel="1">
@@ -1325,7 +1381,22 @@
           <div style="font-weight: 600; color: #10b981;">🎉 Build Complete!</div>
           <div id="artifact-details"></div>
         </div>
+      </div>
 
+      <!-- Build Progress Section. Deliberately OUTSIDE the stage containers:
+           showStatus reports stage-gate reasons and task progress from every
+           stage, so it must never be de-emphasized or out of reach. -->
+      <div id="progress-section" style="margin-top: 10px;">
+        <div class="progress-bar-container" id="progress-container">
+          <div class="progress-bar" id="progress-bar"></div>
+        </div>
+        <div class="status-text" id="status-text">Preparing task...</div>
+      </div>
+
+      <!-- BBCode Preview Section. Hoisted outside the stage panels so it is
+           never de-emphasized across stages 1-3: it represents output and final
+           submission material rather than a stage-specific control. -->
+      <div id="bbcode-section">
         <!-- BBCode Preview -->
         <div class="form-group">
           <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -1380,17 +1451,18 @@
             <button type="button" id="toolbar-popover-cancel" class="btn btn-secondary toolbar-popover-btn">Cancel</button>
           </div>
           <textarea class="bbcode-box" id="bbcode-preview">[b]Megapack Preview[/b]</textarea>
+          <!-- Unmapped Tags Notification Collapsible: collapsed by default, hidden when empty -->
+          <details id="unmapped-tags-collapsible" class="unmapped-tags-collapsible" style="display: none; margin-top: 8px; font-size: 0.85rem; background: rgba(0,0,0,0.2); border: 1px solid #374151; border-radius: 4px; padding: 6px 10px;">
+            <summary id="unmapped-tags-summary" style="cursor: pointer; font-weight: 500; color: #9ca3af; outline: none;"></summary>
+            <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 6px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 0.8rem; color: #9ca3af;">Add mappings in <code>backend/empornium_megapack/data/emp_tags.toml</code></span>
+                <button type="button" id="btn-copy-unmapped" class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;">📋 Copy</button>
+              </div>
+              <ul id="unmapped-tags-list" style="margin: 4px 0 0 16px; padding: 0; max-height: 150px; overflow-y: auto; color: #d1d5db;"></ul>
+            </div>
+          </details>
         </div>
-      </div>
-
-      <!-- Build Progress Section. Deliberately OUTSIDE the stage containers:
-           showStatus reports stage-gate reasons and task progress from every
-           stage, so it must never be de-emphasized or out of reach. -->
-      <div id="progress-section" style="margin-top: 10px;">
-        <div class="progress-bar-container" id="progress-container">
-          <div class="progress-bar" id="progress-bar"></div>
-        </div>
-        <div class="status-text" id="status-text">Preparing task...</div>
       </div>
     </div>
   </div>

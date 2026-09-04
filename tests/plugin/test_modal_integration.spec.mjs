@@ -279,6 +279,24 @@ test.describe("Empornium Megapack Builder Frontend - Full Integration Suite", ()
         });
       }
 
+      if (query.includes("FindJob") || query.includes("findJob")) {
+        await new Promise((r) => setTimeout(r, 300));
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            data: {
+              findJob: {
+                id: postData.variables?.id || "job-probe-99",
+                status: "FINISHED",
+                progress: 1.0,
+                error: null
+              }
+            }
+          })
+        });
+      }
+
       return route.continue();
     });
 
@@ -293,6 +311,9 @@ test.describe("Empornium Megapack Builder Frontend - Full Integration Suite", ()
     expect(probeCalledWith.plugin_id).toBe("empornium-megapack");
     await expect(page.locator("#status-text")).toContainText("Task ProbeFiles queued (Job ID: job-probe-99)");
 
+    // Wait for the probe job to finish and unlock controls before consolidating
+    await expect(page.locator("#btn-consolidate")).toBeEnabled({ timeout: 10000 });
+
     // 2. Consolidate Files (MoveFiles) — the flow now runs the read-only
     // destination pre-check first, so poll for the mutation on the wire.
     await page.locator("#btn-consolidate").click();
@@ -301,6 +322,9 @@ test.describe("Empornium Megapack Builder Frontend - Full Integration Suite", ()
     // Consolidation destination = the seed-dir field value (no pack-title
     // subfolder — in-place seeding, todo 6 of staged-wizard-inplace-seed).
     expect(moveFilesCalledWith.input.destination_folder).toBe("C:\\Packs");
+
+    // Wait for consolidate to finish and controls to be enabled before building
+    await expect(page.locator("#btn-build")).toBeEnabled({ timeout: 10000 });
 
     // 3. Build Megapack
     await page.locator("#btn-build").click();

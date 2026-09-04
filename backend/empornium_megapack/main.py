@@ -16,6 +16,7 @@ from .models import (
     TokenGetResponse,
 )
 from .run_store import run_store, RUN_ID_REGEX
+from .tags import TagVocabularyError, load_vocabulary
 from .token_store import token_store
 from .torrents import sanitize_announce_url
 
@@ -206,6 +207,23 @@ def health():
         "announce_configured": bool(settings.empornium_announce_url.strip()),
         "bundle_after_build": settings.bundle_after_build,
     }
+
+
+@app.get("/api/tags/vocabulary")
+def get_tags_vocabulary():
+    """Return the curated Empornium tag vocabulary mapping and ignored list.
+
+    Returns:
+        {"map": {stash_tag_lower: [emp_tag, ...]}, "ignored": [stash_tag_lower, ...]}
+    """
+    try:
+        vocab = load_vocabulary()
+        return {
+            "map": vocab.map,
+            "ignored": sorted(vocab.ignored),
+        }
+    except TagVocabularyError as err:
+        raise HTTPException(status_code=500, detail=str(err))
 
 
 _MAX_FS_EXISTS_PATHS = 100

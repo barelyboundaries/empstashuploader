@@ -120,6 +120,23 @@ test.describe('Task Failure Sentinel Detection & False-Success Protection', () =
         });
       }
 
+      if (query.includes('FindJob') || query.includes('findJob')) {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            data: {
+              findJob: {
+                id: postData.variables?.id || 'job-probe-nonce-1',
+                status: 'FINISHED',
+                progress: 1.0,
+                error: null,
+              },
+            },
+          }),
+        });
+      }
+
       return route.continue();
     });
 
@@ -132,6 +149,9 @@ test.describe('Task Failure Sentinel Detection & False-Success Protection', () =
     await expect.poll(() => probePayload).not.toBeNull();
     expect(typeof probePayload.run_id).toBe('string');
     expect(probePayload.run_id.length).toBeGreaterThan(5);
+
+    // Wait for the probe job to finish and unlock controls before building
+    await expect(page.locator('#btn-build')).toBeEnabled({ timeout: 10000 });
 
     // Trigger Build
     await page.locator('#btn-build').click();

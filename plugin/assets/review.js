@@ -35,6 +35,15 @@
   let activePollInterval = null;
   let currentCoverUrl = null;
   const handledJobIds = new Set();
+  let uiBusy = false;            // true from click until the operation reaches a terminal state
+  let busyOperation = null;      // "build" | "mutation" — the lock tier
+  let busyLabel = null;          // human label, e.g. "BuildMegapack"
+  let busyAwaitingJob = false;   // a Stash job was dispatched; unlock is owned by handleJobUpdate
+  let busyStartedAt = 0;         // Date.now() at lock, for the escape hatch
+  let busyEscapeTimer = null;
+  let cachedVocabulary = null;
+  let vocabularyFetchAttempted = false;
+  let vocabularyFetchFailed = false;
 
   // 1. Get Scene IDs from Query Parameters or Token Resolution
   const urlParams = new URLSearchParams(window.location.search);
@@ -350,6 +359,92 @@
       .replace(/[\s._-]+/g, ".")
       .replace(/^\.+|\.+$/g, "")
       .slice(0, 32);
+  }
+
+  // Change C: Empornium tag vocabulary resolution (mirrors backend tags.py resolve_tags)
+  function resolveTags(sources, vocab = cachedVocabulary) {
+    const tags = [];
+    const unmapped = [];
+    const ignored = [];
+
+    const hasVocab = Boolean(vocab && vocab.map && (vocab.ignored instanceof Set || Array.isArray(vocab.ignored)));
+    const ignoredSet = hasVocab
+      ? (vocab.ignored instanceof Set ? vocab.ignored : new Set(vocab.ignored.map((s) => String(s).toLowerCase().trim())))
+      : null;
+
+    for (const src of sources || []) {
+      const val = typeof src?.value === "string" ? src.value.trim() : (typeof src === "string" ? src.trim() : "");
+      const kind = src?.kind || "scene_tag";
+      if (!val) continue;
+
+      if (kind === "performer" || kind === "studio" || kind === "derived") {
+        const emp = empifyTag(val);
+        if (emp) tags.push(emp);
+      } else if (kind === "scene_tag") {
+        if (!hasVocab) {
+          // Unfiltered fallback when vocabulary is unavailable (degrade visibly)
+          const emp = empifyTag(val);
+          if (emp) tags.push(emp);
+        } else {
+          const lower = val.toLowerCase();
+          if (ignoredSet && ignoredSet.has(lower)) {
+            ignored.push(src.value || val);
+          } else if (vocab.map && Object.prototype.hasOwnProperty.call(vocab.map, lower)) {
+            const mapped = vocab.map[lower];
+            const tokens = Array.isArray(mapped)
+              ? mapped
+              : String(mapped).trim().split(/\s+/);
+            for (const tok of tokens) {
+              const cleanedTok = tok.trim();
+              if (cleanedTok) tags.push(cleanedTok);
+            }
+          } else {
+            unmapped.push(src.value || val);
+          }
+        }
+      } else {
+        unmapped.push(src.value || val);
+      }
+    }
+
+    const uniqueTags = [...new Set(tags)].sort().slice(0, 60);
+    const uniqueUnmapped = [...new Set(unmapped)];
+    const uniqueIgnored = [...new Set(ignored)];
+
+    return {
+      tags: uniqueTags,
+      unmapped: uniqueUnmapped,
+      ignored: uniqueIgnored,
+    };
+  }
+
+  // Change C: Fetch vocabulary once on load via backendEndpoints helper
+  async function fetchVocabulary() {
+    if (cachedVocabulary) return cachedVocabulary;
+    vocabularyFetchAttempted = true;
+    const endpoints = backendEndpoints("/api/tags/vocabulary");
+    for (const url of endpoints) {
+      try {
+        const response = await fetch(url);
+        if (response.ok) {
+          const data = await response.json();
+          if (data && typeof data === "object" && data.map && Array.isArray(data.ignored)) {
+            cachedVocabulary = {
+              map: data.map,
+              ignored: new Set(data.ignored.map((s) => String(s).toLowerCase().trim())),
+            };
+            vocabularyFetchFailed = false;
+            updateBBCode();
+            return cachedVocabulary;
+          }
+        }
+      } catch (err) {
+        // endpoint unreachable, try next candidate
+      }
+    }
+    vocabularyFetchFailed = true;
+    updateBBCode();
+    return null;
   }
 
   function findFailureSentinel(logs, runId) {
@@ -1705,6 +1800,7 @@
   }
 
   function keepSceneInCollisionGroup(sceneId) {
+    if (uiBusy) return;
     const targetIdStr = String(sceneId);
     const affectedGroups = duplicateGroups.filter((g) =>
       g.members.some((m) => String(m.sceneId) === targetIdStr)
@@ -1793,6 +1889,15 @@
   }
 
   function updateActionAvailability() {
+    if (uiBusy) {
+      // Busy state is authoritative; skip gate derivation entirely.
+      for (const id of ["btn-build", "btn-consolidate", "btn-probe"]) {
+        const el = document.getElementById(id);
+        if (el) { el.disabled = true; el.title = `${busyLabel} in progress — controls locked`; }
+      }
+      return;
+    }
+
     const btnConsolidate = document.getElementById("btn-consolidate");
     const btnBuild = document.getElementById("btn-build");
     const radioMegapack = document.getElementById("mode-megapack");
@@ -1931,12 +2036,14 @@
   }
 
   function removeSceneFromPack(sceneId) {
+    if (uiBusy) return;
     excludedSceneIds.add(String(sceneId));
     renderScenes();
     updateBBCode();
   }
 
   function restoreAllScenes() {
+    if (uiBusy) return;
     excludedSceneIds.clear();
     showOnlyConflicts = false;
     renderScenes();
@@ -2223,8 +2330,12 @@
         });
       }
 
-      card.addEventListener("dragstart", () => card.classList.add("dragging"));
+      card.addEventListener("dragstart", () => {
+        if (uiBusy) return;
+        card.classList.add("dragging");
+      });
       card.addEventListener("dragend", () => {
+        if (uiBusy) return;
         card.classList.remove("dragging");
         reorderScenes();
       });
@@ -2235,6 +2346,7 @@
     if (!container.dataset.dragBound) {
       container.dataset.dragBound = "true";
       container.addEventListener("dragover", (e) => {
+        if (uiBusy) return;
         e.preventDefault();
         const dragging = document.querySelector(".dragging");
         if (!dragging) return;
@@ -2245,6 +2357,11 @@
           container.insertBefore(dragging, afterElement);
         }
       });
+    }
+
+    // Change B: Newly rendered cards inherit busy lockout if operation in flight
+    if (uiBusy) {
+      applyBusyLock();
     }
   }
 
@@ -2351,6 +2468,7 @@
   }
 
   function reorderScenes() {
+    if (uiBusy) return;
     const cards = [...document.querySelectorAll(".scene-card")];
     const reorderedActive = cards
       .map((c) => scenes[parseInt(c.dataset.index, 10)])
@@ -2376,6 +2494,19 @@
   // 5. Update BBCode Preview
   function updateBBCode() {
     if (bbcodeIsFinal || bbcodeUserEdited) return;
+
+    // Change C: Degrade visibly if tag vocabulary is unavailable
+    const bbcodeWarning = document.getElementById("bbcode-warning");
+    if (vocabularyFetchFailed && !cachedVocabulary) {
+      if (bbcodeWarning) {
+        bbcodeWarning.textContent = "⚠️ Tag vocabulary unavailable — tags shown unfiltered";
+        bbcodeWarning.style.display = "block";
+      }
+    } else if (bbcodeWarning && bbcodeWarning.textContent.includes("Tag vocabulary unavailable")) {
+      bbcodeWarning.textContent = "";
+      bbcodeWarning.style.display = "none";
+    }
+
     const packTitleInput = document.getElementById("pack-title");
     const title = packTitleInput?.value || "";
     const notes = document.getElementById("pack-notes")?.value;
@@ -2420,7 +2551,15 @@
 
       const performers = (scene.performers || []).map((p) => p.name).join(", ");
       const studioName = scene.studio?.name;
-      const tags = (scene.tags || []).map((t) => t.name).join(", ");
+      const rawSceneTags = (scene.tags || []).map((t) => (typeof t === "string" ? t : t?.name || "")).filter(Boolean);
+      let tags = "";
+      if (cachedVocabulary) {
+        const sources = rawSceneTags.map((t) => ({ value: t, kind: "scene_tag" }));
+        const resolved = resolveTags(sources, cachedVocabulary);
+        tags = resolved.tags.join(", ");
+      } else {
+        tags = rawSceneTags.join(", ");
+      }
 
       bbcode = `[center][b][size=5]${title}${metaSuffix}[/size][/b][/center]\n\n`;
       if (studioName) {
@@ -2508,6 +2647,7 @@
 
       const jobId = data?.runPluginTask;
       if (jobId) {
+        busyAwaitingJob = true;
         trackJobProgress(jobId, "ProbeFiles", payload);
       } else {
         showStatus("Filesystem probe dispatched. Check Stash Task Manager for live log.", 1.0);
@@ -2955,7 +3095,7 @@
 
         const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
         const base64Data = dataUrl.replace(/^data:image\/jpeg;base64,/, "");
-        uploadCoverImage(base64Data, file.name || "cover.jpg");
+        runExclusive("mutation", "UploadCoverImage", () => uploadCoverImage(base64Data, file.name || "cover.jpg"));
       };
       img.onerror = () => {
         if (statusEl) {
@@ -3010,6 +3150,7 @@
       });
       const jobId = data?.runPluginTask;
       if (jobId) {
+        busyAwaitingJob = true;
         trackJobProgress(jobId, "UploadCoverImage", payload);
       } else {
         if (statusEl) {
@@ -3197,6 +3338,7 @@
 
       const jobId = data?.runPluginTask;
       if (jobId) {
+        busyAwaitingJob = true;
         trackJobProgress(jobId, taskName, payload);
       } else {
         showStatus(`${isSingle ? "Single scene" : "Megapack"} build task queued in Stash Task Manager!`, 0.85);
@@ -3407,154 +3549,159 @@
       }
       handledJobIds.add(jobIdStr);
 
-      if (wsWatchdog) {
-        clearTimeout(wsWatchdog);
-        wsWatchdog = null;
-      }
-      if (activeWs) {
-        try {
-          activeWs.close();
-        } catch (_) {}
-        activeWs = null;
-      }
-      if (activePollInterval) {
-        clearInterval(activePollInterval);
-        activePollInterval = null;
-      }
-      activePollingJobId = null;
+      try {
+        if (wsWatchdog) {
+          clearTimeout(wsWatchdog);
+          wsWatchdog = null;
+        }
+        if (activeWs) {
+          try {
+            activeWs.close();
+          } catch (_) {}
+          activeWs = null;
+        }
+        if (activePollInterval) {
+          clearInterval(activePollInterval);
+          activePollInterval = null;
+        }
+        activePollingJobId = null;
 
-      const runId = payload?.run_id || activeRunId;
-      let sidecarResult = null;
+        const runId = payload?.run_id || activeRunId;
+        let sidecarResult = null;
 
-      if (runId) {
-        async function probeSidecarRun(rid) {
-          const endpoints = backendEndpoints(`/api/run/${encodeURIComponent(rid)}`);
-          let sawNetworkError = false;
-          for (const url of endpoints) {
-            try {
-              const resp = await fetch(url);
-              if (resp.status === 200) {
-                const data = await resp.json();
-                if (data && data.found === true) {
-                  return { status: "found", result: data.result };
-                } else if (data && data.found === false) {
-                  return { status: "not_found" };
+        if (runId) {
+          async function probeSidecarRun(rid) {
+            const endpoints = backendEndpoints(`/api/run/${encodeURIComponent(rid)}`);
+            let sawNetworkError = false;
+            for (const url of endpoints) {
+              try {
+                const resp = await fetch(url);
+                if (resp.status === 200) {
+                  const data = await resp.json();
+                  if (data && data.found === true) {
+                    return { status: "found", result: data.result };
+                  } else if (data && data.found === false) {
+                    return { status: "not_found" };
+                  } else {
+                    return { status: "transport_error" };
+                  }
+                } else if (resp.status === 400) {
+                  return { status: "bad_request" };
                 } else {
                   return { status: "transport_error" };
                 }
-              } else if (resp.status === 400) {
-                return { status: "bad_request" };
-              } else {
-                return { status: "transport_error" };
-              }
-            } catch (err) {
-              sawNetworkError = true;
-            }
-          }
-          return sawNetworkError ? { status: "transport_error" } : { status: "not_found" };
-        }
-
-        let probe = await probeSidecarRun(runId);
-
-        // If not found yet on a reachable sidecar, retry over ~5s (10 x 500ms)
-        if (probe.status === "not_found") {
-          const maxRetries = 10;
-          const retryDelayMs = 500;
-          for (let i = 0; i < maxRetries; i++) {
-            await new Promise((r) => setTimeout(r, retryDelayMs));
-            probe = await probeSidecarRun(runId);
-            if (probe.status === "found" || probe.status === "transport_error" || probe.status === "bad_request") {
-              break;
-            }
-          }
-        }
-
-        if (probe.status === "found" && probe.result) {
-          sidecarResult = probe.result;
-          if (sidecarResult.status === "failed") {
-            const failureError = sidecarResult.error || "Task execution failed on backend.";
-            if (taskType === "UploadCoverImage") {
-              const statusEl = document.getElementById("cover-status");
-              if (statusEl) {
-                statusEl.style.display = "block";
-                statusEl.innerText = `Cover upload failed: ${failureError}`;
-                statusEl.style.color = "#ef4444";
+              } catch (err) {
+                sawNetworkError = true;
               }
             }
-            showStatus(failureError, 0, true);
-            return;
-          } else {
-            const combined = { ...payload, ...sidecarResult };
-            onTaskComplete(taskType, combined);
-            return; // Skip log scans entirely
+            return sawNetworkError ? { status: "transport_error" } : { status: "not_found" };
+          }
+
+          let probe = await probeSidecarRun(runId);
+
+          // If not found yet on a reachable sidecar, retry over ~5s (10 x 500ms)
+          if (probe.status === "not_found") {
+            const maxRetries = 10;
+            const retryDelayMs = 500;
+            for (let i = 0; i < maxRetries; i++) {
+              await new Promise((r) => setTimeout(r, retryDelayMs));
+              probe = await probeSidecarRun(runId);
+              if (probe.status === "found" || probe.status === "transport_error" || probe.status === "bad_request") {
+                break;
+              }
+            }
+          }
+
+          if (probe.status === "found" && probe.result) {
+            sidecarResult = probe.result;
+            if (sidecarResult.status === "failed") {
+              const failureError = sidecarResult.error || "Task execution failed on backend.";
+              if (taskType === "UploadCoverImage") {
+                const statusEl = document.getElementById("cover-status");
+                if (statusEl) {
+                  statusEl.style.display = "block";
+                  statusEl.innerText = `Cover upload failed: ${failureError}`;
+                  statusEl.style.color = "#ef4444";
+                }
+              }
+              showStatus(failureError, 0, true);
+              return;
+            } else {
+              const combined = { ...payload, ...sidecarResult };
+              onTaskComplete(taskType, combined);
+              return; // Skip log scans entirely
+            }
           }
         }
-      }
 
-      // --- Log Sentinel Fallback Path ---
-      let candidateLogs = bufferedLogs;
-      let usedFallback = false;
-      let fallbackFailed = false;
+        // --- Log Sentinel Fallback Path ---
+        let candidateLogs = bufferedLogs;
+        let usedFallback = false;
+        let fallbackFailed = false;
 
-      if (!wsLogStreamActive || candidateLogs.length === 0) {
-        try {
-          const resp = await executeGraphQL(`query Logs { logs { time level message } }`);
-          if (resp && Array.isArray(resp.logs)) {
-            candidateLogs = resp.logs;
-            usedFallback = true;
-          } else {
+        if (!wsLogStreamActive || candidateLogs.length === 0) {
+          try {
+            const resp = await executeGraphQL(`query Logs { logs { time level message } }`);
+            if (resp && Array.isArray(resp.logs)) {
+              candidateLogs = resp.logs;
+              usedFallback = true;
+            } else {
+              fallbackFailed = true;
+            }
+          } catch (err) {
             fallbackFailed = true;
           }
-        } catch (err) {
-          fallbackFailed = true;
         }
-      }
 
-      let failureError = runId ? findFailureSentinel(candidateLogs, runId) : null;
-      if (!failureError && usedFallback && bufferedLogs.length > 0) {
-        failureError = findFailureSentinel(bufferedLogs, runId);
-      }
+        let failureError = runId ? findFailureSentinel(candidateLogs, runId) : null;
+        if (!failureError && usedFallback && bufferedLogs.length > 0) {
+          failureError = findFailureSentinel(bufferedLogs, runId);
+        }
 
-      if (failureError) {
-        if (taskType === "UploadCoverImage") {
-          const statusEl = document.getElementById("cover-status");
-          if (statusEl) {
-            statusEl.style.display = "block";
-            statusEl.innerText = `Cover upload failed: ${failureError}`;
-            statusEl.style.color = "#ef4444";
+        if (failureError) {
+          if (taskType === "UploadCoverImage") {
+            const statusEl = document.getElementById("cover-status");
+            if (statusEl) {
+              statusEl.style.display = "block";
+              statusEl.innerText = `Cover upload failed: ${failureError}`;
+              statusEl.style.color = "#ef4444";
+            }
           }
+          showStatus(failureError, 0, true);
+          return;
         }
-        showStatus(failureError, 0, true);
-        return;
-      }
 
-      if (!wsLogStreamActive && fallbackFailed) {
-        if (taskType === "UploadCoverImage") {
-          const statusEl = document.getElementById("cover-status");
-          if (statusEl) {
-            statusEl.style.display = "block";
-            statusEl.innerText = "⚠️ Cover upload completed, but log verification failed.";
-            statusEl.style.color = "#ef4444";
+        if (!wsLogStreamActive && fallbackFailed) {
+          if (taskType === "UploadCoverImage") {
+            const statusEl = document.getElementById("cover-status");
+            if (statusEl) {
+              statusEl.style.display = "block";
+              statusEl.innerText = "⚠️ Cover upload completed, but log verification failed.";
+              statusEl.style.color = "#ef4444";
+            }
           }
+          showStatus("⚠️ Task marked finished, but log verification failed (WebSocket and logs query unavailable). Check Stash logs.", 1.0, true);
+          return;
         }
-        showStatus("⚠️ Task marked finished, but log verification failed (WebSocket and logs query unavailable). Check Stash logs.", 1.0, true);
-        return;
-      }
 
-      // The request payload only describes what was asked for. Everything the
-      // build actually produced -- remote image URLs, final BBCode, tracker
-      // tags, pre-flight results -- comes back on the result sentinel.
-      const result = runId ? findResultSentinel(candidateLogs, runId) : null;
-      const chunkedBBCode = runId
-        ? (findBBCodeSentinel(candidateLogs, runId) ||
-           (usedFallback && bufferedLogs.length > 0 ? findBBCodeSentinel(bufferedLogs, runId) : null))
-        : null;
+        // The request payload only describes what was asked for. Everything the
+        // build actually produced -- remote image URLs, final BBCode, tracker
+        // tags, pre-flight results -- comes back on the result sentinel.
+        const result = runId ? findResultSentinel(candidateLogs, runId) : null;
+        const chunkedBBCode = runId
+          ? (findBBCodeSentinel(candidateLogs, runId) ||
+             (usedFallback && bufferedLogs.length > 0 ? findBBCodeSentinel(bufferedLogs, runId) : null))
+          : null;
 
-      let combined = result ? { ...payload, ...result } : payload;
-      if (chunkedBBCode) {
-        combined = { ...combined, chunked_bbcode: chunkedBBCode };
+        let combined = result ? { ...payload, ...result } : payload;
+        if (chunkedBBCode) {
+          combined = { ...combined, chunked_bbcode: chunkedBBCode };
+        }
+        onTaskComplete(taskType, combined);
+      } finally {
+        // Change B: Dispatched Stash job has reached terminal state; release busy lockout.
+        setUiBusy(false);
       }
-      onTaskComplete(taskType, combined);
     } else if (job.status === "FAILED" || job.status === "CANCELLED") {
       const jobIdStr = String(job.id);
       handledJobIds.add(jobIdStr);
@@ -3582,6 +3729,8 @@
         }
       }
       showStatus(`Task ${taskType} ${job.status}: ${job.error || "Unknown error"}`, progress, true);
+      // Change B: Terminal failure / cancellation releases busy lockout.
+      setUiBusy(false);
     }
   }
 
@@ -3660,23 +3809,43 @@
       // Tracker tags: from payload.tracker_tags or derived scene tags
       // The backend's merge_tags is authoritative. This fallback only runs when
       // the result sentinel was missing, and mirrors it as closely as the
-      // browser can: performers and studio are tracker tags too, and Empornium
-      // separates words with dots rather than dropping them.
+      // browser can using the cached vocabulary if available.
       let tagsList = payload?.tracker_tags;
+      let unmappedList = payload?.unmapped_tags;
       if (!tagsList || !Array.isArray(tagsList)) {
         const scenes = activeScenes();
-        const rawTags = [
-          ...((payload && payload.tags) || scenes.flatMap((s) => (s.tags || []).map((t) => t.name))),
-          ...((payload && payload.performers) || scenes.flatMap((s) => (s.performers || []).map((p) => p.name))),
-          ...scenes.map((s) => s.studio?.name)
-        ];
-        tagsList = [
-          ...new Set(
-            rawTags
-              .map((t) => (typeof t === "string" ? empifyTag(t) : ""))
-              .filter(Boolean)
-          )
-        ].sort();
+        const sources = [];
+        for (const s of scenes) {
+          for (const t of s.tags || []) {
+            const name = typeof t === "string" ? t : t?.name;
+            if (name) sources.push({ value: name, kind: "scene_tag" });
+          }
+          for (const p of s.performers || []) {
+            const name = typeof p === "string" ? p : p?.name;
+            if (name) sources.push({ value: name, kind: "performer" });
+          }
+          if (s.studio?.name) {
+            sources.push({ value: s.studio.name, kind: "studio" });
+          }
+        }
+        if (payload?.tags && Array.isArray(payload.tags)) {
+          for (const t of payload.tags) {
+            if (typeof t === "string" && t.trim()) sources.push({ value: t.trim(), kind: "scene_tag" });
+          }
+        }
+        if (payload?.performers && Array.isArray(payload.performers)) {
+          for (const p of payload.performers) {
+            if (typeof p === "string" && p.trim()) sources.push({ value: p.trim(), kind: "performer" });
+          }
+        }
+        const resolved = resolveTags(sources, cachedVocabulary);
+        tagsList = resolved.tags;
+        if (!unmappedList) {
+          unmappedList = resolved.unmapped;
+        }
+      }
+      if (!Array.isArray(unmappedList)) {
+        unmappedList = [];
       }
       const tagsString = tagsList.length > 0 ? tagsList.join(" ") : (isSingle ? "scene" : "megapack");
 
@@ -3709,6 +3878,46 @@
       }
 
       const bbcodeText = bbcodeBox ? bbcodeBox.value : "";
+
+      // C3: Render unmapped tags collapsible under BBCode preview
+      const collapsibleEl = document.getElementById("unmapped-tags-collapsible");
+      const summaryEl = document.getElementById("unmapped-tags-summary");
+      const listEl = document.getElementById("unmapped-tags-list");
+      const copyUnmappedBtn = document.getElementById("btn-copy-unmapped");
+
+      if (collapsibleEl && summaryEl && listEl) {
+        if (unmappedList.length > 0) {
+          collapsibleEl.removeAttribute("open"); // collapsed by default
+          collapsibleEl.style.display = "block";
+          summaryEl.textContent = `▸ ${unmappedList.length} Stash tag${unmappedList.length === 1 ? "" : "s"} have no Empornium equivalent (not sent)`;
+          listEl.innerHTML = "";
+          for (const tag of unmappedList) {
+            const li = document.createElement("li");
+            li.textContent = tag;
+            listEl.appendChild(li);
+          }
+          if (copyUnmappedBtn && !copyUnmappedBtn.dataset.bound) {
+            copyUnmappedBtn.dataset.bound = "true";
+            copyUnmappedBtn.addEventListener("click", async (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              try {
+                await navigator.clipboard.writeText(unmappedList.join("\n"));
+                const orig = copyUnmappedBtn.textContent;
+                copyUnmappedBtn.textContent = "✓ Copied";
+                setTimeout(() => {
+                  copyUnmappedBtn.textContent = orig;
+                }, 1500);
+              } catch (err) {
+                // Clipboard fallback
+              }
+            });
+          }
+        } else {
+          collapsibleEl.style.display = "none";
+          listEl.innerHTML = "";
+        }
+      }
 
       // Presentation size indicator next to BBCode preview
       const presSizeEl = document.getElementById("presentation-size-line");
@@ -3955,6 +4164,239 @@
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Change B: Centralized UI lockout system, runExclusive(), and setUiBusy()
+  // ---------------------------------------------------------------------------
+  async function runExclusive(tier, label, fn) {
+    if (uiBusy) return;                 // hard guard: a second click is a no-op
+    setUiBusy(true, tier, label);
+    busyAwaitingJob = false;
+    try {
+      await fn();
+    } catch (err) {
+      showStatus(`${label} failed: ${err.message}`, 0, true);
+      busyAwaitingJob = false;
+    } finally {
+      // A dispatched Stash job owns its own unlock (handleJobUpdate). Anything that
+      // returned without dispatching — a validation abort, a network failure, a pure
+      // GraphQL consolidation — unlocks here.
+      if (!busyAwaitingJob) setUiBusy(false);
+    }
+  }
+
+  function updateBusyEscapeHatch() {
+    if (!uiBusy) return;
+    const elapsedMs = Date.now() - busyStartedAt;
+    if (elapsedMs >= 60000) {
+      const totalSec = Math.floor(elapsedMs / 1000);
+      const m = Math.floor(totalSec / 60);
+      const s = totalSec % 60;
+      const bannerText = document.getElementById("busy-banner-text");
+      if (bannerText) {
+        bannerText.textContent = `Controls locked for ${m}m ${s}s — `;
+      }
+      const unlockBtn = document.getElementById("btn-busy-unlock");
+      if (unlockBtn) {
+        unlockBtn.style.display = "inline-flex";
+      }
+    }
+  }
+
+  function applyBusyLock() {
+    const isBusy = uiBusy;
+    const isBuildTier = isBusy && busyOperation === "build";
+
+    // Common controls locked in both "build" and "mutation" tiers
+    const commonControlIds = [
+      "mode-megapack",
+      "mode-single",
+      "pack-title",
+      "pack-notes",
+      "opt-upload-previews",
+      "cover-file-input",
+      "btn-remove-cover",
+      "output-dir",
+      "scratch-dir",
+      "btn-browse-dir",
+      "btn-browse-scratch",
+      "btn-restore-all",
+      "btn-keep-first",
+      "btn-filter-conflicts",
+      "btn-show-all-conflicts",
+      "btn-probe",
+      "btn-build",
+      "btn-consolidate",
+      "btn-sidecar-stop"
+    ];
+
+    for (const id of commonControlIds) {
+      const el = document.getElementById(id);
+      if (el) {
+        if (isBusy) {
+          el.disabled = true;
+        } else {
+          // Note: mode-megapack, mode-single, btn-build, btn-consolidate are
+          // derived authoritatively by updateActionAvailability() on unlock.
+          if (!["btn-build", "btn-consolidate", "mode-megapack", "mode-single"].includes(id)) {
+            el.disabled = false;
+          }
+        }
+      }
+    }
+
+    // Cover paste zone & file selection link
+    const coverZone = document.getElementById("cover-paste-zone");
+    if (coverZone) {
+      coverZone.tabIndex = isBusy ? -1 : 0;
+      coverZone.style.pointerEvents = isBusy ? "none" : "";
+    }
+    const linkChooseCover = document.getElementById("link-choose-cover");
+    if (linkChooseCover) {
+      linkChooseCover.style.pointerEvents = isBusy ? "none" : "";
+    }
+
+    // Scene cards: remove/keep buttons, file selector, and draggable flags
+    const sceneRemoveBtns = document.querySelectorAll(".scene-remove-btn");
+    for (const btn of sceneRemoveBtns) {
+      btn.disabled = isBusy;
+    }
+    const sceneKeepBtns = document.querySelectorAll(".scene-keep-btn");
+    for (const btn of sceneKeepBtns) {
+      btn.disabled = isBusy;
+    }
+    const sceneFileSelects = document.querySelectorAll(".scene-file-select");
+    for (const sel of sceneFileSelects) {
+      sel.disabled = isBusy;
+    }
+    const sceneCards = document.querySelectorAll(".scene-card");
+    for (const card of sceneCards) {
+      card.draggable = !isBusy;
+      card.setAttribute("draggable", isBusy ? "false" : "true");
+    }
+
+    // Build-tier only controls (BBCode editor, toolbar, and reset button)
+    const bbcodePreview = document.getElementById("bbcode-preview");
+    if (bbcodePreview) {
+      bbcodePreview.disabled = isBuildTier;
+    }
+    const bbcodeToolbarElements = document.querySelectorAll("#bbcode-toolbar .toolbar-btn, #bbcode-toolbar .toolbar-select");
+    for (const el of bbcodeToolbarElements) {
+      el.disabled = isBuildTier;
+    }
+    const bbcodeResetBtn = document.getElementById("btn-bbcode-reset");
+    if (bbcodeResetBtn) {
+      bbcodeResetBtn.disabled = isBuildTier;
+    }
+  }
+
+  function setUiBusy(on, tier = null, label = null) {
+    uiBusy = Boolean(on);
+
+    if (uiBusy) {
+      busyOperation = tier || "build";
+      busyLabel = label || (busyOperation === "build" ? "BuildMegapack" : "Operation");
+      busyStartedAt = Date.now();
+      document.body.classList.toggle("ui-busy", true);
+
+      // Button feedback: swap starting button label to hourglass verb
+      const btnFeedbackMap = {
+        "BuildMegapack": { id: "btn-build", text: "⏳ Building…" },
+        "BuildSingleScene": { id: "btn-build", text: "⏳ Building…" },
+        "ProbeFiles": { id: "btn-probe", text: "⏳ Probing…" },
+        "Consolidate": { id: "btn-consolidate", text: "⏳ Consolidating…" }
+      };
+      const feedback = btnFeedbackMap[busyLabel];
+      if (feedback) {
+        const btn = document.getElementById(feedback.id);
+        if (btn) {
+          if (!btn.dataset.idleLabel) {
+            btn.dataset.idleLabel = btn.textContent;
+          }
+          btn.textContent = feedback.text;
+        }
+      }
+
+      // Show busy banner
+      const banner = document.getElementById("busy-banner");
+      const bannerText = document.getElementById("busy-banner-text");
+      const unlockBtn = document.getElementById("btn-busy-unlock");
+      if (banner) banner.style.display = "flex";
+      if (bannerText) {
+        bannerText.textContent = `⏳ ${busyLabel} in progress — controls locked until it finishes or fails.`;
+      }
+      if (unlockBtn) unlockBtn.style.display = "none";
+
+      const unmappedCollapsible = document.getElementById("unmapped-tags-collapsible");
+      if (unmappedCollapsible) unmappedCollapsible.style.display = "none";
+
+      // Arm 60-second escape hatch timer
+      if (busyEscapeTimer) {
+        clearInterval(busyEscapeTimer);
+        busyEscapeTimer = null;
+      }
+      busyEscapeTimer = setInterval(updateBusyEscapeHatch, 1000);
+
+      // Scroll progress section into view once per operation
+      const progressSection = document.getElementById("progress-section");
+      if (progressSection && typeof progressSection.scrollIntoView === "function") {
+        progressSection.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }
+
+      // Apply indeterminate class to progress bar
+      const bar = document.getElementById("progress-bar");
+      if (bar) {
+        bar.classList.add("indeterminate");
+      }
+
+      // Lock controls
+      applyBusyLock();
+    } else {
+      busyOperation = null;
+      busyLabel = null;
+      busyAwaitingJob = false;
+      busyStartedAt = 0;
+      document.body.classList.toggle("ui-busy", false);
+
+      // Clear escape timer
+      if (busyEscapeTimer) {
+        clearInterval(busyEscapeTimer);
+        busyEscapeTimer = null;
+      }
+
+      // Hide busy banner
+      const banner = document.getElementById("busy-banner");
+      const bannerText = document.getElementById("busy-banner-text");
+      const unlockBtn = document.getElementById("btn-busy-unlock");
+      if (banner) banner.style.display = "none";
+      if (bannerText) bannerText.textContent = "";
+      if (unlockBtn) unlockBtn.style.display = "none";
+
+      // Clear indeterminate class from progress bar
+      const bar = document.getElementById("progress-bar");
+      if (bar) {
+        bar.classList.remove("indeterminate");
+      }
+
+      // Restore button labels
+      for (const id of ["btn-build", "btn-probe", "btn-consolidate"]) {
+        const btn = document.getElementById(id);
+        if (btn && btn.dataset.idleLabel) {
+          btn.textContent = btn.dataset.idleLabel;
+          delete btn.dataset.idleLabel;
+        }
+      }
+
+      // Restore probe button title if set
+      const btnProbe = document.getElementById("btn-probe");
+      if (btnProbe) btnProbe.title = "";
+
+      // Unlock controls and re-derive gated state
+      applyBusyLock();
+      updateActionAvailability();
+      renderStageState();
+    }
+  }
+
   function showStatus(msg, progress = 0, isError = false) {
     const container = document.getElementById("progress-container");
     const bar = document.getElementById("progress-bar");
@@ -3968,6 +4410,13 @@
     }
     if (bar) {
       bar.style.width = `${Math.round(progress * 100)}%`;
+      // Sweep highlight while operation is busy/waiting on Stash (progress < 0.02);
+      // switch to standard width presentation once real progress arrives.
+      if (progress < 0.02 && !isError) {
+        bar.classList.add("indeterminate");
+      } else {
+        bar.classList.remove("indeterminate");
+      }
     }
   }
 
@@ -4135,6 +4584,7 @@
   }
 
   function openDirectoryBrowser(targetInputId = "output-dir") {
+    if (uiBusy) return;
     const modal = document.getElementById("dir-browser-modal");
     if (!modal) return;
     dirBrowserTargetId = targetInputId || "output-dir";
@@ -4423,6 +4873,10 @@
   window.sanitizeName = sanitizeName;
   window.getPackDestinationFolder = getPackDestinationFolder;
   window.empifyTag = empifyTag;
+  window.resolveTags = resolveTags;
+  window.fetchVocabulary = fetchVocabulary;
+  window.getCachedVocabulary = () => cachedVocabulary;
+  window.setCachedVocabulary = (v) => { cachedVocabulary = v; };
   window.isPathUnderSeed = isPathUnderSeed;
   window.computeMissingSeedFiles = computeMissingSeedFiles;
   window.findBBCodeSentinel = findBBCodeSentinel;
@@ -4432,6 +4886,17 @@
   window.getCurrentCoverUrl = () => currentCoverUrl;
   window.getWizardStage = getWizardStage;
   window.handledJobIds = handledJobIds;
+  window.showStatus = showStatus;
+  window.renderScenes = renderScenes;
+  window.runExclusive = runExclusive;
+  window.setUiBusy = setUiBusy;
+  window.applyBusyLock = applyBusyLock;
+  window.updateBusyEscapeHatch = updateBusyEscapeHatch;
+  window.getUiBusy = () => uiBusy;
+  window.getBusyOperation = () => busyOperation;
+  window.setBusyStartedAt = (ts) => { busyStartedAt = ts; };
+  window.onTaskComplete = onTaskComplete;
+  window.handleJobUpdate = handleJobUpdate;
 
   // Prefill the scratch dir from the backend /health payload (todo 8 added
   // the field there). Best-effort: a down sidecar, non-200, or missing field
@@ -4593,6 +5058,19 @@
         badge.className = "sidecar-status sidecar-warn";
       }
     } else {
+      // Change B: Suppress StartBackend auto-dispatch while UI is busy to prevent queue flooding
+      if (uiBusy) {
+        const runningJob = Array.isArray(queue) ? queue.find((j) => j.status === "RUNNING") : null;
+        if (runningJob) {
+          badge.textContent = getQueuedStatusText(queue, null);
+          badge.className = "sidecar-status sidecar-warn";
+        } else {
+          badge.textContent = "Sidecar: NOT RUNNING — run start_backend.ps1";
+          badge.className = "sidecar-status sidecar-bad";
+        }
+        return;
+      }
+
       // F3: Bound the retry loop
       if (startBackendDispatchCount >= MAX_START_BACKEND_DISPATCHES) {
         badge.textContent = "Sidecar: failed to start — run start_backend.ps1";
@@ -4738,6 +5216,7 @@
     if (coverPasteZone && !coverPasteZone.dataset.bound) {
       coverPasteZone.dataset.bound = "true";
       coverPasteZone.addEventListener("paste", (e) => {
+        if (uiBusy) return;
         const items = e.clipboardData?.items;
         if (!items) return;
         for (let i = 0; i < items.length; i++) {
@@ -4752,6 +5231,7 @@
         }
       });
       coverPasteZone.addEventListener("dragover", (e) => {
+        if (uiBusy) return;
         e.preventDefault();
         coverPasteZone.style.borderColor = "#3b82f6";
       });
@@ -4760,6 +5240,7 @@
         coverPasteZone.style.borderColor = "#4b5563";
       });
       coverPasteZone.addEventListener("drop", (e) => {
+        if (uiBusy) return;
         e.preventDefault();
         coverPasteZone.style.borderColor = "#4b5563";
         const files = e.dataTransfer?.files;
@@ -4779,6 +5260,7 @@
     if (linkChooseCover && !linkChooseCover.dataset.bound) {
       linkChooseCover.dataset.bound = "true";
       linkChooseCover.addEventListener("click", (e) => {
+        if (uiBusy) return;
         e.preventDefault();
         e.stopPropagation();
         if (coverFileInput) coverFileInput.click();
@@ -4976,19 +5458,28 @@
     const probeBtn = document.getElementById("btn-probe");
     if (probeBtn && !probeBtn.dataset.bound) {
       probeBtn.dataset.bound = "true";
-      probeBtn.addEventListener("click", probeFiles);
+      probeBtn.addEventListener("click", () => runExclusive("mutation", "ProbeFiles", probeFiles));
     }
 
     const consolidateBtn = document.getElementById("btn-consolidate");
     if (consolidateBtn && !consolidateBtn.dataset.bound) {
       consolidateBtn.dataset.bound = "true";
-      consolidateBtn.addEventListener("click", consolidateFiles);
+      consolidateBtn.addEventListener("click", () => runExclusive("mutation", "Consolidate", consolidateFiles));
     }
 
     const buildBtn = document.getElementById("btn-build");
     if (buildBtn && !buildBtn.dataset.bound) {
       buildBtn.dataset.bound = "true";
-      buildBtn.addEventListener("click", buildMegapack);
+      buildBtn.addEventListener("click", () => runExclusive("build", "BuildMegapack", buildMegapack));
+    }
+
+    const btnBusyUnlock = document.getElementById("btn-busy-unlock");
+    if (btnBusyUnlock && !btnBusyUnlock.dataset.bound) {
+      btnBusyUnlock.dataset.bound = "true";
+      btnBusyUnlock.addEventListener("click", () => {
+        setUiBusy(false);
+        showStatus("Controls unlocked manually. The Stash job may still be running — check the Task Manager before starting another build.", 0, false);
+      });
     }
 
     const titleInput = document.getElementById("pack-title");
@@ -5053,5 +5544,6 @@
   loadScenes();
   prefillScratchDirFromHealth();
   refreshSidecarStatus();
+  fetchVocabulary();
 })();
 

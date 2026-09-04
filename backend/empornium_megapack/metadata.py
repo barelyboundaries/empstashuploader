@@ -1,7 +1,15 @@
 import re
 from datetime import date
 
-MAX_TAGS = 60
+from .tags import (
+    MAX_TAGS,
+    ResolvedTags,
+    TagSource,
+    empify,
+    load_vocabulary,
+    resolve_tags,
+)
+
 MAX_TITLE_LEN = 200
 MAX_NOTES_LEN = 2000
 
@@ -57,12 +65,6 @@ def join_names(names: list[str]) -> str:
     return ", ".join(names[:-1]) + f" & {names[-1]}"
 
 
-def empify(tag: str) -> str:
-    cleaned = re.sub(r"[^\w\s._-]", "", tag).lower()
-    cleaned = re.sub(r"[\s._-]+", ".", cleaned)
-    return cleaned.strip(".")[:32]
-
-
 def bbcode_escape(text: str, keep_newlines: bool = False) -> str:
     cleaned = "".join(ch for ch in text if ch >= " " or ch in "\t\n\r")
     if keep_newlines:
@@ -72,28 +74,34 @@ def bbcode_escape(text: str, keep_newlines: bool = False) -> str:
     return cleaned.replace("[", "&#91;").replace("]", "&#93;")
 
 
-def tag_sources_for_scene(scene, primary=None) -> list[str]:
-    sources: list[str] = []
+def tag_sources_for_scene(scene, primary=None) -> list[TagSource]:
+    sources: list[TagSource] = []
     raw_tags = getattr(scene, "tags", None) if hasattr(scene, "tags") else (scene.get("tags", []) if isinstance(scene, dict) else [])
     for t in raw_tags or []:
-        if isinstance(t, str) and t.strip():
-            sources.append(t.strip())
+        if isinstance(t, TagSource):
+            sources.append(t)
+        elif isinstance(t, str) and t.strip():
+            sources.append(TagSource(t.strip(), "scene_tag"))
         elif isinstance(t, dict) and "name" in t and str(t["name"]).strip():
-            sources.append(str(t["name"]).strip())
+            sources.append(TagSource(str(t["name"]).strip(), "scene_tag"))
 
     raw_perfs = getattr(scene, "performers", None) if hasattr(scene, "performers") else (scene.get("performers", []) if isinstance(scene, dict) else [])
     for p in raw_perfs or []:
-        if isinstance(p, str) and p.strip():
-            sources.append(p.strip())
+        if isinstance(p, TagSource):
+            sources.append(p)
+        elif isinstance(p, str) and p.strip():
+            sources.append(TagSource(p.strip(), "performer"))
         elif isinstance(p, dict) and "name" in p and str(p["name"]).strip():
-            sources.append(str(p["name"]).strip())
+            sources.append(TagSource(str(p["name"]).strip(), "performer"))
 
     raw_studio = getattr(scene, "studio", None) if hasattr(scene, "studio") else (scene.get("studio") if isinstance(scene, dict) else None)
     if raw_studio:
-        if isinstance(raw_studio, str) and raw_studio.strip():
-            sources.append(raw_studio.strip())
+        if isinstance(raw_studio, TagSource):
+            sources.append(raw_studio)
+        elif isinstance(raw_studio, str) and raw_studio.strip():
+            sources.append(TagSource(raw_studio.strip(), "studio"))
         elif isinstance(raw_studio, dict) and "name" in raw_studio and str(raw_studio["name"]).strip():
-            sources.append(str(raw_studio["name"]).strip())
+            sources.append(TagSource(str(raw_studio["name"]).strip(), "studio"))
 
     height = getattr(primary, "height", None) if primary else (scene.get("height") if isinstance(scene, dict) else None)
     video_codec = getattr(primary, "video_codec", None) if primary else (scene.get("video_codec") if isinstance(scene, dict) else None)
@@ -101,37 +109,40 @@ def tag_sources_for_scene(scene, primary=None) -> list[str]:
 
     resolution = resolution_for(height)
     if resolution:
-        sources.append(resolution)
+        sources.append(TagSource(resolution, "derived"))
     if video_codec:
-        sources.append(str(video_codec).strip())
+        sources.append(TagSource(str(video_codec).strip(), "derived"))
     if duration:
-        sources.append(f"{max(1, round(float(duration) / 60))}.min")
+        sources.append(TagSource(f"{max(1, round(float(duration) / 60))}.min", "derived"))
 
     raw_date = getattr(scene, "date", None) if hasattr(scene, "date") else (scene.get("date") if isinstance(scene, dict) else None)
     if raw_date:
         try:
             parsed = date.fromisoformat(str(raw_date)[:10])
-            sources.append(str(parsed.year))
-            sources.append(f"{parsed.year}.{parsed.month:02d}")
-            sources.append(f"{parsed.year}.{parsed.month:02d}.{parsed.day:02d}")
+            sources.append(TagSource(str(parsed.year), "derived"))
+            sources.append(TagSource(f"{parsed.year}.{parsed.month:02d}", "derived"))
+            sources.append(TagSource(f"{parsed.year}.{parsed.month:02d}.{parsed.day:02d}", "derived"))
         except ValueError:
             pass
     return sources
 
 
-def merge_tags(scenes, primaries: dict[str, object] | None = None) -> list[str]:
+def merge_tags_detailed(scenes, primaries: dict[str, object] | None = None) -> ResolvedTags:
     primaries = primaries or {}
-    collected: list[str] = []
+    collected: list[TagSource] = []
     for scene in scenes:
         scene_id = getattr(scene, "scene_id", None) if hasattr(scene, "scene_id") else (scene.get("id") or scene.get("scene_id") if isinstance(scene, dict) else None)
         primary = primaries.get(scene_id) if scene_id is not None else None
-        collected.extend(tag_sources_for_scene(scene, primary))
-    normalized: set[str] = set()
-    for tag in collected:
-        cleaned = empify(tag)
-        if cleaned and cleaned not in normalized:
-            normalized.add(cleaned)
-    return sorted(normalized)[:MAX_TAGS]
+        for item in tag_sources_for_scene(scene, primary):
+            if isinstance(item, TagSource):
+                collected.append(item)
+            elif isinstance(item, str):
+                collected.append(TagSource(item, "scene_tag"))
+    return resolve_tags(collected)
+
+
+def merge_tags(scenes, primaries: dict[str, object] | None = None) -> list[str]:
+    return merge_tags_detailed(scenes, primaries).tags
 
 
 def pack_performer_union(scenes, limit: int = 4) -> list[str]:

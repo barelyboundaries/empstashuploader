@@ -22,11 +22,10 @@ const __dirname = path.dirname(__filename);
 // mismatch — that is the signal to refresh ASSET_RECORD below in the same
 // commit, so unreviewed or truncated asset changes can never slip through.
 const ASSET_RECORD = {
-  // review.js: Brief F — query jobQueue before StartBackend dispatch, show truthful
-  // badge state, and bound client-side retry loop to prevent queue flooding
-  'review.js': '422192dd688303dec36b136bef51dfbe30138735d96cee62ee62331f19280bfe',
-  // review.html: added #bbcode-edited-notice markup and styling above the BBCode toolbar
-  'review.html': 'e20e40bdcf7cc21cafa078bdb30f2a8cfad4d425ed4aa4430e4c840f4eddf62d',
+  // review.js: Change C — Empornium tag vocabulary resolution, fallback, and unmapped tags collapsible
+  'review.js': '32805228bd93309590eb7b41bf377d096613b7839377b4476abe73222f36ed6e',
+  // review.html: Change C — unmapped tags collapsible (#unmapped-tags-collapsible) under bbcode-preview
+  'review.html': 'a0e4908b685a856690d3f3cb7f02e069c4033e85e0d83391d4268d955a1c79c6',
 };
 
 function sha256(filePath) {

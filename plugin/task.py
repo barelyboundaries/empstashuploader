@@ -275,6 +275,7 @@ try:
         pack_performer_union,
         pack_studio,
         merge_tags,
+        merge_tags_detailed,
         empify,
         THUMB_WIDTH,
         THUMB_RENDER_WIDTH,
@@ -299,6 +300,7 @@ except ImportError:
     pack_performer_union = None
     pack_studio = None
     merge_tags = None
+    merge_tags_detailed = None
     empify = None
     THUMB_WIDTH = 150
     THUMB_RENDER_WIDTH = 300
@@ -1731,10 +1733,19 @@ def run_build_megapack(payload: Any, server_connection: Optional[Dict[str, Any]]
                 bbcode_lines.append(f"\n[quote]{esc_notes}[/quote]\n")
 
         # Compute tracker tags via domain merge_tags engine (for Stage 5 upload/tracker submission)
-        tracker_tags = merge_tags(scenes)
+        if merge_tags_detailed is not None:
+            resolved_detailed = merge_tags_detailed(scenes)
+            tracker_tags = list(resolved_detailed.tags)
+            unmapped_tags = list(resolved_detailed.unmapped)
+        elif merge_tags is not None:
+            tracker_tags = merge_tags(scenes)
+            unmapped_tags = []
+        else:
+            tracker_tags = []
+            unmapped_tags = []
         if payload_tags:
             for pt in payload_tags:
-                emp = empify(pt)
+                emp = empify(pt) if empify else str(pt).strip().lower()
                 if emp and emp not in tracker_tags:
                     tracker_tags.append(emp)
             tracker_tags = sorted(set(tracker_tags))[:60]
@@ -1819,6 +1830,7 @@ def run_build_megapack(payload: Any, server_connection: Optional[Dict[str, Any]]
         submission_payload = {
             "title": pack_title,
             "tracker_tags": tracker_tags,
+            "unmapped_tags": unmapped_tags,
             "description": bbcode_content,
             "image_urls": uploaded_image_urls,
             "torrent_path": torrent_path,
@@ -1858,6 +1870,7 @@ def run_build_megapack(payload: Any, server_connection: Optional[Dict[str, Any]]
             "uploaded_urls": uploaded_image_urls,
             "preview_only": has_local_file_urls,
             "tracker_tags": tracker_tags,
+            "unmapped_tags": unmapped_tags,
             "announce_url": masked_announce,
             "source": torrent_source,
             "site_url": site_url,
@@ -1894,6 +1907,7 @@ def run_build_megapack(payload: Any, server_connection: Optional[Dict[str, Any]]
             "uploaded_urls": uploaded_image_urls,
             "preview_only": has_local_file_urls,
             "tracker_tags": tracker_tags,
+            "unmapped_tags": unmapped_tags,
             "announce_url": masked_announce,
             "source": torrent_source,
             "site_url": site_url,

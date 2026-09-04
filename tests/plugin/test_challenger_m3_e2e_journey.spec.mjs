@@ -210,6 +210,23 @@ test.describe("Milestone 3 Challenger 2: Full End-to-End User Journey & Fault In
         });
       }
 
+      if (query.includes("FindJob") || query.includes("findJob")) {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            data: {
+              findJob: {
+                id: postData?.variables?.id || "job-probe-77",
+                status: "FINISHED",
+                progress: 1.0,
+                error: null
+              }
+            }
+          })
+        });
+      }
+
       return route.fallback();
     });
 
@@ -229,7 +246,7 @@ test.describe("Milestone 3 Challenger 2: Full End-to-End User Journey & Fault In
           const parsed = JSON.parse(data);
           window.__mockWsSent.push(parsed);
 
-          if (parsed.type === "subscribe") {
+          if (parsed.type === "subscribe" && (!window.getBusyOperation || window.getBusyOperation() === "build")) {
             setTimeout(() => {
               if (this.onmessage) {
                 this.onmessage({
@@ -318,19 +335,25 @@ test.describe("Milestone 3 Challenger 2: Full End-to-End User Journey & Fault In
     await probeBtn.click();
     expect(probeDispatched).toBe(true);
 
+    // Wait for the probe job to finish and unlock controls before consolidating
+    const consolidateBtn = frame.locator("#btn-consolidate");
+    await expect(consolidateBtn).toBeEnabled({ timeout: 10000 });
+
     // 4. Trigger File Consolidation
     page.on("dialog", async (dialog) => {
       await dialog.accept();
     });
-    const consolidateBtn = frame.locator("#btn-consolidate");
     await consolidateBtn.click();
     // The consolidation flow now runs the read-only destination pre-check
     // (collision query + fs probe) before moveFiles — poll for the mutation.
     await expect.poll(() => moveDispatched).toBe(true);
 
+    // Wait for consolidate to finish and controls to be enabled before building
+    const buildBtn = frame.locator("#btn-build");
+    await expect(buildBtn).toBeEnabled({ timeout: 10000 });
+
     // 5. Trigger Build Megapack
     await frame.locator("#opt-upload-previews").check();
-    const buildBtn = frame.locator("#btn-build");
     await buildBtn.click();
     expect(buildDispatched).toBe(true);
     expect(buildPayloadCaptured).toBeTruthy();

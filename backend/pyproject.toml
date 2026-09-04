@@ -27,3 +27,7 @@ dev = [
 where = ["."]
 include = ["empornium_megapack*"]
 exclude = ["tests*"]
+
+[tool.setuptools.package-data]
+"empornium_megapack" = ["data/*.toml"]
+
