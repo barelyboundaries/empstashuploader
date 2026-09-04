@@ -1,6 +1,9 @@
 import asyncio
+import json
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,7 +15,10 @@ from .models import (
     TokenCreateResponse,
     TokenGetResponse,
 )
+from .run_store import run_store, RUN_ID_REGEX
+from .tags import TagVocabularyError, load_vocabulary
 from .token_store import token_store
+from .torrents import sanitize_announce_url
 
 settings = get_settings()
 
@@ -24,6 +30,7 @@ async def lifespan(app: FastAPI):
             try:
                 await asyncio.sleep(600)  # Every 10 minutes
                 token_store.sweep_expired()
+                run_store.sweep_expired()
             except asyncio.CancelledError:
                 break
             except Exception:
@@ -116,12 +123,79 @@ def get_token_endpoint(token: str):
     return TokenGetResponse(sceneIds=scene_ids)
 
 
+def get_build_stamp() -> Optional[str]:
+    """Retrieve the build stamp from env or BUILD_STAMP metadata file.
+
+    Returns:
+        str | None: String stamp (e.g. '0.2.0-639bc89') or None if unversioned/dev checkout.
+    """
+    env_stamp = os.environ.get("EMPORNIUM_BUILD_STAMP")
+    if env_stamp and env_stamp.strip():
+        return env_stamp.strip()
+
+    current_dir = Path(__file__).resolve().parent
+    candidates = (
+        current_dir / "BUILD_STAMP",          # vendored inside empornium_megapack/
+        current_dir.parent / "BUILD_STAMP",   # plugin root or backend root
+    )
+    for path in candidates:
+        if path.is_file():
+            try:
+                content = path.read_text(encoding="utf-8").strip()
+                if content:
+                    return content
+            except Exception:
+                pass
+    return None
+
+
+# Resolved once, at import, and never re-read.
+#
+# /health used to call get_build_stamp() per request, which reads BUILD_STAMP
+# off disk. Deploying a new plugin build rewrites that file underneath the
+# already-running sidecar, so the OLD process immediately began reporting the
+# NEW stamp. The plugin's StartBackend task compares /health's build_stamp
+# against the installed stamp to decide whether a sidecar is stale and needs
+# restarting -- so after any upgrade the two always matched, StartBackend
+# adopted the old process, and the check could never fire in the one situation
+# it exists for. Freezing the value at process start is what makes that
+# comparison mean "the code this process is running" instead of "whatever is
+# on disk right now".
+_build_stamp_cache: Optional[str] = None
+_build_stamp_cached: bool = False
+
+
+def current_build_stamp() -> Optional[str]:
+    """The build stamp as of this process's start.
+
+    Deliberately does NOT track later changes to BUILD_STAMP on disk; see the
+    note above. Use get_build_stamp() for a live read of what is on disk.
+    """
+    global _build_stamp_cache, _build_stamp_cached
+    if not _build_stamp_cached:
+        _build_stamp_cache = get_build_stamp()
+        _build_stamp_cached = True
+    return _build_stamp_cache
+
+
+def reset_build_stamp_cache() -> None:
+    """Drop the cached stamp so the next call re-resolves. Tests only."""
+    global _build_stamp_cache, _build_stamp_cached
+    _build_stamp_cache = None
+    _build_stamp_cached = False
+
+
+# Prime at import so the value reflects process start, not first request.
+current_build_stamp()
+
+
 @app.get("/health")
 def health():
     return {
         "status": "ok",
         "track": "Empornium Megapack Builder",
         "version": app.version,
+        "build_stamp": current_build_stamp(),
         "stash_url": settings.stash_url,
         "staging_dir": str(settings.staging_dir),
         "output_dir": str(settings.output_dir),
@@ -133,6 +207,23 @@ def health():
         "announce_configured": bool(settings.empornium_announce_url.strip()),
         "bundle_after_build": settings.bundle_after_build,
     }
+
+
+@app.get("/api/tags/vocabulary")
+def get_tags_vocabulary():
+    """Return the curated Empornium tag vocabulary mapping and ignored list.
+
+    Returns:
+        {"map": {stash_tag_lower: [emp_tag, ...]}, "ignored": [stash_tag_lower, ...]}
+    """
+    try:
+        vocab = load_vocabulary()
+        return {
+            "map": vocab.map,
+            "ignored": sorted(vocab.ignored),
+        }
+    except TagVocabularyError as err:
+        raise HTTPException(status_code=500, detail=str(err))
 
 
 _MAX_FS_EXISTS_PATHS = 100
@@ -184,3 +275,64 @@ async def fs_exists(request: Request):
 
     results = {p: await asyncio.to_thread(os.path.isfile, p) for p in paths}
     return {"results": results}
+
+
+_MAX_RUN_BODY_BYTES = 2 * 1024 * 1024
+
+
+@app.post("/api/run/{run_id}")
+async def post_run_result(run_id: str, request: Request):
+    if not RUN_ID_REGEX.match(run_id):
+        raise HTTPException(status_code=400, detail="Invalid run_id format")
+
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > _MAX_RUN_BODY_BYTES:
+                raise HTTPException(status_code=400, detail="Payload exceeds 2MB limit")
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid Content-Length header")
+
+    raw_body = await request.body()
+    if len(raw_body) > _MAX_RUN_BODY_BYTES:
+        raise HTTPException(status_code=400, detail="Payload exceeds 2MB limit")
+
+    try:
+        data = json.loads(raw_body)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON body")
+
+    if not isinstance(data, dict):
+        raise HTTPException(status_code=400, detail="Payload must be a JSON object")
+
+    # Defense-in-depth sanitization of announce_url field if present
+    if "announce_url" in data and isinstance(data["announce_url"], str):
+        data["announce_url"] = sanitize_announce_url(data["announce_url"])
+
+    run_store.store_run(run_id, data)
+    return {"status": "ok", "run_id": run_id}
+
+
+@app.get("/api/run/{run_id}")
+def get_run_result(run_id: str):
+    if not RUN_ID_REGEX.match(run_id):
+        raise HTTPException(status_code=400, detail="Invalid run_id format")
+
+    result = run_store.get_run(run_id)
+    if result is None:
+        return {"found": False}
+    return {"found": True, "result": result}
+
+
+@app.post("/api/shutdown")
+async def shutdown_endpoint():
+    """Gracefully shuts down the sidecar process after returning HTTP 200."""
+    async def _delayed_shutdown(delay: float = 0.2):
+        await asyncio.sleep(delay)
+        if "PYTEST_CURRENT_TEST" not in os.environ and "TESTING" not in os.environ:
+            os._exit(0)
+
+    asyncio.create_task(_delayed_shutdown())
+    return {"status": "ok", "detail": "Server shutting down"}
+
+

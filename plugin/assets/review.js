@@ -19,6 +19,7 @@
   let selectedFileBySceneId = new Map(); // sceneId -> fileId / filePath
   let sceneSuperioritiesMap = new Map(); // sceneId -> [{ type, label, title }]
   let consolidatedFileIds = new Set(); // file ids successfully moved to output_dir
+  let missingSourceSceneIds = new Set(); // sceneId (string) -> no known file exists on disk, per reconcileSourceFiles()
   let showOnlyConflicts = false;
   let probeResultsMap = {};
   let activeJobId = null;
@@ -33,6 +34,21 @@
   let activePollingJobId = null;
   let activePollInterval = null;
   let currentCoverUrl = null;
+  const handledJobIds = new Set();
+  let uiBusy = false;            // true from click until the operation reaches a terminal state
+  let busyOperation = null;      // "build" | "mutation" — the lock tier
+  let busyLabel = null;          // human label, e.g. "BuildMegapack"
+  let busyAwaitingJob = false;   // a Stash job was dispatched; unlock is owned by handleJobUpdate
+  let busyStartedAt = 0;         // Date.now() at lock, for the escape hatch
+  let busyEscapeTimer = null;
+  let cachedVocabulary = null;
+  let vocabularyFetchAttempted = false;
+  // Distinguishes "the sidecar has not answered yet" from "the sidecar is up
+  // but the vocabulary is genuinely broken". The load-time fetch races
+  // StartBackend, so the first failure after a Stash restart is routine, not an
+  // error worth alarming about.
+  let sidecarEverHealthy = false;
+  let vocabularyFetchFailed = false;
 
   // 1. Get Scene IDs from Query Parameters or Token Resolution
   const urlParams = new URLSearchParams(window.location.search);
@@ -40,6 +56,285 @@
   const sceneIdsParam = urlParams.get("scenes") || "";
   const modeParam = urlParams.get("mode") || "";
   let sceneIds = [];
+  let bbcodeUserEdited = false;
+  let savedSelection = { start: 0, end: 0 };
+  let savedScrollTop = 0;
+  let currentPopoverTag = null;
+  // Last BBCode written programmatically, so "reset" can put it back.
+  let lastFinalBBCode = null;
+
+  // updateBBCode() stops regenerating as soon as bbcodeUserEdited latches.
+  // That is deliberate -- it is what stops a scene-selection change wiping
+  // the user's edit -- but silently freezing the preview reads as a bug, so
+  // say so on screen and offer the way back.
+  function refreshBBCodeEditedNotice() {
+    const notice = document.getElementById("bbcode-edited-notice");
+    if (!notice) return;
+    if (!bbcodeUserEdited) {
+      notice.style.display = "none";
+      return;
+    }
+    const label = document.getElementById("bbcode-edited-notice-text");
+    const btn = document.getElementById("btn-bbcode-reset");
+    if (label) {
+      label.innerText = bbcodeIsFinal
+        ? "✏️ Edited — this no longer matches the build output."
+        : "✏️ Edited — the live preview has stopped updating.";
+    }
+    if (btn) {
+      btn.innerText = bbcodeIsFinal ? "Restore build output" : "Resume live preview";
+    }
+    notice.style.display = "flex";
+  }
+
+  function markBBCodeEdited() {
+    bbcodeUserEdited = true;
+    refreshBBCodeEditedNotice();
+  }
+
+  // Discard the user's edits and go back to the generated text. Writes via
+  // .value on purpose: that fires no input event, so the latch stays clear.
+  function resetBBCodeToGenerated() {
+    bbcodeUserEdited = false;
+    const previewEl = document.getElementById("bbcode-preview");
+    if (bbcodeIsFinal && lastFinalBBCode !== null) {
+      if (previewEl) previewEl.value = lastFinalBBCode;
+    } else {
+      updateBBCode();
+    }
+    refreshBBCodeEditedNotice();
+  }
+
+  function initBBCodeToolbar() {
+    const textarea = document.getElementById("bbcode-preview");
+    if (!textarea || textarea.dataset.toolbarBound) return;
+    textarea.dataset.toolbarBound = "true";
+
+    textarea.addEventListener("input", () => {
+      markBBCodeEdited();
+      updateSavedSelection();
+    });
+
+    const resetBtn = document.getElementById("btn-bbcode-reset");
+    if (resetBtn && !resetBtn.dataset.bound) {
+      resetBtn.dataset.bound = "true";
+      resetBtn.addEventListener("click", resetBBCodeToGenerated);
+    }
+
+    const updateSavedSelection = () => {
+      savedSelection.start = textarea.selectionStart;
+      savedSelection.end = textarea.selectionEnd;
+    };
+
+    textarea.addEventListener("keyup", updateSavedSelection);
+    textarea.addEventListener("mouseup", updateSavedSelection);
+    textarea.addEventListener("select", updateSavedSelection);
+    textarea.addEventListener("focus", () => {
+      if (popover && popover.style.display !== "none") {
+        popover.style.display = "none";
+        currentPopoverTag = null;
+      }
+      updateSavedSelection();
+    });
+
+    document.addEventListener("selectionchange", () => {
+      if (document.activeElement === textarea) {
+        updateSavedSelection();
+      }
+    });
+
+    function applyBBCodeFormat(openTag, closeTag) {
+      markBBCodeEdited();
+      if (popover && popover.style.display !== "none") {
+        popover.style.display = "none";
+        currentPopoverTag = null;
+      }
+
+      const wasFocused = document.activeElement === textarea;
+      textarea.focus({ preventScroll: true });
+
+      let start = textarea.selectionStart;
+      let end = textarea.selectionEnd;
+      if (!wasFocused) {
+        start = savedSelection.start;
+        end = savedSelection.end;
+        textarea.setSelectionRange(start, end);
+      }
+
+      const val = textarea.value;
+      const selected = val.substring(start, end);
+      const scrollTop = savedScrollTop !== undefined && !wasFocused ? savedScrollTop : textarea.scrollTop;
+
+      if (openTag === "[hr]") {
+        const replacement = "[hr]";
+        document.execCommand("insertText", false, replacement);
+        const caret = start + replacement.length;
+        textarea.setSelectionRange(caret, caret);
+      } else if (openTag === "[list]") {
+        const trimmedSelected = selected.trim();
+        if (trimmedSelected.length > 0) {
+          const lines = trimmedSelected.split(/\r?\n/);
+          const formatted = lines.map((line) => {
+            const trimmed = line.trim();
+            if (!trimmed) return "";
+            return trimmed.startsWith("[*]") ? trimmed : `[*]${trimmed}`;
+          }).join("\n");
+          const replacement = `[list]\n${formatted}\n[/list]`;
+          document.execCommand("insertText", false, replacement);
+          const newStart = start + 7;
+          const newEnd = newStart + formatted.length;
+          textarea.setSelectionRange(newStart, newEnd);
+        } else {
+          const replacement = "[list]\n[*]\n[/list]";
+          document.execCommand("insertText", false, replacement);
+          const caret = start + 10;
+          textarea.setSelectionRange(caret, caret);
+        }
+      } else if (selected.length > 0) {
+        // Selection wrapping: wrap selection and keep text selected
+        const replacement = `${openTag}${selected}${closeTag}`;
+        document.execCommand("insertText", false, replacement);
+        const newStart = start + openTag.length;
+        const newEnd = newStart + selected.length;
+        textarea.setSelectionRange(newStart, newEnd);
+      } else {
+        // Empty selection: insert tag pair and place caret between them
+        const replacement = `${openTag}${closeTag}`;
+        document.execCommand("insertText", false, replacement);
+        const caret = start + openTag.length;
+        textarea.setSelectionRange(caret, caret);
+      }
+
+      textarea.scrollTop = scrollTop;
+      savedScrollTop = undefined;
+      updateSavedSelection();
+    }
+
+    // Simple tag buttons
+    const simpleTags = ["b", "i", "u", "s", "center", "img", "quote", "code", "hr", "list"];
+    simpleTags.forEach((tag) => {
+      const btn = document.getElementById(`btn-tag-${tag}`);
+      if (btn) {
+        btn.addEventListener("mousedown", (e) => e.preventDefault());
+        btn.addEventListener("click", () => applyBBCodeFormat(`[${tag}]`, `[/${tag}]`));
+      }
+    });
+
+    // Fixed choice selects: size & color
+    const sizeSelect = document.getElementById("toolbar-size");
+    if (sizeSelect) {
+      sizeSelect.addEventListener("change", () => {
+        const val = sizeSelect.value;
+        if (val) {
+          applyBBCodeFormat(`[size=${val}]`, "[/size]");
+          sizeSelect.selectedIndex = 0;
+        }
+      });
+    }
+
+    const colorSelect = document.getElementById("toolbar-color");
+    if (colorSelect) {
+      colorSelect.addEventListener("change", () => {
+        const val = colorSelect.value;
+        if (val) {
+          applyBBCodeFormat(`[color=${val}]`, "[/color]");
+          colorSelect.selectedIndex = 0;
+        }
+      });
+    }
+
+    // Popover for url and spoiler
+    const popover = document.getElementById("toolbar-popover");
+    const popoverLabel = document.getElementById("toolbar-popover-label");
+    const popoverInput = document.getElementById("toolbar-popover-input");
+    const popoverConfirm = document.getElementById("toolbar-popover-confirm");
+    const popoverCancel = document.getElementById("toolbar-popover-cancel");
+
+    function openPopover(tag) {
+      currentPopoverTag = tag;
+      if (document.activeElement === textarea) {
+        updateSavedSelection();
+      }
+      savedScrollTop = textarea.scrollTop;
+      if (tag === "url") {
+        if (popoverLabel) popoverLabel.textContent = "URL:";
+        if (popoverInput) popoverInput.placeholder = "https://...";
+      } else if (tag === "spoiler") {
+        if (popoverLabel) popoverLabel.textContent = "Spoiler Title:";
+        if (popoverInput) popoverInput.placeholder = "Optional title...";
+      }
+      if (popoverInput) popoverInput.value = "";
+      if (popover) popover.style.display = "flex";
+      if (popoverInput) popoverInput.focus();
+    }
+
+    function closePopover() {
+      if (popover) popover.style.display = "none";
+      currentPopoverTag = null;
+      textarea.focus({ preventScroll: true });
+      textarea.setSelectionRange(savedSelection.start, savedSelection.end);
+      if (savedScrollTop !== undefined) {
+        textarea.scrollTop = savedScrollTop;
+      }
+    }
+
+    function submitPopover() {
+      const tag = currentPopoverTag;
+      const rawVal = popoverInput ? popoverInput.value : "";
+      const val = rawVal.replace(/\s+/g, " ").trim();
+      if (popover) popover.style.display = "none";
+      currentPopoverTag = null;
+
+      textarea.focus({ preventScroll: true });
+      textarea.setSelectionRange(savedSelection.start, savedSelection.end);
+
+      if (tag === "url") {
+        const openTag = val ? `[url=${val}]` : "[url]";
+        applyBBCodeFormat(openTag, "[/url]");
+      } else if (tag === "spoiler") {
+        const openTag = val ? `[spoiler=${val}]` : "[spoiler]";
+        applyBBCodeFormat(openTag, "[/spoiler]");
+      }
+    }
+
+    const urlBtn = document.getElementById("btn-tag-url");
+    if (urlBtn) {
+      urlBtn.addEventListener("mousedown", (e) => e.preventDefault());
+      urlBtn.addEventListener("click", () => openPopover("url"));
+    }
+
+    const spoilerBtn = document.getElementById("btn-tag-spoiler");
+    if (spoilerBtn) {
+      spoilerBtn.addEventListener("mousedown", (e) => e.preventDefault());
+      spoilerBtn.addEventListener("click", () => openPopover("spoiler"));
+    }
+
+    if (popoverConfirm) {
+      popoverConfirm.addEventListener("click", submitPopover);
+    }
+
+    if (popoverCancel) {
+      popoverCancel.addEventListener("click", closePopover);
+    }
+
+    if (popoverInput) {
+      popoverInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          submitPopover();
+        } else if (e.key === "Escape") {
+          e.preventDefault();
+          closePopover();
+        }
+      });
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initBBCodeToolbar);
+  } else {
+    initBBCodeToolbar();
+  }
 
   function escapeHtml(str) {
     if (!str) return "";
@@ -69,6 +364,92 @@
       .replace(/[\s._-]+/g, ".")
       .replace(/^\.+|\.+$/g, "")
       .slice(0, 32);
+  }
+
+  // Change C: Empornium tag vocabulary resolution (mirrors backend tags.py resolve_tags)
+  function resolveTags(sources, vocab = cachedVocabulary) {
+    const tags = [];
+    const unmapped = [];
+    const ignored = [];
+
+    const hasVocab = Boolean(vocab && vocab.map && (vocab.ignored instanceof Set || Array.isArray(vocab.ignored)));
+    const ignoredSet = hasVocab
+      ? (vocab.ignored instanceof Set ? vocab.ignored : new Set(vocab.ignored.map((s) => String(s).toLowerCase().trim())))
+      : null;
+
+    for (const src of sources || []) {
+      const val = typeof src?.value === "string" ? src.value.trim() : (typeof src === "string" ? src.trim() : "");
+      const kind = src?.kind || "scene_tag";
+      if (!val) continue;
+
+      if (kind === "performer" || kind === "studio" || kind === "derived") {
+        const emp = empifyTag(val);
+        if (emp) tags.push(emp);
+      } else if (kind === "scene_tag") {
+        if (!hasVocab) {
+          // Unfiltered fallback when vocabulary is unavailable (degrade visibly)
+          const emp = empifyTag(val);
+          if (emp) tags.push(emp);
+        } else {
+          const lower = val.toLowerCase();
+          if (ignoredSet && ignoredSet.has(lower)) {
+            ignored.push(src.value || val);
+          } else if (vocab.map && Object.prototype.hasOwnProperty.call(vocab.map, lower)) {
+            const mapped = vocab.map[lower];
+            const tokens = Array.isArray(mapped)
+              ? mapped
+              : String(mapped).trim().split(/\s+/);
+            for (const tok of tokens) {
+              const cleanedTok = tok.trim();
+              if (cleanedTok) tags.push(cleanedTok);
+            }
+          } else {
+            unmapped.push(src.value || val);
+          }
+        }
+      } else {
+        unmapped.push(src.value || val);
+      }
+    }
+
+    const uniqueTags = [...new Set(tags)].sort().slice(0, 60);
+    const uniqueUnmapped = [...new Set(unmapped)];
+    const uniqueIgnored = [...new Set(ignored)];
+
+    return {
+      tags: uniqueTags,
+      unmapped: uniqueUnmapped,
+      ignored: uniqueIgnored,
+    };
+  }
+
+  // Change C: Fetch vocabulary once on load via backendEndpoints helper
+  async function fetchVocabulary() {
+    if (cachedVocabulary) return cachedVocabulary;
+    vocabularyFetchAttempted = true;
+    const endpoints = backendEndpoints("/api/tags/vocabulary");
+    for (const url of endpoints) {
+      try {
+        const response = await fetch(url);
+        if (response.ok) {
+          const data = await response.json();
+          if (data && typeof data === "object" && data.map && Array.isArray(data.ignored)) {
+            cachedVocabulary = {
+              map: data.map,
+              ignored: new Set(data.ignored.map((s) => String(s).toLowerCase().trim())),
+            };
+            vocabularyFetchFailed = false;
+            updateBBCode();
+            return cachedVocabulary;
+          }
+        }
+      } catch (err) {
+        // endpoint unreachable, try next candidate
+      }
+    }
+    vocabularyFetchFailed = true;
+    updateBBCode();
+    return null;
   }
 
   function findFailureSentinel(logs, runId) {
@@ -1125,17 +1506,13 @@
     return `Group ${label}`;
   }
 
-  function getPrimaryFile(scene) {
-    if (!scene || !scene.files || !Array.isArray(scene.files) || scene.files.length === 0) return {};
-    const sId = String(scene.id);
-    if (selectedFileBySceneId.has(sId)) {
-      const targetId = String(selectedFileBySceneId.get(sId));
-      const found = scene.files.find((f) => (f.id != null && String(f.id) === targetId) || f.path === targetId);
-      if (found) return found;
-    }
-    let best = scene.files[0];
-    for (let i = 1; i < scene.files.length; i++) {
-      const f = scene.files[i];
+  // Highest-resolution, then largest-size, file among the given candidates.
+  // Shared by getPrimaryFile() (all of a scene's files) and
+  // reconcileSourceFiles() (only the candidates confirmed present on disk).
+  function pickBestFile(files) {
+    let best = files[0];
+    for (let i = 1; i < files.length; i++) {
+      const f = files[i];
       const bestRes = getEffectiveResolution(best.height, best.width);
       const fRes = getEffectiveResolution(f.height, f.width);
       if (fRes > bestRes) {
@@ -1145,6 +1522,128 @@
       }
     }
     return best;
+  }
+
+  function getPrimaryFile(scene) {
+    if (!scene || !scene.files || !Array.isArray(scene.files) || scene.files.length === 0) return {};
+    const sId = String(scene.id);
+    if (selectedFileBySceneId.has(sId)) {
+      const targetId = String(selectedFileBySceneId.get(sId));
+      const found = scene.files.find((f) => (f.id != null && String(f.id) === targetId) || f.path === targetId);
+      if (found) return found;
+    }
+    return pickBestFile(scene.files);
+  }
+
+  // Cross-checks EVERY known file of every active scene (not just the
+  // currently chosen primary) against the real filesystem in one batched
+  // call. Fixes the class of bug where Stash's primary file record for a
+  // scene has gone stale (renamed/deduped outside Stash) while a sibling
+  // file record for the same scene still points at something real:
+  //   - If the current pick is confirmed present, the scene is untouched.
+  //   - If it's gone but another file Stash already knows about for that
+  //     scene IS present, auto-repoint selectedFileBySceneId at it (the fix
+  //     a human would otherwise make by hand via the version dropdown),
+  //     preferring one already under the seed dir when there's a choice.
+  //   - If nothing for the scene exists anywhere, the scene is recorded in
+  //     missingSourceSceneIds instead of only failing later, deep in Build
+  //     or (worse) inside task.py.
+  // failClosed mirrors pathExistsBatch's own contract: when true (the
+  // pre-Build gate), a probe failure re-throws so Build aborts rather than
+  // risk treating "couldn't check" as "exists". When false (the passive
+  // post-load pass), a probe failure is swallowed with a warning so an
+  // unreachable sidecar doesn't brand every scene in the pack as missing
+  // during ordinary review.
+  async function reconcileSourceFiles({ failClosed = false } = {}) {
+    const active = activeScenes();
+    // Session-consolidated scenes are excluded from the probe ENTIRELY (not
+    // just their result): moveFiles already placed the file and its
+    // locally-known path may still be the pre-move one (moveFiles returns
+    // only Boolean!, never an echoed path), so a probe would look stale for
+    // no reason. This also matches the old build-time check's behavior of
+    // making zero network calls once every active scene is consolidated.
+    const scenesToCheck = [];
+    const allPaths = [];
+    for (const s of active) {
+      const files = s.files || [];
+      if (files.length === 0) continue;
+      const current = getPrimaryFile(s);
+      if (current.id && consolidatedFileIds.has(current.id)) continue;
+      scenesToCheck.push(s);
+      for (const f of files) {
+        if (f && f.path) allPaths.push(f.path.trim());
+      }
+    }
+    if (allPaths.length === 0) {
+      missingSourceSceneIds = new Set();
+      return { relinked: [], missing: [], outsideSeed: [] };
+    }
+
+    let existsMap;
+    try {
+      existsMap = await pathExistsBatch(allPaths);
+    } catch (err) {
+      if (failClosed) throw err;
+      showStatus(`Source-file check skipped: ${err.message}`, 0, true);
+      return { relinked: [], missing: [], outsideSeed: [], skipped: true };
+    }
+
+    const seedDir = (document.getElementById("output-dir")?.value || "").trim();
+    const relinked = [];
+    const outsideSeed = [];
+    const missing = [];
+    for (const s of scenesToCheck) {
+      const files = s.files || [];
+      const current = getPrimaryFile(s);
+      if (current.path && existsMap[current.path.trim()] === true) continue;
+
+      const existingCandidates = files.filter((f) => f.path && existsMap[f.path.trim()] === true);
+      if (existingCandidates.length === 0) {
+        missing.push({ sceneId: s.id, sceneTitle: s.title, path: current.path || (files[0] && files[0].path) || "" });
+        continue;
+      }
+      const underSeed = seedDir ? existingCandidates.filter((f) => isPathUnderSeed(f.path, seedDir)) : [];
+      const best = pickBestFile(underSeed.length > 0 ? underSeed : existingCandidates);
+      selectedFileBySceneId.set(String(s.id), String(best.id ?? best.path));
+      if (seedDir && underSeed.length === 0) {
+        outsideSeed.push({ sceneId: s.id, sceneTitle: s.title, from: current.path || "", to: best.path, path: best.path });
+      } else {
+        relinked.push({ sceneId: s.id, sceneTitle: s.title, from: current.path || "", to: best.path });
+      }
+    }
+    missingSourceSceneIds = new Set(missing.map((m) => String(m.sceneId)));
+    return { relinked, missing, outsideSeed };
+  }
+
+  function describeReconcile({ relinked = [], missing = [], outsideSeed = [] } = {}) {
+    const parts = [];
+    if (relinked.length > 0) {
+      const detail = relinked
+        .map((r) => `${r.sceneTitle || `Scene ${r.sceneId}`} → ${(r.to.split(/[\\/]/).pop() || r.to)}`)
+        .join("; ");
+      parts.push(`Auto-relinked ${relinked.length} scene(s) to a renamed file found on disk: ${detail}`);
+    }
+    if (outsideSeed.length > 0) {
+      const detail = outsideSeed
+        .map((o) => {
+          const label = o.sceneTitle || `Scene ${o.sceneId}`;
+          const base = o.to ? (o.to.split(/[\\/]/).pop() || o.to) : (o.path ? (o.path.split(/[\\/]/).pop() || o.path) : null);
+          return base ? `${label} (${base})` : label;
+        })
+        .join(", ");
+      parts.push(`${outsideSeed.length} scene(s) only have surviving files outside the seed directory — run Consolidate to move them: ${detail}`);
+    }
+    if (missing.length > 0) {
+      const detail = missing
+        .map((m) => {
+          const label = m.sceneTitle || `Scene ${m.sceneId}`;
+          const base = m.path ? (m.path.split(/[\\/]/).pop() || m.path) : null;
+          return base ? `${label} (${base})` : label;
+        })
+        .join(", ");
+      parts.push(`${missing.length} scene(s) have no file on disk anywhere — remove them from the pack or restore the source: ${detail}`);
+    }
+    return parts.join(" | ");
   }
 
   function computeDuplicateGroups() {
@@ -1306,6 +1805,7 @@
   }
 
   function keepSceneInCollisionGroup(sceneId) {
+    if (uiBusy) return;
     const targetIdStr = String(sceneId);
     const affectedGroups = duplicateGroups.filter((g) =>
       g.members.some((m) => String(m.sceneId) === targetIdStr)
@@ -1394,6 +1894,15 @@
   }
 
   function updateActionAvailability() {
+    if (uiBusy) {
+      // Busy state is authoritative; skip gate derivation entirely.
+      for (const id of ["btn-build", "btn-consolidate", "btn-probe"]) {
+        const el = document.getElementById(id);
+        if (el) { el.disabled = true; el.title = `${busyLabel} in progress — controls locked`; }
+      }
+      return;
+    }
+
     const btnConsolidate = document.getElementById("btn-consolidate");
     const btnBuild = document.getElementById("btn-build");
     const radioMegapack = document.getElementById("mode-megapack");
@@ -1451,6 +1960,9 @@
       } else if (rawAllFiles.length > 1) {
         buildDisabled = true;
         buildReason = `Single Scene mode requires exactly 1 media file (found ${rawAllFiles.length})`;
+      } else if (missingSourceSceneIds.has(String(active[0].id))) {
+        buildDisabled = true;
+        buildReason = "This scene's file was not found on disk under any known path. Restore the source or remove the scene.";
       } else {
         // In-place parity (todo 7): the single scene's primary must sit under
         // the seed dir too — same recursive containment as megapack mode.
@@ -1490,6 +2002,15 @@
 
         buildDisabled = true;
         buildReason = `${collisionCount} filename collision${collisionCount > 1 ? "s" : ""} must be resolved first`;
+      } else if (missingSourceSceneIds.size > 0) {
+        const names = active
+          .filter((s) => missingSourceSceneIds.has(String(s.id)))
+          .map((s) => s.title || `Scene ${s.id}`);
+        const reason = `${missingSourceSceneIds.size} scene(s) have no file on disk anywhere: ${names.join(", ")}. Restore the source(s) or remove the scene(s) from the pack.`;
+        consolidateDisabled = true;
+        consolidateReason = reason;
+        buildDisabled = true;
+        buildReason = reason;
       } else {
         // In-place gating (todo 7): Build is enabled iff every active scene's
         // chosen primary sits under the seed dir (recursive). The old
@@ -1520,12 +2041,14 @@
   }
 
   function removeSceneFromPack(sceneId) {
+    if (uiBusy) return;
     excludedSceneIds.add(String(sceneId));
     renderScenes();
     updateBBCode();
   }
 
   function restoreAllScenes() {
+    if (uiBusy) return;
     excludedSceneIds.clear();
     showOnlyConflicts = false;
     renderScenes();
@@ -1678,6 +2201,13 @@
         duplicateBadge = `<span class="badge badge-danger" title="Filename collision with other scene(s) in pack">⚠️ Duplicate filename · ${escapeHtml(dupInfo.label)} (${dupInfo.ordinal} of ${dupInfo.total})</span>`;
       }
 
+      // Missing Source Badge: reconcileSourceFiles() found no file for this
+      // scene anywhere on disk (not just outside the seed dir — gone).
+      let missingSourceBadge = "";
+      if (missingSourceSceneIds.has(String(scene.id))) {
+        missingSourceBadge = `<span class="badge badge-danger" title="No file for this scene was found on disk under any known path. Restore the source file or remove this scene from the pack.">🚫 Source file missing</span>`;
+      }
+
       // Quality / Superiority Badges
       let superiorBadgesHtml = "";
       if (dupInfo && currentMode !== "single") {
@@ -1755,9 +2285,9 @@
       card.innerHTML = `
         <img class="scene-thumb" src="${escapeHtml(thumbUrl)}" alt="Thumbnail" />
         <div class="scene-info">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;">
+          <div class="scene-card-header">
             <div class="scene-title">#${activeIdx + 1} - ${escapeHtml(scene.title || "Untitled Scene")}</div>
-            <div style="display: flex; gap: 6px; align-items: center; flex-shrink: 0;">
+            <div class="scene-card-actions">
               ${keepButtonHtml}
               <button type="button" class="btn btn-secondary scene-remove-btn" data-scene-id="${escapeHtml(String(scene.id))}" title="Remove from pack" aria-label="Remove scene #${activeIdx + 1} from pack">✕ Remove</button>
             </div>
@@ -1766,6 +2296,7 @@
             <span>👤 ${escapeHtml(performers)}</span>
             <span>📅 ${escapeHtml(scene.date || "Unknown date")}</span>
             ${duplicateBadge}
+            ${missingSourceBadge}
             ${superiorBadgesHtml}
             ${capabilityBadge}
           </div>
@@ -1804,8 +2335,12 @@
         });
       }
 
-      card.addEventListener("dragstart", () => card.classList.add("dragging"));
+      card.addEventListener("dragstart", () => {
+        if (uiBusy) return;
+        card.classList.add("dragging");
+      });
       card.addEventListener("dragend", () => {
+        if (uiBusy) return;
         card.classList.remove("dragging");
         reorderScenes();
       });
@@ -1816,10 +2351,11 @@
     if (!container.dataset.dragBound) {
       container.dataset.dragBound = "true";
       container.addEventListener("dragover", (e) => {
+        if (uiBusy) return;
         e.preventDefault();
         const dragging = document.querySelector(".dragging");
         if (!dragging) return;
-        const afterElement = getDragAfterElement(container, e.clientY);
+        const afterElement = getDragAfterElement(container, e.clientX, e.clientY);
         if (afterElement == null) {
           container.appendChild(dragging);
         } else {
@@ -1827,25 +2363,117 @@
         }
       });
     }
+
+    // Change B: Newly rendered cards inherit busy lockout if operation in flight
+    if (uiBusy) {
+      applyBusyLock();
+    }
   }
 
-  function getDragAfterElement(container, y) {
+  function getDragAfterElement(container, x, y) {
+    if (y === undefined) {
+      y = x;
+      x = 0;
+    }
     const draggableElements = [...container.querySelectorAll(".scene-card:not(.dragging)")];
-    return draggableElements.reduce(
-      (closest, child) => {
-        const box = child.getBoundingClientRect();
-        const offset = y - box.top - box.height / 2;
-        if (offset < 0 && offset > closest.offset) {
-          return { offset: offset, element: child };
+    if (draggableElements.length === 0) return null;
+
+    // Detect multi-column layout via computed grid template tracks
+    let isMultiColumn = false;
+    try {
+      const style = window.getComputedStyle(container);
+      const cols = (style.gridTemplateColumns || "").split(/\s+/).filter(Boolean);
+      isMultiColumn = cols.length > 1;
+    } catch (_) {}
+
+    // Group cards into visual row bands using vertical overlap tolerance (~5px)
+    const rows = [];
+    let currentRow = [];
+    let rowTop = 0;
+    let rowBottom = 0;
+
+    for (const el of draggableElements) {
+      const box = el.getBoundingClientRect();
+      if (currentRow.length === 0) {
+        currentRow.push({ el, box });
+        rowTop = box.top;
+        rowBottom = box.bottom;
+      } else {
+        const overlapsVertically = box.top <= rowBottom - 5 && box.bottom >= rowTop + 5;
+        const topsAligned = Math.abs(box.top - rowTop) <= 10;
+        if (overlapsVertically || topsAligned) {
+          currentRow.push({ el, box });
+          rowTop = Math.min(rowTop, box.top);
+          rowBottom = Math.max(rowBottom, box.bottom);
         } else {
-          return closest;
+          rows.push({
+            items: currentRow,
+            top: rowTop,
+            bottom: rowBottom
+          });
+          currentRow = [{ el, box }];
+          rowTop = box.top;
+          rowBottom = box.bottom;
         }
-      },
-      { offset: Number.NEGATIVE_INFINITY }
-    ).element;
+      }
+    }
+    if (currentRow.length > 0) {
+      rows.push({
+        items: currentRow,
+        top: rowTop,
+        bottom: rowBottom
+      });
+    }
+
+    if (!isMultiColumn) {
+      isMultiColumn = rows.some((r) => r.items.length > 1);
+    }
+
+    // Determine target row based on y coordinate
+    let targetRowIndex = 0;
+    if (y < rows[0].top) {
+      targetRowIndex = 0;
+    } else if (y > rows[rows.length - 1].bottom) {
+      return null;
+    } else {
+      for (let i = 0; i < rows.length; i++) {
+        const nextRow = rows[i + 1];
+        const bandBottom = nextRow ? (rows[i].bottom + nextRow.top) / 2 : rows[i].bottom;
+        if (y <= bandBottom) {
+          targetRowIndex = i;
+          break;
+        }
+        targetRowIndex = i;
+      }
+    }
+
+    const targetRow = rows[targetRowIndex];
+    const items = targetRow.items;
+
+    // Single-column collapsed layout: use vertical midpoint (y)
+    if (!isMultiColumn) {
+      const box = items[0].box;
+      const centerY = box.top + box.height / 2;
+      if (y < centerY) {
+        return items[0].el;
+      } else {
+        return targetRowIndex < rows.length - 1 ? rows[targetRowIndex + 1].items[0].el : null;
+      }
+    }
+
+    // Multi-column grid: use horizontal midpoint (x) across column tracks in the row
+    for (const item of items) {
+      const centerX = item.box.left + item.box.width / 2;
+      if (x < centerX) {
+        return item.el;
+      }
+    }
+
+    return targetRowIndex < rows.length - 1 ? rows[targetRowIndex + 1].items[0].el : null;
   }
 
   function reorderScenes() {
+    if (uiBusy) return;
     const cards = [...document.querySelectorAll(".scene-card")];
     const reorderedActive = cards
       .map((c) => scenes[parseInt(c.dataset.index, 10)])
@@ -1870,7 +2498,31 @@
 
   // 5. Update BBCode Preview
   function updateBBCode() {
-    if (bbcodeIsFinal) return;
+    if (bbcodeIsFinal || bbcodeUserEdited) return;
+
+    // Change C: Degrade visibly if tag vocabulary is unavailable
+    const bbcodeWarning = document.getElementById("bbcode-warning");
+    if (!cachedVocabulary) {
+      if (bbcodeWarning) {
+        // No vocabulary means the tags rendered below are unfiltered, whatever
+        // the reason -- so the condition is its absence, not a failed fetch that
+        // may not have been attempted yet. Which reason it is matters: before
+        // the sidecar has ever answered it is still starting, which is routine;
+        // once it is demonstrably up, a missing vocabulary is a real fault.
+        bbcodeWarning.textContent = sidecarEverHealthy
+          ? "⚠️ Tag vocabulary unavailable — tags shown unfiltered"
+          : "⏳ Waiting for the sidecar — tags stay unfiltered until it answers";
+        bbcodeWarning.style.display = "block";
+      }
+    } else if (
+      bbcodeWarning &&
+      (bbcodeWarning.textContent.includes("Tag vocabulary unavailable") ||
+        bbcodeWarning.textContent.includes("Waiting for the sidecar"))
+    ) {
+      bbcodeWarning.textContent = "";
+      bbcodeWarning.style.display = "none";
+    }
+
     const packTitleInput = document.getElementById("pack-title");
     const title = packTitleInput?.value || "";
     const notes = document.getElementById("pack-notes")?.value;
@@ -1915,7 +2567,15 @@
 
       const performers = (scene.performers || []).map((p) => p.name).join(", ");
       const studioName = scene.studio?.name;
-      const tags = (scene.tags || []).map((t) => t.name).join(", ");
+      const rawSceneTags = (scene.tags || []).map((t) => (typeof t === "string" ? t : t?.name || "")).filter(Boolean);
+      let tags = "";
+      if (cachedVocabulary) {
+        const sources = rawSceneTags.map((t) => ({ value: t, kind: "scene_tag" }));
+        const resolved = resolveTags(sources, cachedVocabulary);
+        tags = resolved.tags.join(", ");
+      } else {
+        tags = rawSceneTags.join(", ");
+      }
 
       bbcode = `[center][b][size=5]${title}${metaSuffix}[/size][/b][/center]\n\n`;
       if (studioName) {
@@ -1949,7 +2609,7 @@
 
     const previewEl = document.getElementById("bbcode-preview");
     if (previewEl) {
-      previewEl.innerText = bbcode;
+      previewEl.value = bbcode;
     }
   }
 
@@ -2003,6 +2663,7 @@
 
       const jobId = data?.runPluginTask;
       if (jobId) {
+        busyAwaitingJob = true;
         trackJobProgress(jobId, "ProbeFiles", payload);
       } else {
         showStatus("Filesystem probe dispatched. Check Stash Task Manager for live log.", 1.0);
@@ -2135,7 +2796,7 @@
     // Split BEFORE the backstop: only files NOT already under the seed dir
     // (recursive containment — nested files count as in-place) are missing
     // and get moved; only they can clobber each other at the destination.
-    const toMove = fileItems.filter((item) => !isPathUnderSeed(item.path, destinationFolder));
+    let toMove = fileItems.filter((item) => !isPathUnderSeed(item.path, destinationFolder));
     const inPlaceItems = fileItems.filter((item) => isPathUnderSeed(item.path, destinationFolder));
     // In-place files need no move — mark them so the build gate sees the pack
     // as complete. Truthful regardless of how the rest of the run ends.
@@ -2143,26 +2804,82 @@
       consolidatedFileIds.add(item.id);
     }
 
-    // Pre-move basename collision check: MUST BLOCK BEFORE DESTRUCTIVE moveFiles
-    const basenameCounts = {};
-    for (const item of toMove) {
-      if (!item.path) continue;
-      const parts = item.path.split(/[\\/]/);
-      const bname = parts[parts.length - 1];
-      if (!bname) continue;
-      const norm = bname.toLowerCase();
-      basenameCounts[norm] = (basenameCounts[norm] || 0) + 1;
+    // Nothing missing: every primary already sits inside the seed dir —
+    // ZERO mutations and no confirm (there is no move to confirm).
+    if (toMove.length === 0) {
+      showStatus(`All ${fileItems.length} file(s) are already in '${destinationFolder}' — nothing to move.`, 1.0);
+      return;
     }
 
-    const collidingEntries = Object.keys(basenameCounts).filter((k) => basenameCounts[k] > 1);
-    if (collidingEntries.length > 0) {
+    function findBasenameCollisions(items) {
+      const counts = {};
+      for (const item of items) {
+        if (!item.path) continue;
+        const parts = item.path.split(/[\\/]/);
+        const bname = parts[parts.length - 1];
+        if (!bname) continue;
+        const norm = bname.toLowerCase();
+        counts[norm] = (counts[norm] || 0) + 1;
+      }
+      return Object.keys(counts).filter((k) => counts[k] > 1);
+    }
+    function reportBasenameCollisions(collidingEntries) {
       const errorMsg = `Consolidation blocked: Basename collision detected (${collidingEntries.length} duplicate filenames across active scenes): ${collidingEntries.join(", ")}. Multiple files cannot be moved to '${destinationFolder}' with identical names without clobbering. Please resolve conflicting scenes using the banner above.`;
       showStatus(errorMsg, 0, true);
       const banner = document.getElementById("collision-banner");
       if (banner) {
         banner.scrollIntoView({ behavior: "smooth", block: "center" });
       }
+    }
+
+    const initialCollisions = findBasenameCollisions(toMove);
+    if (initialCollisions.length > 0) {
+      reportBasenameCollisions(initialCollisions);
       return;
+    }
+
+    let reconciled;
+    try {
+      reconciled = await reconcileSourceFiles({ failClosed: true });
+    } catch (err) {
+      showStatus(`Consolidation aborted: filesystem check failed — ${err.message}`, 0, true);
+      return;
+    }
+    if (reconciled.missing.length > 0) {
+      showStatus(`Consolidation aborted: ${describeReconcile(reconciled)}`, 0, true);
+      renderScenes();
+      return;
+    }
+    if (reconciled.relinked.length > 0 || (reconciled.outsideSeed && reconciled.outsideSeed.length > 0)) {
+      renderScenes();
+      const updatedActive = activeScenes();
+      const updatedFileItems = updatedActive
+        .map((s) => {
+          const f = getPrimaryFile(s);
+          return {
+            id: f.id,
+            path: (f.path || "").trim(),
+            sceneId: s.id,
+            sceneTitle: s.title,
+            file: f
+          };
+        })
+        .filter((item) => item.id != null && item.path.length > 0);
+
+      toMove = updatedFileItems.filter((item) => !isPathUnderSeed(item.path, destinationFolder));
+      const newlyInPlace = updatedFileItems.filter((item) => isPathUnderSeed(item.path, destinationFolder));
+      for (const item of newlyInPlace) {
+        consolidatedFileIds.add(item.id);
+      }
+      if (toMove.length === 0) {
+        showStatus(`All ${updatedFileItems.length} file(s) are already in '${destinationFolder}' — nothing to move.`, 1.0);
+        return;
+      }
+      const updatedCollisions = findBasenameCollisions(toMove);
+      if (updatedCollisions.length > 0) {
+        reportBasenameCollisions(updatedCollisions);
+        return;
+      }
     }
 
     const sep = destinationFolder.includes("/") ? "/" : "\\";
@@ -2394,7 +3111,7 @@
 
         const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
         const base64Data = dataUrl.replace(/^data:image\/jpeg;base64,/, "");
-        uploadCoverImage(base64Data, file.name || "cover.jpg");
+        runExclusive("mutation", "UploadCoverImage", () => uploadCoverImage(base64Data, file.name || "cover.jpg"));
       };
       img.onerror = () => {
         if (statusEl) {
@@ -2449,6 +3166,7 @@
       });
       const jobId = data?.runPluginTask;
       if (jobId) {
+        busyAwaitingJob = true;
         trackJobProgress(jobId, "UploadCoverImage", payload);
       } else {
         if (statusEl) {
@@ -2488,6 +3206,9 @@
   // 8. Trigger Megapack or Single-Scene Build Task (BuildMegapack / BuildSingleScene) & Track Progress
   async function buildMegapack() {
     bbcodeIsFinal = false;
+    bbcodeUserEdited = false;
+    lastFinalBBCode = null;
+    refreshBBCodeEditedNotice();
     updateBBCode();
 
     const active = activeScenes();
@@ -2524,6 +3245,9 @@
     // In-place gating (todo 7): every active scene's chosen primary must sit
     // under the seed dir (recursive). Mirrors task.py's
     // validate_pack_files_present so the UI blocks before the backend does.
+    // This is a cheap, local string check — it runs BEFORE the network
+    // disk-existence probe below so a file that's simply not consolidated
+    // yet (the common, expected case) never triggers a filesystem call.
     const { missing } = computeMissingSeedFiles();
     if (missing.length > 0) {
       showStatus(`Build aborted: ${formatMissingSeedFilesReason(missing)}`, 0, true);
@@ -2531,27 +3255,29 @@
     }
 
     // Authoritative on-disk existence probe (POST /api/fs/exists, chunked at
-    // 100 paths, fail-closed on non-200/network error via pathExistsBatch).
-    // A file the Stash metadata places under the seed dir may still be absent
-    // on disk (stale DB, deleted file) — block here, not deep in task.py.
-    // Session-consolidated files are skipped: moveFiles already placed them
-    // and their local paths may predate the move.
-    const probePaths = active
-      .map((s) => getPrimaryFile(s))
-      .filter((f) => f.path && !(f.id && consolidatedFileIds.has(f.id)))
-      .map((f) => f.path.trim());
-    let existsMap = null;
+    // 100 paths, fail-closed on non-200/network error). A file the Stash
+    // metadata places under the seed dir may still be absent on disk (stale
+    // DB, deleted/renamed file) — block here, not deep in task.py. Checks
+    // every file record Stash knows about for each scene, not just the
+    // chosen primary: if the primary has gone stale but a sibling file for
+    // the same scene is confirmed present, auto-relinks to it instead of
+    // failing; only a scene with nothing left on disk anywhere aborts the
+    // build, named exactly.
+    let reconciled;
     try {
-      existsMap = await pathExistsBatch(probePaths);
+      reconciled = await reconcileSourceFiles({ failClosed: true });
     } catch (err) {
       showStatus(`Build aborted: filesystem check failed — ${err.message}`, 0, true);
       return;
     }
-    const notOnDisk = probePaths.filter((p) => existsMap[p] !== true);
-    if (notOnDisk.length > 0) {
-      const names = notOnDisk.map((p) => p.split(/[\\/]/).pop() || p);
-      showStatus(`Build aborted: ${names.length} file(s) missing from the seed directory on disk: ${names.join(", ")}. Run Consolidate or add the missing files.`, 0, true);
+    if (reconciled.missing.length > 0 || (reconciled.outsideSeed && reconciled.outsideSeed.length > 0)) {
+      showStatus(`Build aborted: ${describeReconcile(reconciled)}`, 0, true);
+      renderScenes();
       return;
+    }
+    if (reconciled.relinked.length > 0) {
+      renderScenes();
+      showStatus(describeReconcile(reconciled), 0, false);
     }
 
     const packTitle = document.getElementById("pack-title")?.value || (isSingle ? "Untitled Scene" : "Megapack");
@@ -2628,6 +3354,7 @@
 
       const jobId = data?.runPluginTask;
       if (jobId) {
+        busyAwaitingJob = true;
         trackJobProgress(jobId, taskName, payload);
       } else {
         showStatus(`${isSingle ? "Single scene" : "Megapack"} build task queued in Stash Task Manager!`, 0.85);
@@ -2745,7 +3472,9 @@
           activeWs = null;
         }
         wsLogStreamActive = false;
-        startJobPolling(jobId, taskType, payload);
+        if (!handledJobIds.has(String(jobId))) {
+          startJobPolling(jobId, taskType, payload);
+        }
       };
 
       ws.onclose = () => {
@@ -2757,6 +3486,9 @@
           activeWs = null;
         }
         wsLogStreamActive = false;
+        if (!handledJobIds.has(String(jobId))) {
+          startJobPolling(jobId, taskType, payload);
+        }
       };
     } catch (e) {
       if (wsWatchdog) {
@@ -2764,12 +3496,18 @@
         wsWatchdog = null;
       }
       wsLogStreamActive = false;
-      startJobPolling(jobId, taskType, payload);
+      if (!handledJobIds.has(String(jobId))) {
+        startJobPolling(jobId, taskType, payload);
+      }
     }
   }
 
   function startJobPolling(jobId, taskType, payload) {
-    if (activePollingJobId === jobId && activePollInterval !== null) {
+    const jobIdStr = String(jobId);
+    if (handledJobIds.has(jobIdStr)) {
+      return;
+    }
+    if (String(activePollingJobId) === jobIdStr && activePollInterval !== null) {
       return;
     }
     if (activePollInterval) {
@@ -2779,6 +3517,16 @@
     activePollingJobId = jobId;
 
     const poll = async () => {
+      if (handledJobIds.has(jobIdStr)) {
+        if (activePollInterval) {
+          clearInterval(activePollInterval);
+          activePollInterval = null;
+        }
+        if (String(activePollingJobId) === jobIdStr) {
+          activePollingJobId = null;
+        }
+        return;
+      }
       try {
         const resp = await executeGraphQL(
           `query FindJob($id: ID!) { findJob(input: { id: $id }) { id status progress error } }`,
@@ -2792,7 +3540,7 @@
               clearInterval(activePollInterval);
               activePollInterval = null;
             }
-            if (activePollingJobId === jobId) {
+            if (String(activePollingJobId) === jobIdStr) {
               activePollingJobId = null;
             }
           }
@@ -2811,88 +3559,168 @@
     showStatus(`Running ${taskType}: ${Math.round(progress * 100)}%`, progress);
 
     if (job.status === "FINISHED") {
-      if (wsWatchdog) {
-        clearTimeout(wsWatchdog);
-        wsWatchdog = null;
+      const jobIdStr = String(job.id);
+      if (handledJobIds.has(jobIdStr)) {
+        return;
       }
-      if (activeWs) {
-        try {
-          activeWs.close();
-        } catch (_) {}
-        activeWs = null;
-      }
-      if (activePollInterval) {
-        clearInterval(activePollInterval);
-        activePollInterval = null;
-      }
-      activePollingJobId = null;
+      handledJobIds.add(jobIdStr);
 
-      const runId = payload?.run_id || activeRunId;
+      try {
+        if (wsWatchdog) {
+          clearTimeout(wsWatchdog);
+          wsWatchdog = null;
+        }
+        if (activeWs) {
+          try {
+            activeWs.close();
+          } catch (_) {}
+          activeWs = null;
+        }
+        if (activePollInterval) {
+          clearInterval(activePollInterval);
+          activePollInterval = null;
+        }
+        activePollingJobId = null;
 
-      let candidateLogs = bufferedLogs;
-      let usedFallback = false;
-      let fallbackFailed = false;
+        const runId = payload?.run_id || activeRunId;
+        let sidecarResult = null;
 
-      if (!wsLogStreamActive || candidateLogs.length === 0) {
-        try {
-          const resp = await executeGraphQL(`query Logs { logs { time level message } }`);
-          if (resp && Array.isArray(resp.logs)) {
-            candidateLogs = resp.logs;
-            usedFallback = true;
-          } else {
+        if (runId) {
+          async function probeSidecarRun(rid) {
+            const endpoints = backendEndpoints(`/api/run/${encodeURIComponent(rid)}`);
+            let sawNetworkError = false;
+            for (const url of endpoints) {
+              try {
+                const resp = await fetch(url);
+                if (resp.status === 200) {
+                  const data = await resp.json();
+                  if (data && data.found === true) {
+                    return { status: "found", result: data.result };
+                  } else if (data && data.found === false) {
+                    return { status: "not_found" };
+                  } else {
+                    return { status: "transport_error" };
+                  }
+                } else if (resp.status === 400) {
+                  return { status: "bad_request" };
+                } else {
+                  return { status: "transport_error" };
+                }
+              } catch (err) {
+                sawNetworkError = true;
+              }
+            }
+            return sawNetworkError ? { status: "transport_error" } : { status: "not_found" };
+          }
+
+          let probe = await probeSidecarRun(runId);
+
+          // If not found yet on a reachable sidecar, retry over ~5s (10 x 500ms)
+          if (probe.status === "not_found") {
+            const maxRetries = 10;
+            const retryDelayMs = 500;
+            for (let i = 0; i < maxRetries; i++) {
+              await new Promise((r) => setTimeout(r, retryDelayMs));
+              probe = await probeSidecarRun(runId);
+              if (probe.status === "found" || probe.status === "transport_error" || probe.status === "bad_request") {
+                break;
+              }
+            }
+          }
+
+          if (probe.status === "found" && probe.result) {
+            sidecarResult = probe.result;
+            if (sidecarResult.status === "failed") {
+              const failureError = sidecarResult.error || "Task execution failed on backend.";
+              if (taskType === "UploadCoverImage") {
+                const statusEl = document.getElementById("cover-status");
+                if (statusEl) {
+                  statusEl.style.display = "block";
+                  statusEl.innerText = `Cover upload failed: ${failureError}`;
+                  statusEl.style.color = "#ef4444";
+                }
+              }
+              showStatus(failureError, 0, true);
+              return;
+            } else {
+              const combined = { ...payload, ...sidecarResult };
+              onTaskComplete(taskType, combined);
+              return; // Skip log scans entirely
+            }
+          }
+        }
+
+        // --- Log Sentinel Fallback Path ---
+        let candidateLogs = bufferedLogs;
+        let usedFallback = false;
+        let fallbackFailed = false;
+
+        if (!wsLogStreamActive || candidateLogs.length === 0) {
+          try {
+            const resp = await executeGraphQL(`query Logs { logs { time level message } }`);
+            if (resp && Array.isArray(resp.logs)) {
+              candidateLogs = resp.logs;
+              usedFallback = true;
+            } else {
+              fallbackFailed = true;
+            }
+          } catch (err) {
             fallbackFailed = true;
           }
-        } catch (err) {
-          fallbackFailed = true;
         }
-      }
 
-      let failureError = runId ? findFailureSentinel(candidateLogs, runId) : null;
-      if (!failureError && usedFallback && bufferedLogs.length > 0) {
-        failureError = findFailureSentinel(bufferedLogs, runId);
-      }
+        let failureError = runId ? findFailureSentinel(candidateLogs, runId) : null;
+        if (!failureError && usedFallback && bufferedLogs.length > 0) {
+          failureError = findFailureSentinel(bufferedLogs, runId);
+        }
 
-      if (failureError) {
-        if (taskType === "UploadCoverImage") {
-          const statusEl = document.getElementById("cover-status");
-          if (statusEl) {
-            statusEl.style.display = "block";
-            statusEl.innerText = `Cover upload failed: ${failureError}`;
-            statusEl.style.color = "#ef4444";
+        if (failureError) {
+          if (taskType === "UploadCoverImage") {
+            const statusEl = document.getElementById("cover-status");
+            if (statusEl) {
+              statusEl.style.display = "block";
+              statusEl.innerText = `Cover upload failed: ${failureError}`;
+              statusEl.style.color = "#ef4444";
+            }
           }
+          showStatus(failureError, 0, true);
+          return;
         }
-        showStatus(failureError, 0, true);
-        return;
-      }
 
-      if (!wsLogStreamActive && fallbackFailed) {
-        if (taskType === "UploadCoverImage") {
-          const statusEl = document.getElementById("cover-status");
-          if (statusEl) {
-            statusEl.style.display = "block";
-            statusEl.innerText = "⚠️ Cover upload completed, but log verification failed.";
-            statusEl.style.color = "#ef4444";
+        if (!wsLogStreamActive && fallbackFailed) {
+          if (taskType === "UploadCoverImage") {
+            const statusEl = document.getElementById("cover-status");
+            if (statusEl) {
+              statusEl.style.display = "block";
+              statusEl.innerText = "⚠️ Cover upload completed, but log verification failed.";
+              statusEl.style.color = "#ef4444";
+            }
           }
+          showStatus("⚠️ Task marked finished, but log verification failed (WebSocket and logs query unavailable). Check Stash logs.", 1.0, true);
+          return;
         }
-        showStatus("⚠️ Task marked finished, but log verification failed (WebSocket and logs query unavailable). Check Stash logs.", 1.0, true);
-        return;
-      }
 
-      // The request payload only describes what was asked for. Everything the
-      // build actually produced -- remote image URLs, final BBCode, tracker
-      // tags, pre-flight results -- comes back on the result sentinel.
-      const result = runId ? findResultSentinel(candidateLogs, runId) : null;
-      const chunkedBBCode = runId
-        ? (findBBCodeSentinel(candidateLogs, runId) ||
-           (usedFallback && bufferedLogs.length > 0 ? findBBCodeSentinel(bufferedLogs, runId) : null))
-        : null;
+        // The request payload only describes what was asked for. Everything the
+        // build actually produced -- remote image URLs, final BBCode, tracker
+        // tags, pre-flight results -- comes back on the result sentinel.
+        const result = runId ? findResultSentinel(candidateLogs, runId) : null;
+        const chunkedBBCode = runId
+          ? (findBBCodeSentinel(candidateLogs, runId) ||
+             (usedFallback && bufferedLogs.length > 0 ? findBBCodeSentinel(bufferedLogs, runId) : null))
+          : null;
 
-      let combined = result ? { ...payload, ...result } : payload;
-      if (chunkedBBCode) {
-        combined = { ...combined, chunked_bbcode: chunkedBBCode };
+        let combined = result ? { ...payload, ...result } : payload;
+        if (chunkedBBCode) {
+          combined = { ...combined, chunked_bbcode: chunkedBBCode };
+        }
+        onTaskComplete(taskType, combined);
+      } finally {
+        // Change B: Dispatched Stash job has reached terminal state; release busy lockout.
+        setUiBusy(false);
       }
-      onTaskComplete(taskType, combined);
     } else if (job.status === "FAILED" || job.status === "CANCELLED") {
+      const jobIdStr = String(job.id);
+      handledJobIds.add(jobIdStr);
       if (wsWatchdog) {
         clearTimeout(wsWatchdog);
         wsWatchdog = null;
@@ -2917,6 +3745,8 @@
         }
       }
       showStatus(`Task ${taskType} ${job.status}: ${job.error || "Unknown error"}`, progress, true);
+      // Change B: Terminal failure / cancellation releases busy lockout.
+      setUiBusy(false);
     }
   }
 
@@ -2974,71 +3804,144 @@
     if (taskType === "BuildMegapack" || taskType === "BuildSingleScene") {
       const isSingle = taskType === "BuildSingleScene" || currentMode === "single";
       const packTitle =
-        payload.pack_title || document.getElementById("pack-title")?.value || "";
-      const outputDir =
-        payload.output_dir || document.getElementById("output-dir")?.value || "";
-      const torrentPath = payload.torrent_path || `${outputDir}\\${packTitle}.torrent`;
-      const manifestPath = payload.manifest_path || `${outputDir}\\${packTitle}_manifest.json`;
-      const submissionPath = payload.submission_path || `${outputDir}\\${packTitle}_submission.json`;
+        payload?.pack_title || document.getElementById("pack-title")?.value || "";
+      const torrentPath =
+        typeof payload?.torrent_path === "string" && payload.torrent_path.trim()
+          ? payload.torrent_path.trim()
+          : null;
+      const manifestPath =
+        typeof payload?.manifest_path === "string" && payload.manifest_path.trim()
+          ? payload.manifest_path.trim()
+          : null;
+      const submissionPath =
+        typeof payload?.submission_path === "string" && payload.submission_path.trim()
+          ? payload.submission_path.trim()
+          : null;
+      const bbcodePath =
+        typeof payload?.bbcode_path === "string" && payload.bbcode_path.trim()
+          ? payload.bbcode_path.trim()
+          : null;
 
       // Tracker tags: from payload.tracker_tags or derived scene tags
       // The backend's merge_tags is authoritative. This fallback only runs when
       // the result sentinel was missing, and mirrors it as closely as the
-      // browser can: performers and studio are tracker tags too, and Empornium
-      // separates words with dots rather than dropping them.
-      let tagsList = payload.tracker_tags;
+      // browser can using the cached vocabulary if available.
+      let tagsList = payload?.tracker_tags;
+      let unmappedList = payload?.unmapped_tags;
       if (!tagsList || !Array.isArray(tagsList)) {
         const scenes = activeScenes();
-        const rawTags = [
-          ...(payload.tags || scenes.flatMap((s) => (s.tags || []).map((t) => t.name))),
-          ...(payload.performers || scenes.flatMap((s) => (s.performers || []).map((p) => p.name))),
-          ...scenes.map((s) => s.studio?.name)
-        ];
-        tagsList = [
-          ...new Set(
-            rawTags
-              .map((t) => (typeof t === "string" ? empifyTag(t) : ""))
-              .filter(Boolean)
-          )
-        ].sort();
+        const sources = [];
+        for (const s of scenes) {
+          for (const t of s.tags || []) {
+            const name = typeof t === "string" ? t : t?.name;
+            if (name) sources.push({ value: name, kind: "scene_tag" });
+          }
+          for (const p of s.performers || []) {
+            const name = typeof p === "string" ? p : p?.name;
+            if (name) sources.push({ value: name, kind: "performer" });
+          }
+          if (s.studio?.name) {
+            sources.push({ value: s.studio.name, kind: "studio" });
+          }
+        }
+        if (payload?.tags && Array.isArray(payload.tags)) {
+          for (const t of payload.tags) {
+            if (typeof t === "string" && t.trim()) sources.push({ value: t.trim(), kind: "scene_tag" });
+          }
+        }
+        if (payload?.performers && Array.isArray(payload.performers)) {
+          for (const p of payload.performers) {
+            if (typeof p === "string" && p.trim()) sources.push({ value: p.trim(), kind: "performer" });
+          }
+        }
+        const resolved = resolveTags(sources, cachedVocabulary);
+        tagsList = resolved.tags;
+        if (!unmappedList) {
+          unmappedList = resolved.unmapped;
+        }
+      }
+      if (!Array.isArray(unmappedList)) {
+        unmappedList = [];
       }
       const tagsString = tagsList.length > 0 ? tagsList.join(" ") : (isSingle ? "scene" : "megapack");
 
       // Preview status and image count
       const active = activeScenes();
-      const imageUrls = Array.isArray(payload.uploaded_urls) ? payload.uploaded_urls : [];
+      const imageUrls = Array.isArray(payload?.uploaded_urls) ? payload.uploaded_urls : [];
       const imageCount = imageUrls.length || (active.length > 0 ? active.length : 1);
-      const uploadEnabled = Boolean(payload.upload_previews);
+      const uploadEnabled = Boolean(payload?.upload_previews);
       const bbcodeBox = document.getElementById("bbcode-preview");
 
       // The locally-composed preview omits the image block, which is only known
       // once the uploads finish. Replace it with what was actually written to
       // the .bbcode file so "Copy" hands over the real submission text.
-      const finalBBCode = payload.chunked_bbcode || (typeof payload.bbcode === "string" && payload.bbcode ? payload.bbcode : null);
+      const finalBBCode = payload?.chunked_bbcode || (typeof payload?.bbcode === "string" && payload.bbcode ? payload.bbcode : null);
       const bbcodeWarning = document.getElementById("bbcode-warning");
       if (bbcodeBox && finalBBCode) {
-        bbcodeBox.innerText = finalBBCode;
+        bbcodeBox.value = finalBBCode;
         bbcodeIsFinal = true;
+        lastFinalBBCode = finalBBCode;
+        refreshBBCodeEditedNotice();
         if (bbcodeWarning) bbcodeWarning.style.display = "none";
-      } else if (payload.bbcode_truncated) {
+      } else if (payload?.bbcode_truncated) {
         if (bbcodeWarning) {
-          const bbPath = payload.bbcode_path || `${outputDir}\\${packTitle}_bbcode.txt`;
-          bbcodeWarning.innerText = `⚠️ Preview is provisional (truncated). Read ${bbPath} for the complete BBCode.`;
+          const locationMsg = bbcodePath ? bbcodePath : "the artifact directory";
+          bbcodeWarning.innerText = `⚠️ Preview is provisional (truncated). Read ${bbcodePath ? locationMsg : "the .bbcode file in " + locationMsg} for the complete BBCode.`;
           bbcodeWarning.style.display = "block";
         }
       } else if (bbcodeWarning) {
         bbcodeWarning.style.display = "none";
       }
 
-      const bbcodeText = bbcodeBox ? bbcodeBox.innerText : "";
+      const bbcodeText = bbcodeBox ? bbcodeBox.value : "";
+
+      // C3: Render unmapped tags collapsible under BBCode preview
+      const collapsibleEl = document.getElementById("unmapped-tags-collapsible");
+      const summaryEl = document.getElementById("unmapped-tags-summary");
+      const listEl = document.getElementById("unmapped-tags-list");
+      const copyUnmappedBtn = document.getElementById("btn-copy-unmapped");
+
+      if (collapsibleEl && summaryEl && listEl) {
+        if (unmappedList.length > 0) {
+          collapsibleEl.removeAttribute("open"); // collapsed by default
+          collapsibleEl.style.display = "block";
+          summaryEl.textContent = `▸ ${unmappedList.length} Stash tag${unmappedList.length === 1 ? "" : "s"} have no Empornium equivalent (not sent)`;
+          listEl.innerHTML = "";
+          for (const tag of unmappedList) {
+            const li = document.createElement("li");
+            li.textContent = tag;
+            listEl.appendChild(li);
+          }
+          if (copyUnmappedBtn && !copyUnmappedBtn.dataset.bound) {
+            copyUnmappedBtn.dataset.bound = "true";
+            copyUnmappedBtn.addEventListener("click", async (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              try {
+                await navigator.clipboard.writeText(unmappedList.join("\n"));
+                const orig = copyUnmappedBtn.textContent;
+                copyUnmappedBtn.textContent = "✓ Copied";
+                setTimeout(() => {
+                  copyUnmappedBtn.textContent = orig;
+                }, 1500);
+              } catch (err) {
+                // Clipboard fallback
+              }
+            });
+          }
+        } else {
+          collapsibleEl.style.display = "none";
+          listEl.innerHTML = "";
+        }
+      }
 
       // Presentation size indicator next to BBCode preview
       const presSizeEl = document.getElementById("presentation-size-line");
       if (presSizeEl) {
         let presBytes = null;
-        if (payload.presentation_bytes !== undefined && payload.presentation_bytes !== null) {
+        if (payload?.presentation_bytes !== undefined && payload.presentation_bytes !== null) {
           presBytes = Number(payload.presentation_bytes);
-        } else if (payload.preflight && Array.isArray(payload.preflight.checks)) {
+        } else if (payload?.preflight && Array.isArray(payload.preflight.checks)) {
           const presCheck = payload.preflight.checks.find((c) => c.id === "presentation_size");
           if (presCheck && presCheck.detail) {
             const match = presCheck.detail.match(/([\d.]+)\s*MiB/);
@@ -3070,7 +3973,7 @@
       }
 
       let isPreviewOnly = false;
-      if (payload.preview_only !== undefined) {
+      if (payload?.preview_only !== undefined) {
         isPreviewOnly = Boolean(payload.preview_only);
       } else {
         isPreviewOnly =
@@ -3081,76 +3984,16 @@
         ? `${imageCount} image(s) (${imageCount} local file:/// preview(s))`
         : `${imageCount} image(s) (all remote on HamsterImg)`;
 
-      // Pre-Flight Checklist evaluation
-      let checks = [];
-      if (payload.preflight && Array.isArray(payload.preflight.checks)) {
-        checks = payload.preflight.checks;
-      } else {
-        checks = [
-          {
-            id: "images_remote",
-            label: "Preview Images",
-            passed: !isPreviewOnly,
-            detail: !isPreviewOnly
-              ? `All ${imageCount} preview image(s) hosted remotely`
-              : `Contains local file:/// URLs. Remote hosting required.`
-          },
-          {
-            id: "tracker_tags",
-            label: "Tracker Tags",
-            passed: tagsList.length > 0,
-            detail: `${tagsList.length} valid tracker tags generated`
-          },
-          {
-            id: "category",
-            label: "Category",
-            passed: true,
-            is_info: true,
-            detail: "Category — you select this on the upload form."
-          },
-          {
-            id: "torrent_valid",
-            label: "Torrent File (torf)",
-            passed: Boolean(torrentPath),
-            detail: "private=True, source=Emp, non-empty pieces"
-          },
-          {
-            id: "payload_files",
-            label: "Media Files Verification",
-            passed: active.length > 0,
-            detail: isSingle
-              ? `Single media file exists on disk`
-              : `All ${active.length} payload file(s) exist on disk`
-          },
-          {
-            id: "root_name",
-            label: isSingle ? "Torrent Name" : "Torrent Root Name",
-            passed: true,
-            is_warning: false,
-            is_info: isSingle,
-            detail: isSingle
-              ? "Single-file torrent — tracker displays media filename"
-              : "Root folder matches pack title"
-          }
-        ];
-        if (payload.presentation_bytes !== undefined && payload.presentation_bytes !== null) {
-          const pb = Number(payload.presentation_bytes);
-          const cap = 23000000;
-          checks.push({
-            id: "presentation_size",
-            label: "Presentation Size",
-            passed: pb <= cap,
-            detail: `${(pb / 1048576).toFixed(2)} MiB of ${(cap / 1048576).toFixed(2)} MiB budget (Empornium cap 25.00 MiB)`
-          });
-        }
-      }
-
-      const isReady =
-        payload.ready !== undefined
+      // Pre-Flight Checklist evaluation (fail-closed if preflight checks missing)
+      const isUnverified = !payload?.preflight || !Array.isArray(payload.preflight.checks);
+      const checks = isUnverified ? [] : payload.preflight.checks;
+      const isReady = isUnverified
+        ? false
+        : (payload.ready !== undefined
           ? Boolean(payload.ready)
-          : payload.preflight
-          ? Boolean(payload.preflight.ready)
-          : !isPreviewOnly && checks.every((c) => c.is_info || c.is_warning || c.passed);
+          : (payload.preflight.ready !== undefined
+            ? Boolean(payload.preflight.ready)
+            : false));
 
       let checklistHtml = "";
       for (const c of checks) {
@@ -3172,7 +4015,7 @@
       }
 
       // Resolve upload URL from configured site_url
-      const rawSiteUrl = (payload.site_url || payload.empornium_site_url || "").trim();
+      const rawSiteUrl = (payload?.site_url || payload?.empornium_site_url || "").trim();
       let uploadLinkHtml = "";
       if (rawSiteUrl) {
         let uploadUrl = rawSiteUrl;
@@ -3188,7 +4031,7 @@
         }" title="${
           isReady
             ? "Open Empornium upload form and copy torrent path to clipboard"
-            : "Upload disabled: Pre-flight checks did not pass"
+            : (isUnverified ? "Upload disabled: Build result is unverified" : "Upload disabled: Pre-flight checks did not pass")
         }">
               🌐 Open Empornium Upload Form
             </a>
@@ -3223,15 +4066,40 @@
       const summaryBox = document.getElementById("artifact-summary");
       const detailsBox = document.getElementById("artifact-details");
 
+      const headerHtml = isUnverified
+        ? `<div id="handoff-status-header" style="font-weight: 600; color: var(--danger); margin-bottom: 4px;">⚠️ Build Result Unverified — no result received from the backend</div>`
+        : `<div id="handoff-status-header" style="font-weight: 600; color: ${
+            isReady ? "var(--success)" : "var(--danger)"
+          }; margin-bottom: 4px;">${
+            isReady
+              ? "🎉 Build Complete! — Ready for Manual Upload"
+              : "⚠️ Build Complete! — " + (isSingle ? "Release" : "Pack") + " Not Ready for Upload"
+          }</div>`;
+
+      const unverifiedAlertHtml = isUnverified
+        ? `<div id="unverified-build-alert" style="padding: 6px 10px; background: rgba(239, 68, 68, 0.1); border: 1px solid var(--danger); border-radius: 4px; color: var(--danger); font-size: 0.8rem; margin-bottom: 8px;">
+            The build task finished in Stash, but no result payload was received from the backend sidecar or logs. The build may have failed. Please check the Stash logs.
+          </div>`
+        : "";
+
+      const torrentDisplayHtml = torrentPath
+        ? `<code id="handoff-torrent">${escapeHtml(torrentPath)}</code>`
+        : `<span id="handoff-torrent" style="color: var(--text-muted); font-style: italic;">— not reported —</span>`;
+
+      const manifestDisplayHtml = manifestPath
+        ? `<code id="handoff-manifest">${escapeHtml(manifestPath)}</code>`
+        : `<span id="handoff-manifest" style="color: var(--text-muted); font-style: italic;">— not reported —</span>`;
+
+      const submissionDisplayHtml = submissionPath
+        ? `<code id="handoff-submission">${escapeHtml(submissionPath)}</code>`
+        : `<span id="handoff-submission" style="color: var(--text-muted); font-style: italic;">— not reported —</span>`;
+
       detailsBox.innerHTML = `
-        <div id="handoff-status-header" style="font-weight: 600; color: ${
-          isReady ? "var(--success)" : "var(--danger)"
-        }; margin-bottom: 4px;">
-          ${isReady ? "🎉 Build Complete! — Ready for Manual Upload" : "⚠️ Build Complete! — " + (isSingle ? "Release" : "Pack") + " Not Ready for Upload"}
-        </div>
+        ${headerHtml}
+        ${unverifiedAlertHtml}
 
         <div id="preview-gate-alert" class="preview-gate-alert" style="display: ${
-          isPreviewOnly ? "block" : "none"
+          !isUnverified && isPreviewOnly ? "block" : "none"
         };">
           🚫 <strong>${isSingle ? "Release" : "Pack"} Not Ready for Upload:</strong> BBCode contains local <code>file:///</code> URLs. Remote hosting is required so images render for other users and do not disclose local paths.<br>
           <em>Remedy: Enable preview upload, or re-run once the image host is reachable.</em>
@@ -3242,7 +4110,7 @@
         <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px;">
           <div><strong>${isSingle ? "Release Title" : "Pack Title"}:</strong> <span id="handoff-title">${escapeHtml(packTitle)}</span></div>
           <button id="btn-copy-title" class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;" ${
-            !isReady ? 'disabled title="Copy disabled: ' + (isSingle ? "Release" : "Pack") + ' is not ready for upload"' : ""
+            !isReady ? 'disabled title="Copy disabled: ' + (isUnverified ? "Build result is unverified" : (isSingle ? "Release" : "Pack") + " is not ready for upload") + '"' : ""
           }>📋 Copy Title</button>
         </div>
 
@@ -3251,27 +4119,23 @@
             tagsString
           )}</span></div>
           <button id="btn-copy-tags" class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;" ${
-            !isReady ? 'disabled title="Copy disabled: ' + (isSingle ? "Release" : "Pack") + ' is not ready for upload"' : ""
+            !isReady ? 'disabled title="Copy disabled: ' + (isUnverified ? "Build result is unverified" : (isSingle ? "Release" : "Pack") + " is not ready for upload") + '"' : ""
           }>📋 Copy Tags</button>
         </div>
 
         <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px;">
-          <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px;"><strong>Torrent File:</strong> <code id="handoff-torrent">${escapeHtml(
-            torrentPath
-          )}</code></div>
-          <button id="btn-copy-torrent-path" class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;">📋 Copy Path</button>
+          <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px;"><strong>Torrent File:</strong> ${torrentDisplayHtml}</div>
+          <button id="btn-copy-torrent-path" class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;" ${
+            isUnverified || !torrentPath ? 'disabled title="Copy disabled: ' + (!torrentPath ? "Path not reported" : "Build result is unverified") + '"' : ""
+          }>📋 Copy Path</button>
         </div>
 
         <div style="margin-top: 4px;"><strong>Preview Images:</strong> <span id="handoff-images">${escapeHtml(
           imageSummary
         )}</span></div>
         ${imageLinksHtml}
-        <div style="margin-top: 2px;"><strong>Manifest:</strong> <code id="handoff-manifest">${escapeHtml(
-          manifestPath
-        )}</code></div>
-        <div style="margin-top: 2px;"><strong>Submission JSON:</strong> <code id="handoff-submission">${escapeHtml(
-          submissionPath
-        )}</code></div>
+        <div style="margin-top: 2px;"><strong>Manifest:</strong> ${manifestDisplayHtml}</div>
+        <div style="margin-top: 2px;"><strong>Submission JSON:</strong> ${submissionDisplayHtml}</div>
 
         <!-- Pre-Flight Checklist Section -->
         <div id="preflight-section" style="margin-top: 8px; border-top: 1px solid var(--card-border); padding-top: 6px;">
@@ -3291,7 +4155,9 @@
       if (copyBbcodeBtn) {
         copyBbcodeBtn.disabled = !isReady;
         if (!isReady) {
-          copyBbcodeBtn.title = `Copy disabled: ${isSingle ? "Release" : "Pack"} is not ready for upload`;
+          copyBbcodeBtn.title = isUnverified
+            ? "Copy disabled: Build result is unverified"
+            : `Copy disabled: ${isSingle ? "Release" : "Pack"} is not ready for upload`;
         } else {
           copyBbcodeBtn.title = "";
         }
@@ -3299,18 +4165,251 @@
 
       setupCopyButton("btn-copy-title", () => document.getElementById("handoff-title")?.innerText || "");
       setupCopyButton("btn-copy-tags", () => document.getElementById("handoff-tags")?.innerText || "");
-      setupCopyButton("btn-copy-torrent-path", () => document.getElementById("handoff-torrent")?.innerText || "");
+      setupCopyButton("btn-copy-torrent-path", () => (torrentPath ? document.getElementById("handoff-torrent")?.innerText || "" : ""));
 
       const uploadLink = document.getElementById("btn-open-upload");
       if (uploadLink) {
         uploadLink.addEventListener("click", () => {
-          if (!isReady) return;
+          if (!isReady || !torrentPath) return;
           const torPath = document.getElementById("handoff-torrent")?.innerText || "";
           if (torPath && navigator.clipboard && navigator.clipboard.writeText) {
             navigator.clipboard.writeText(torPath).catch(() => {});
           }
         });
       }
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Change B: Centralized UI lockout system, runExclusive(), and setUiBusy()
+  // ---------------------------------------------------------------------------
+  async function runExclusive(tier, label, fn) {
+    if (uiBusy) return;                 // hard guard: a second click is a no-op
+    setUiBusy(true, tier, label);
+    busyAwaitingJob = false;
+    try {
+      await fn();
+    } catch (err) {
+      showStatus(`${label} failed: ${err.message}`, 0, true);
+      busyAwaitingJob = false;
+    } finally {
+      // A dispatched Stash job owns its own unlock (handleJobUpdate). Anything that
+      // returned without dispatching — a validation abort, a network failure, a pure
+      // GraphQL consolidation — unlocks here.
+      if (!busyAwaitingJob) setUiBusy(false);
+    }
+  }
+
+  function updateBusyEscapeHatch() {
+    if (!uiBusy) return;
+    const elapsedMs = Date.now() - busyStartedAt;
+    if (elapsedMs >= 60000) {
+      const totalSec = Math.floor(elapsedMs / 1000);
+      const m = Math.floor(totalSec / 60);
+      const s = totalSec % 60;
+      const bannerText = document.getElementById("busy-banner-text");
+      if (bannerText) {
+        bannerText.textContent = `Controls locked for ${m}m ${s}s — `;
+      }
+      const unlockBtn = document.getElementById("btn-busy-unlock");
+      if (unlockBtn) {
+        unlockBtn.style.display = "inline-flex";
+      }
+    }
+  }
+
+  function applyBusyLock() {
+    const isBusy = uiBusy;
+    const isBuildTier = isBusy && busyOperation === "build";
+
+    // Common controls locked in both "build" and "mutation" tiers
+    const commonControlIds = [
+      "mode-megapack",
+      "mode-single",
+      "pack-title",
+      "pack-notes",
+      "opt-upload-previews",
+      "cover-file-input",
+      "btn-remove-cover",
+      "output-dir",
+      "scratch-dir",
+      "btn-browse-dir",
+      "btn-browse-scratch",
+      "btn-restore-all",
+      "btn-keep-first",
+      "btn-filter-conflicts",
+      "btn-show-all-conflicts",
+      "btn-probe",
+      "btn-build",
+      "btn-consolidate",
+      "btn-sidecar-stop"
+    ];
+
+    for (const id of commonControlIds) {
+      const el = document.getElementById(id);
+      if (el) {
+        if (isBusy) {
+          el.disabled = true;
+        } else {
+          // Note: mode-megapack, mode-single, btn-build, btn-consolidate are
+          // derived authoritatively by updateActionAvailability() on unlock.
+          if (!["btn-build", "btn-consolidate", "mode-megapack", "mode-single"].includes(id)) {
+            el.disabled = false;
+          }
+        }
+      }
+    }
+
+    // Cover paste zone & file selection link
+    const coverZone = document.getElementById("cover-paste-zone");
+    if (coverZone) {
+      coverZone.tabIndex = isBusy ? -1 : 0;
+      coverZone.style.pointerEvents = isBusy ? "none" : "";
+    }
+    const linkChooseCover = document.getElementById("link-choose-cover");
+    if (linkChooseCover) {
+      linkChooseCover.style.pointerEvents = isBusy ? "none" : "";
+    }
+
+    // Scene cards: remove/keep buttons, file selector, and draggable flags
+    const sceneRemoveBtns = document.querySelectorAll(".scene-remove-btn");
+    for (const btn of sceneRemoveBtns) {
+      btn.disabled = isBusy;
+    }
+    const sceneKeepBtns = document.querySelectorAll(".scene-keep-btn");
+    for (const btn of sceneKeepBtns) {
+      btn.disabled = isBusy;
+    }
+    const sceneFileSelects = document.querySelectorAll(".scene-file-select");
+    for (const sel of sceneFileSelects) {
+      sel.disabled = isBusy;
+    }
+    const sceneCards = document.querySelectorAll(".scene-card");
+    for (const card of sceneCards) {
+      card.draggable = !isBusy;
+      card.setAttribute("draggable", isBusy ? "false" : "true");
+    }
+
+    // Build-tier only controls (BBCode editor, toolbar, and reset button)
+    const bbcodePreview = document.getElementById("bbcode-preview");
+    if (bbcodePreview) {
+      bbcodePreview.disabled = isBuildTier;
+    }
+    const bbcodeToolbarElements = document.querySelectorAll("#bbcode-toolbar .toolbar-btn, #bbcode-toolbar .toolbar-select");
+    for (const el of bbcodeToolbarElements) {
+      el.disabled = isBuildTier;
+    }
+    const bbcodeResetBtn = document.getElementById("btn-bbcode-reset");
+    if (bbcodeResetBtn) {
+      bbcodeResetBtn.disabled = isBuildTier;
+    }
+  }
+
+  function setUiBusy(on, tier = null, label = null) {
+    uiBusy = Boolean(on);
+
+    if (uiBusy) {
+      busyOperation = tier || "build";
+      busyLabel = label || (busyOperation === "build" ? "BuildMegapack" : "Operation");
+      busyStartedAt = Date.now();
+      document.body.classList.toggle("ui-busy", true);
+
+      // Button feedback: swap starting button label to hourglass verb
+      const btnFeedbackMap = {
+        "BuildMegapack": { id: "btn-build", text: "⏳ Building…" },
+        "BuildSingleScene": { id: "btn-build", text: "⏳ Building…" },
+        "ProbeFiles": { id: "btn-probe", text: "⏳ Probing…" },
+        "Consolidate": { id: "btn-consolidate", text: "⏳ Consolidating…" }
+      };
+      const feedback = btnFeedbackMap[busyLabel];
+      if (feedback) {
+        const btn = document.getElementById(feedback.id);
+        if (btn) {
+          if (!btn.dataset.idleLabel) {
+            btn.dataset.idleLabel = btn.textContent;
+          }
+          btn.textContent = feedback.text;
+        }
+      }
+
+      // Show busy banner
+      const banner = document.getElementById("busy-banner");
+      const bannerText = document.getElementById("busy-banner-text");
+      const unlockBtn = document.getElementById("btn-busy-unlock");
+      if (banner) banner.style.display = "flex";
+      if (bannerText) {
+        bannerText.textContent = `⏳ ${busyLabel} in progress — controls locked until it finishes or fails.`;
+      }
+      if (unlockBtn) unlockBtn.style.display = "none";
+
+      const unmappedCollapsible = document.getElementById("unmapped-tags-collapsible");
+      if (unmappedCollapsible) unmappedCollapsible.style.display = "none";
+
+      // Arm 60-second escape hatch timer
+      if (busyEscapeTimer) {
+        clearInterval(busyEscapeTimer);
+        busyEscapeTimer = null;
+      }
+      busyEscapeTimer = setInterval(updateBusyEscapeHatch, 1000);
+
+      // Scroll progress section into view once per operation
+      const progressSection = document.getElementById("progress-section");
+      if (progressSection && typeof progressSection.scrollIntoView === "function") {
+        progressSection.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      }
+
+      // Apply indeterminate class to progress bar
+      const bar = document.getElementById("progress-bar");
+      if (bar) {
+        bar.classList.add("indeterminate");
+      }
+
+      // Lock controls
+      applyBusyLock();
+    } else {
+      busyOperation = null;
+      busyLabel = null;
+      busyAwaitingJob = false;
+      busyStartedAt = 0;
+      document.body.classList.toggle("ui-busy", false);
+
+      // Clear escape timer
+      if (busyEscapeTimer) {
+        clearInterval(busyEscapeTimer);
+        busyEscapeTimer = null;
+      }
+
+      // Hide busy banner
+      const banner = document.getElementById("busy-banner");
+      const bannerText = document.getElementById("busy-banner-text");
+      const unlockBtn = document.getElementById("btn-busy-unlock");
+      if (banner) banner.style.display = "none";
+      if (bannerText) bannerText.textContent = "";
+      if (unlockBtn) unlockBtn.style.display = "none";
+
+      // Clear indeterminate class from progress bar
+      const bar = document.getElementById("progress-bar");
+      if (bar) {
+        bar.classList.remove("indeterminate");
+      }
+
+      // Restore button labels
+      for (const id of ["btn-build", "btn-probe", "btn-consolidate"]) {
+        const btn = document.getElementById(id);
+        if (btn && btn.dataset.idleLabel) {
+          btn.textContent = btn.dataset.idleLabel;
+          delete btn.dataset.idleLabel;
+        }
+      }
+
+      // Restore probe button title if set
+      const btnProbe = document.getElementById("btn-probe");
+      if (btnProbe) btnProbe.title = "";
+
+      // Unlock controls and re-derive gated state
+      applyBusyLock();
+      updateActionAvailability();
+      renderStageState();
     }
   }
 
@@ -3327,6 +4426,13 @@
     }
     if (bar) {
       bar.style.width = `${Math.round(progress * 100)}%`;
+      // Sweep highlight while operation is busy/waiting on Stash (progress < 0.02);
+      // switch to standard width presentation once real progress arrives.
+      if (progress < 0.02 && !isError) {
+        bar.classList.add("indeterminate");
+      } else {
+        bar.classList.remove("indeterminate");
+      }
     }
   }
 
@@ -3494,6 +4600,7 @@
   }
 
   function openDirectoryBrowser(targetInputId = "output-dir") {
+    if (uiBusy) return;
     const modal = document.getElementById("dir-browser-modal");
     if (!modal) return;
     dirBrowserTargetId = targetInputId || "output-dir";
@@ -3734,6 +4841,8 @@
     renderStageState();
     setMode(initialMode);
     loadScenes(ids, token);
+    prefillScratchDirFromHealth();
+    refreshSidecarStatus();
   }
 
   // Window exports for tests and integrations
@@ -3759,6 +4868,7 @@
   window.computeDuplicateGroups = computeDuplicateGroups;
   window.consolidateFiles = consolidateFiles;
   window.refreshSidecarStatus = refreshSidecarStatus;
+  window.stopSidecar = stopSidecar;
   window.consolidatedFileIds = consolidatedFileIds;
   window.buildMegapack = buildMegapack;
   window.setMode = setMode;
@@ -3779,6 +4889,10 @@
   window.sanitizeName = sanitizeName;
   window.getPackDestinationFolder = getPackDestinationFolder;
   window.empifyTag = empifyTag;
+  window.resolveTags = resolveTags;
+  window.fetchVocabulary = fetchVocabulary;
+  window.getCachedVocabulary = () => cachedVocabulary;
+  window.setCachedVocabulary = (v) => { cachedVocabulary = v; };
   window.isPathUnderSeed = isPathUnderSeed;
   window.computeMissingSeedFiles = computeMissingSeedFiles;
   window.findBBCodeSentinel = findBBCodeSentinel;
@@ -3787,6 +4901,18 @@
   window.removeCoverImage = removeCoverImage;
   window.getCurrentCoverUrl = () => currentCoverUrl;
   window.getWizardStage = getWizardStage;
+  window.handledJobIds = handledJobIds;
+  window.showStatus = showStatus;
+  window.renderScenes = renderScenes;
+  window.runExclusive = runExclusive;
+  window.setUiBusy = setUiBusy;
+  window.applyBusyLock = applyBusyLock;
+  window.updateBusyEscapeHatch = updateBusyEscapeHatch;
+  window.getUiBusy = () => uiBusy;
+  window.getBusyOperation = () => busyOperation;
+  window.setBusyStartedAt = (ts) => { busyStartedAt = ts; };
+  window.onTaskComplete = onTaskComplete;
+  window.handleJobUpdate = handleJobUpdate;
 
   // Prefill the scratch dir from the backend /health payload (todo 8 added
   // the field there). Best-effort: a down sidecar, non-200, or missing field
@@ -3815,58 +4941,304 @@
     }
   }
 
-  // Live sidecar status badge (header pill). Best-effort: every failure mode
-  // collapses into one of the three badge states, never a thrown error into
-  // the UI. Unlike prefillScratchDirFromHealth — which stops at the first
-  // candidate that answers — this tries EVERY candidate before concluding,
-  // so a half-up sidecar (one loopback name answering, the other blocked)
-  // never reads as NOT RUNNING.
-  async function refreshSidecarStatus() {
-    try {
-      const badge = document.getElementById("sidecar-status");
-      if (!badge) return;
-      const endpoints = backendEndpoints("/health");
-      let version = null; // parsed from an ok+JSON candidate
-      let sawRunning = false; // any ok HTTP response, even with a malformed body
-      for (const url of endpoints) {
-        try {
-          const response = await fetch(url);
-          if (!response.ok) continue;
-          sawRunning = true;
-          try {
-            const data = await response.json();
-            const v = String(data?.version ?? "").trim();
-            if (v) {
-              version = v;
-              break; // usable version in hand — no need for more candidates
-            }
-          } catch (jsonErr) {
-            // Malformed body on an ok response: the sidecar IS running but
-            // this candidate exposed no version — keep trying the rest.
-          }
-        } catch (err) {
-          // Network-level failure for this candidate — try the next one.
-        }
+  // Everything that becomes possible the moment the sidecar answers. Called
+  // from BOTH recovery paths in _doRefreshSidecarStatus: the fast probe at the
+  // top, and the post-StartBackend poll loop below it. The second is the common
+  // one in practice -- sidecar down at page load, auto-start dispatched, poll
+  // until healthy -- which is exactly when the one-shot vocabulary fetch at load
+  // has already failed. Without the retry the failure latches and the page emits
+  // unfiltered tags for the rest of the session behind a warning that is easy to
+  // scroll past. fetchVocabulary() is idempotent: it returns the cache
+  // immediately once populated, and clears the warning via updateBBCode().
+  function onSidecarHealthy() {
+    sidecarEverHealthy = true;
+    prefillScratchDirFromHealth();
+    if (!cachedVocabulary) fetchVocabulary();
+  }
+
+  // Sidecar refresh state & candidate probe helper
+  let activeSidecarRefreshPromise = null;
+  const MAX_START_BACKEND_DISPATCHES = 3;
+  let startBackendDispatchCount = 0;
+
+  const JOB_QUEUE_QUERY = `
+    query JobQueue {
+      jobQueue {
+        id
+        status
+        description
+        startTime
       }
-      if (version !== null) {
-        if (version === EXPECTED_SIDECAR_VERSION) {
-          badge.textContent = `Sidecar: connected (v${version})`;
-          badge.className = "sidecar-status sidecar-ok";
-        } else {
-          badge.textContent = `Sidecar: outdated (v${version}, expected ${EXPECTED_SIDECAR_VERSION}) — restart via start_backend.ps1`;
-          badge.className = "sidecar-status sidecar-warn";
+    }
+  `;
+
+  async function fetchJobQueue() {
+    try {
+      const data = await executeGraphQL(JOB_QUEUE_QUERY);
+      if (!data) return null;
+      if (data.jobQueue === null || data.jobQueue === undefined) {
+        return [];
+      }
+      if (Array.isArray(data.jobQueue)) {
+        return data.jobQueue;
+      }
+      return null;
+    } catch (err) {
+      // Fail safe: return null on query error or network failure
+      return null;
+    }
+  }
+
+  function isStartBackendDescription(desc) {
+    if (typeof desc !== "string") return false;
+    return /^Running plugin task:\s*StartBackend(?:\s|$)/.test(desc.trim());
+  }
+
+  function isPendingStartBackend(job) {
+    if (!job || typeof job !== "object") return false;
+    if (job.status !== "READY" && job.status !== "RUNNING") return false;
+    return isStartBackendDescription(job.description);
+  }
+
+  function formatAheadTaskName(desc) {
+    if (!desc || typeof desc !== "string") return "";
+    return desc.replace(/^Running plugin task:\s*/, "").trim();
+  }
+
+  function formatStartTime(st) {
+    if (!st) return "";
+    try {
+      const d = new Date(st);
+      if (!isNaN(d.getTime())) {
+        return d.toLocaleTimeString([], { hour12: false });
+      }
+    } catch (_) {}
+    return String(st);
+  }
+
+  function getQueuedStatusText(queue, targetJob) {
+    if (!Array.isArray(queue)) return "Sidecar: start queued — waiting in job queue";
+    const runningJob = queue.find((j) => j.status === "RUNNING" && j !== targetJob);
+    const aheadJob = runningJob || queue.find((j) => (j.status === "READY" || j.status === "RUNNING") && j !== targetJob);
+    if (aheadJob) {
+      const name = formatAheadTaskName(aheadJob.description) || "another job";
+      const time = formatStartTime(aheadJob.startTime);
+      return `Sidecar: start queued — waiting on ${name}${time ? ` (started ${time})` : ""}`;
+    }
+    return "Sidecar: start queued — waiting in job queue";
+  }
+
+  async function probeHealthCandidates() {
+    const endpoints = backendEndpoints("/health");
+    let version = null; // parsed from an ok+JSON candidate
+    let sawRunning = false; // any ok HTTP response, even with a malformed body
+    for (const url of endpoints) {
+      try {
+        const response = await fetch(url);
+        if (!response.ok) continue;
+        sawRunning = true;
+        try {
+          const data = await response.json();
+          const v = String(data?.version ?? "").trim();
+          if (v) {
+            version = v;
+            break;
+          }
+        } catch (jsonErr) {
+          // Malformed body on ok response
         }
-      } else if (sawRunning) {
-        // Running, but no candidate exposed a parseable version — refuse to
-        // claim green; nudge a restart so the expected version comes up.
-        badge.textContent = `Sidecar: outdated (v?, expected ${EXPECTED_SIDECAR_VERSION}) — restart via start_backend.ps1`;
+      } catch (err) {
+        // Network error for this candidate
+      }
+    }
+    return { ok: sawRunning || version !== null, version, sawRunning };
+  }
+
+  async function _doRefreshSidecarStatus() {
+    const badge = document.getElementById("sidecar-status");
+    const btnStop = document.getElementById("btn-sidecar-stop");
+    if (!badge) return;
+
+    const initialProbe = await probeHealthCandidates();
+    if (initialProbe.ok) {
+      startBackendDispatchCount = 0;
+      if (initialProbe.version === EXPECTED_SIDECAR_VERSION) {
+        badge.textContent = `Sidecar: connected (v${initialProbe.version})`;
+        badge.className = "sidecar-status sidecar-ok";
+      } else {
+        badge.textContent = `Sidecar: outdated (v${initialProbe.version || "?"}, expected ${EXPECTED_SIDECAR_VERSION}) — restart via start_backend.ps1`;
+        badge.className = "sidecar-status sidecar-warn";
+      }
+      if (btnStop) btnStop.style.display = "inline-flex";
+      onSidecarHealthy();
+      return;
+    }
+
+    if (btnStop) btnStop.style.display = "none";
+
+    const queue = await fetchJobQueue();
+    const pendingJob = Array.isArray(queue) ? queue.find(isPendingStartBackend) : null;
+
+    if (pendingJob) {
+      // F1: Skip dispatch if StartBackend is already READY or RUNNING
+      if (pendingJob.status === "RUNNING") {
+        badge.textContent = "Sidecar: starting…";
         badge.className = "sidecar-status sidecar-warn";
       } else {
-        badge.textContent = "Sidecar: NOT RUNNING — run start_backend.ps1";
+        badge.textContent = getQueuedStatusText(queue, pendingJob);
+        badge.className = "sidecar-status sidecar-warn";
+      }
+    } else {
+      // Change B: Suppress StartBackend auto-dispatch while UI is busy to prevent queue flooding
+      if (uiBusy) {
+        const runningJob = Array.isArray(queue) ? queue.find((j) => j.status === "RUNNING") : null;
+        if (runningJob) {
+          badge.textContent = getQueuedStatusText(queue, null);
+          badge.className = "sidecar-status sidecar-warn";
+        } else {
+          badge.textContent = "Sidecar: NOT RUNNING — run start_backend.ps1";
+          badge.className = "sidecar-status sidecar-bad";
+        }
+        return;
+      }
+
+      // F3: Bound the retry loop
+      if (startBackendDispatchCount >= MAX_START_BACKEND_DISPATCHES) {
+        badge.textContent = "Sidecar: failed to start — run start_backend.ps1";
+        badge.className = "sidecar-status sidecar-bad";
+        return;
+      }
+
+      // Initial badge state before dispatching
+      const runningJob = Array.isArray(queue) ? queue.find((j) => j.status === "RUNNING") : null;
+      if (runningJob) {
+        badge.textContent = getQueuedStatusText(queue, null);
+        badge.className = "sidecar-status sidecar-warn";
+      } else {
+        badge.textContent = "Sidecar: starting…";
+        badge.className = "sidecar-status sidecar-warn";
+      }
+
+      try {
+        const query = `
+          mutation RunStartBackend($plugin_id: ID!, $task_name: String!, $args: [PluginArgInput!]) {
+            runPluginTask(
+              plugin_id: $plugin_id,
+              task_name: $task_name,
+              args: $args
+            )
+          }
+        `;
+        await executeGraphQL(query, {
+          plugin_id: PLUGIN_ID,
+          task_name: "StartBackend",
+          args: [{ key: "mode", value: { str: "start_backend" } }]
+        });
+        startBackendDispatchCount++;
+      } catch (err) {
+        badge.textContent = "Sidecar: failed to start — run start_backend.ps1";
+        badge.className = "sidecar-status sidecar-bad";
+        return;
+      }
+    }
+
+    // Poll /health with bounded timeout (~10s, 500ms intervals)
+    const pollDeadline = Date.now() + 10000;
+    const pollInterval = 500;
+    let running = false;
+    let runningVersion = null;
+
+    while (Date.now() < pollDeadline) {
+      await new Promise((r) => setTimeout(r, pollInterval));
+      const probe = await probeHealthCandidates();
+      if (probe.ok) {
+        running = true;
+        runningVersion = probe.version;
+        break;
+      }
+    }
+
+    if (running) {
+      startBackendDispatchCount = 0;
+      if (runningVersion === EXPECTED_SIDECAR_VERSION) {
+        badge.textContent = `Sidecar: connected (v${runningVersion})`;
+        badge.className = "sidecar-status sidecar-ok";
+      } else {
+        badge.textContent = `Sidecar: outdated (v${runningVersion || "?"}, expected ${EXPECTED_SIDECAR_VERSION}) — restart via start_backend.ps1`;
+        badge.className = "sidecar-status sidecar-warn";
+      }
+      if (btnStop) btnStop.style.display = "inline-flex";
+      onSidecarHealthy();
+    } else {
+      // Health probe timed out. Consult queue before claiming failure.
+      const finalQueue = await fetchJobQueue();
+      const stillPending = Array.isArray(finalQueue) ? finalQueue.find(isPendingStartBackend) : null;
+      const blockingJob = Array.isArray(finalQueue) ? finalQueue.find((j) => j.status === "RUNNING" && j !== stillPending) : null;
+
+      if (stillPending) {
+        if (stillPending.status === "RUNNING") {
+          badge.textContent = "Sidecar: starting…";
+          badge.className = "sidecar-status sidecar-warn";
+        } else {
+          badge.textContent = getQueuedStatusText(finalQueue, stillPending);
+          badge.className = "sidecar-status sidecar-warn";
+        }
+      } else if (blockingJob) {
+        badge.textContent = getQueuedStatusText(finalQueue, null);
+        badge.className = "sidecar-status sidecar-warn";
+      } else {
+        badge.textContent = "Sidecar: failed to start — run start_backend.ps1";
         badge.className = "sidecar-status sidecar-bad";
       }
-    } catch (err) {
-      // Best-effort: never throw into the UI.
+      if (btnStop) btnStop.style.display = "none";
+    }
+  }
+
+  // Live sidecar status badge (header pill). Debounced so rapid or repeated
+  // calls reuse in-flight task / poll cycles and never flood duplicate StartBackend tasks.
+  async function refreshSidecarStatus() {
+    if (activeSidecarRefreshPromise) {
+      return activeSidecarRefreshPromise;
+    }
+    activeSidecarRefreshPromise = (async () => {
+      try {
+        await _doRefreshSidecarStatus();
+      } catch (err) {
+        // Best-effort: never throw into the UI.
+      } finally {
+        activeSidecarRefreshPromise = null;
+      }
+    })();
+    return activeSidecarRefreshPromise;
+  }
+
+  // Graceful sidecar shutdown via POST /api/shutdown
+  async function stopSidecar() {
+    const btn = document.getElementById("btn-sidecar-stop");
+    const badge = document.getElementById("sidecar-status");
+    if (btn) btn.disabled = true;
+    if (badge) {
+      badge.textContent = "Sidecar: stopping…";
+      badge.className = "sidecar-status sidecar-warn";
+    }
+
+    const endpoints = backendEndpoints("/api/shutdown");
+    for (const url of endpoints) {
+      try {
+        const resp = await fetch(url, { method: "POST" });
+        if (resp.ok) break;
+      } catch (err) {
+        // Best-effort: ignore network drops during process termination
+      }
+    }
+
+    if (badge) {
+      badge.textContent = "Sidecar: NOT RUNNING — run start_backend.ps1";
+      badge.className = "sidecar-status sidecar-bad";
+    }
+    if (btn) {
+      btn.style.display = "none";
+      btn.disabled = false;
     }
   }
 
@@ -3875,6 +5247,7 @@
     if (coverPasteZone && !coverPasteZone.dataset.bound) {
       coverPasteZone.dataset.bound = "true";
       coverPasteZone.addEventListener("paste", (e) => {
+        if (uiBusy) return;
         const items = e.clipboardData?.items;
         if (!items) return;
         for (let i = 0; i < items.length; i++) {
@@ -3889,6 +5262,7 @@
         }
       });
       coverPasteZone.addEventListener("dragover", (e) => {
+        if (uiBusy) return;
         e.preventDefault();
         coverPasteZone.style.borderColor = "#3b82f6";
       });
@@ -3897,6 +5271,7 @@
         coverPasteZone.style.borderColor = "#4b5563";
       });
       coverPasteZone.addEventListener("drop", (e) => {
+        if (uiBusy) return;
         e.preventDefault();
         coverPasteZone.style.borderColor = "#4b5563";
         const files = e.dataTransfer?.files;
@@ -3916,6 +5291,7 @@
     if (linkChooseCover && !linkChooseCover.dataset.bound) {
       linkChooseCover.dataset.bound = "true";
       linkChooseCover.addEventListener("click", (e) => {
+        if (uiBusy) return;
         e.preventDefault();
         e.stopPropagation();
         if (coverFileInput) coverFileInput.click();
@@ -3999,7 +5375,7 @@
       copyBbcodeBtn.dataset.bound = "true";
       copyBbcodeBtn.addEventListener("click", () => {
         if (copyBbcodeBtn.disabled) return;
-        const text = document.getElementById("bbcode-preview")?.innerText || "";
+        const text = document.getElementById("bbcode-preview")?.value || "";
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard
             .writeText(text)
@@ -4024,6 +5400,12 @@
           window.parent.postMessage({ type: "EMPORNIUM_CLOSE_MODAL" }, "*");
         }
       });
+    }
+
+    const stopSidecarBtn = document.getElementById("btn-sidecar-stop");
+    if (stopSidecarBtn && !stopSidecarBtn.dataset.bound) {
+      stopSidecarBtn.dataset.bound = "true";
+      stopSidecarBtn.addEventListener("click", stopSidecar);
     }
 
     const browseDirBtn = document.getElementById("btn-browse-dir");
@@ -4107,19 +5489,28 @@
     const probeBtn = document.getElementById("btn-probe");
     if (probeBtn && !probeBtn.dataset.bound) {
       probeBtn.dataset.bound = "true";
-      probeBtn.addEventListener("click", probeFiles);
+      probeBtn.addEventListener("click", () => runExclusive("mutation", "ProbeFiles", probeFiles));
     }
 
     const consolidateBtn = document.getElementById("btn-consolidate");
     if (consolidateBtn && !consolidateBtn.dataset.bound) {
       consolidateBtn.dataset.bound = "true";
-      consolidateBtn.addEventListener("click", consolidateFiles);
+      consolidateBtn.addEventListener("click", () => runExclusive("mutation", "Consolidate", consolidateFiles));
     }
 
     const buildBtn = document.getElementById("btn-build");
     if (buildBtn && !buildBtn.dataset.bound) {
       buildBtn.dataset.bound = "true";
-      buildBtn.addEventListener("click", buildMegapack);
+      buildBtn.addEventListener("click", () => runExclusive("build", "BuildMegapack", buildMegapack));
+    }
+
+    const btnBusyUnlock = document.getElementById("btn-busy-unlock");
+    if (btnBusyUnlock && !btnBusyUnlock.dataset.bound) {
+      btnBusyUnlock.dataset.bound = "true";
+      btnBusyUnlock.addEventListener("click", () => {
+        setUiBusy(false);
+        showStatus("Controls unlocked manually. The Stash job may still be running — check the Task Manager before starting another build.", 0, false);
+      });
     }
 
     const titleInput = document.getElementById("pack-title");
@@ -4171,6 +5562,7 @@
     }
 
     renderStageState();
+    initBBCodeToolbar();
   }
 
   if (document.readyState === "loading") {
@@ -4179,7 +5571,11 @@
     bindDomEvents();
   }
 
-  // Initial Load
+  // Initial Load. The vocabulary is deliberately NOT fetched here: it needs the
+  // sidecar, and firing it alongside refreshSidecarStatus() raced StartBackend
+  // and lost every time after a Stash restart. onSidecarHealthy() is its sole
+  // trigger, so it runs exactly once the sidecar is known to be answering --
+  // immediately when it is already up, and on recovery when it is not.
   loadScenes();
   prefillScratchDirFromHealth();
   refreshSidecarStatus();

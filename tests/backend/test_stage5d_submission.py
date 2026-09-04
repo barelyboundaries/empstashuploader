@@ -170,7 +170,7 @@ def test_stage5d_b4_regression_criterion(tmp_path):
                 "duration": 1800,
                 "video_codec": "h264",
                 "performers": ["Actor B4"],
-                "tags": ["TagB4"],
+                "tags": ["Blowjob"],
             }
         ],
     }
@@ -194,5 +194,5 @@ def test_stage5d_b4_regression_criterion(tmp_path):
     assert manifest["torrent_path"] == res["torrent_path"]
     assert manifest["bbcode_path"] == res["bbcode_path"]
     assert manifest["preview_only"] is True
-    assert "tagb4" in [t.lower() for t in manifest["tracker_tags"]]
+    assert "blowjob" in [t.lower() for t in manifest["tracker_tags"]]
 

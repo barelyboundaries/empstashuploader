@@ -1,4 +1,4 @@
-﻿import { test, expect } from "@playwright/test";
+import { test, expect } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 
@@ -54,6 +54,52 @@ test.describe("Stage 6 — Handoff Quality & Manual Upload Preparation", () => {
       });
     });
 
+
+    page.route("**/api/run/*", async (route) => {
+      if (route.request().method() === "GET") {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            found: true,
+            result: {
+              status: "success",
+              pack_title: isPreviewOnly ? "Preview Only Megapack" : "Ready Megapack",
+              torrent_path: isPreviewOnly ? "C:\\Packs\\Preview Only Megapack.torrent" : "C:\\Packs\\Ready Megapack.torrent",
+              manifest_path: isPreviewOnly ? "C:\\Packs\\Preview Only Megapack_manifest.json" : "C:\\Packs\\Ready Megapack_manifest.json",
+              submission_path: isPreviewOnly ? "C:\\Packs\\Preview Only Megapack_submission.json" : "C:\\Packs\\Ready Megapack_submission.json",
+              bbcode_path: isPreviewOnly ? "C:\\Packs\\Preview Only Megapack_bbcode.txt" : "C:\\Packs\\Ready Megapack_bbcode.txt",
+              upload_previews: !isPreviewOnly,
+              preview_only: isPreviewOnly,
+              ready: !isPreviewOnly,
+              tracker_tags: ["1080p", "feature", "star.performer"],
+              uploaded_urls: isPreviewOnly ? [] : ["https://hamsterimg.net/images/preview.jpg"],
+              preflight: {
+                ready: !isPreviewOnly,
+                checks: isPreviewOnly
+                  ? [
+                      { id: "images_remote", label: "Preview Images", passed: false, detail: "Contains local file:/// preview" },
+                      { id: "tracker_tags", label: "Tracker Tags", passed: true, detail: "3 valid tags" },
+                      { id: "category", label: "Category", passed: true, is_info: true, detail: "Category — you select this on the upload form." },
+                      { id: "torrent_valid", label: "Torrent File", passed: true, detail: "Valid torrent" },
+                      { id: "payload_files", label: "Media Files Verification", passed: true, detail: "All files exist on disk" },
+                      { id: "root_name", label: "Torrent Root Name", passed: true, detail: "Root folder matches pack title" }
+                    ]
+                  : [
+                      { id: "images_remote", label: "Preview Images", passed: true, detail: "All remote on HamsterImg" },
+                      { id: "tracker_tags", label: "Tracker Tags", passed: true, detail: "Tracker Tags valid" },
+                      { id: "category", label: "Category", passed: true, is_info: true, detail: "Category — you select this on the upload form." },
+                      { id: "torrent_valid", label: "Torrent File", passed: true, detail: "Valid torrent" },
+                      { id: "payload_files", label: "Media Files Verification", passed: true, detail: "All files exist on disk" },
+                      { id: "root_name", label: "Torrent Root Name", passed: true, detail: "Root folder matches pack title" }
+                    ]
+              }
+            }
+          })
+        });
+      }
+      return route.fallback();
+    });
 
     page.route("**/graphql", async (route) => {
       const postData = JSON.parse(route.request().postData() || "{}");
@@ -187,11 +233,26 @@ test.describe("Stage 6 — Handoff Quality & Manual Upload Preparation", () => {
       window.onTaskComplete("BuildMegapack", {
         pack_title: "Ready Megapack",
         output_dir: "C:\\Packs",
+        torrent_path: "C:\\Packs\\Ready Megapack.torrent",
+        manifest_path: "C:\\Packs\\Ready Megapack_manifest.json",
+        submission_path: "C:\\Packs\\Ready Megapack_submission.json",
+        bbcode_path: "C:\\Packs\\Ready Megapack_bbcode.txt",
         upload_previews: true,
         preview_only: false,
         ready: true,
         site_url: "https://www.empornium.sx",
-        tracker_tags: ["feature", "1080p", "star.performer"]
+        tracker_tags: ["feature", "1080p", "star.performer"],
+        preflight: {
+          ready: true,
+          checks: [
+            { id: "images_remote", label: "Preview Images", passed: true, detail: "All remote on HamsterImg" },
+            { id: "tracker_tags", label: "Tracker Tags", passed: true, detail: "Tracker Tags valid" },
+            { id: "category", label: "Category", passed: true, is_info: true, detail: "Category — you select this on the upload form." },
+            { id: "torrent_valid", label: "Torrent File", passed: true, detail: "Valid torrent" },
+            { id: "payload_files", label: "Media Files Verification", passed: true, detail: "All files exist on disk" },
+            { id: "root_name", label: "Torrent Root Name", passed: true, detail: "Root folder matches pack title" }
+          ]
+        }
       });
     });
 

@@ -938,7 +938,7 @@ def test_tracker_tag_deduplication_and_case_insensitivity_in_single_mode(tmp_pat
         "mode": "single",
         "pack_title": "Tag Dedup Release",
         "output_dir": str(media_dir),
-        "tags": ["1080p", "1080P", "Solo.Action", "solo_action", "SOLO-ACTION", "4k.uhd", "4K UHD"],
+        "tags": ["1080p", "1080P", "Solo.Action", "solo_action", "SOLO-ACTION", "4k.uhd", "4K UHD", "Feature.Film"],
         "scenes": [
             {
                 "id": 1,

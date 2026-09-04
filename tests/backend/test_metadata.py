@@ -119,7 +119,7 @@ def test_merge_tags_deterministic_and_sources(tmp_path):
                 title="One",
                 date="2023-01-01",
                 performers=["Alice"],
-                tags=["Blonde", "Blonde", "Big Booty!"],
+                tags=["Brown Hair", "Brown Hair", "Blowjob"],
             )
         ),
     ]
@@ -128,8 +128,9 @@ def test_merge_tags_deterministic_and_sources(tmp_path):
     assert len(tags) == len(set(tags))
     joined = " ".join(tags)
     assert "alice" in joined
-    assert "blonde" in joined
-    assert "big.booty" in joined
+    assert "brown.hair" in joined
+    assert "brunette" in joined
+    assert "blowjob" in joined
     assert "h264" in joined
     assert "2023" in joined
     assert "2023.01" in joined
@@ -138,7 +139,7 @@ def test_merge_tags_deterministic_and_sources(tmp_path):
 
 
 def test_merge_tags_caps():
-    fake_scene = SceneReview(scene_id="1", tags=[f"Tag {i}" for i in range(200)])
+    fake_scene = SceneReview(scene_id="1", performers=[f"Performer {i}" for i in range(200)])
     assert len(merge_tags([fake_scene])) == MAX_TAGS
 
 
@@ -211,7 +212,7 @@ def test_scene_tags_flow_through_real_build_path(tmp_path):
     f = touch(str(tmp_path / "scene_a.mp4"), 1_700_000_000)
     svc = service(
         tmp_path,
-        {"1": make_scene("1", [make_file("f1", f, video_codec="h264")], title="Alpha", date="2023-01-01", performers=["Alice"], tags=["Amateur", "POV", "Amateur"])},
+        {"1": make_scene("1", [make_file("f1", f, video_codec="h264")], title="Alpha", date="2023-01-01", performers=["Alice"], tags=["Amateur", "Female POV", "Amateur"])},
     )
     resp = svc.meta(MetaRequest(scene_ids=["1"]))
     joined = " ".join(resp.meta.tags)

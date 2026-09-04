@@ -66,7 +66,9 @@
       padding: 16px;
       overflow-y: auto;
       min-height: 0;
+      border: 1px solid transparent;
       border-right: 1px solid var(--card-border);
+      transition: border-color 0.2s, background-color 0.2s;
     }
 
     .options-panel {
@@ -80,13 +82,24 @@
       gap: 16px;
     }
 
+    #scene-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(245px, 1fr));
+      gap: 12px;
+    }
+
+    #scene-list > :not(.scene-card) {
+      grid-column: 1 / -1;
+    }
+
     .scene-card {
       background-color: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: 8px;
       padding: 12px;
-      margin-bottom: 12px;
+      margin-bottom: 0;
       display: flex;
+      flex-wrap: wrap;
       gap: 12px;
       cursor: grab;
       transition: border-color 0.2s, box-shadow 0.2s;
@@ -102,6 +115,7 @@
     }
 
     .scene-thumb {
+      flex: 0 0 120px;
       width: 120px;
       height: 70px;
       border-radius: 4px;
@@ -110,16 +124,33 @@
     }
 
     .scene-info {
-      flex: 1;
+      flex: 1 1 180px;
+      min-width: 0;
       display: flex;
       flex-direction: column;
       justify-content: space-between;
     }
 
+    .scene-card-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .scene-card-actions {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-shrink: 0;
+    }
+
     .scene-title {
       font-size: 0.95rem;
-      font-weight: 600;
-      margin-bottom: 4px;
+      overflow-wrap: anywhere;
+      min-width: 0;
+      flex: 1 1 auto;
     }
 
     .scene-meta {
@@ -166,6 +197,28 @@
       background-color: rgba(16, 185, 129, 0.2);
       color: #34d399;
       border: 1px solid rgba(16, 185, 129, 0.35);
+    }
+
+    .busy-banner {
+      background-color: rgba(59, 130, 246, 0.12);
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      padding: 10px 14px;
+      margin-bottom: 12px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      color: var(--text-main);
+      font-size: 0.85rem;
+      font-weight: 500;
+    }
+
+    .busy-banner button {
+      padding: 3px 10px;
+      font-size: 0.75rem;
+      line-height: 1.3;
+      flex-shrink: 0;
     }
 
     .collision-banner {
@@ -351,6 +404,34 @@
       transition: width 0.3s ease;
     }
 
+    .progress-bar.indeterminate {
+      width: 100% !important;
+      position: relative;
+      overflow: hidden;
+      background: #2c323b;
+    }
+
+    .progress-bar.indeterminate::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 0;
+      bottom: 0;
+      width: 30%;
+      background: linear-gradient(90deg, transparent, #3b82f6, #10b981, transparent);
+      border-radius: 8px;
+      animation: progress-bar-indeterminate 1.2s infinite linear;
+    }
+
+    @keyframes progress-bar-indeterminate {
+      0% {
+        transform: translateX(-100%);
+      }
+      100% {
+        transform: translateX(350%);
+      }
+    }
+
     .status-text {
       font-size: 0.85rem;
       color: var(--text-muted);
@@ -358,17 +439,133 @@
       display: none;
     }
 
+    /* Shown while bbcodeUserEdited is latched. Without it the live preview
+       silently stops regenerating the moment the user types, and nothing on
+       screen says so. */
+    .bbcode-edited-notice {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 6px;
+      padding: 6px 8px;
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      border-radius: 6px;
+      background-color: rgba(245, 158, 11, 0.1);
+      color: #f59e0b;
+      font-size: 0.8rem;
+    }
+
+    .bbcode-reset-btn {
+      padding: 3px 8px;
+      font-size: 0.75rem;
+      line-height: 1.2;
+      flex-shrink: 0;
+    }
+
+    .bbcode-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 4px;
+      padding: 6px 8px;
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-bottom: none;
+      border-radius: 6px 6px 0 0;
+    }
+
+    .toolbar-btn {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      border: 1px solid var(--card-border);
+      border-radius: 4px;
+      padding: 3px 8px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      cursor: pointer;
+      line-height: 1.2;
+      transition: background-color 0.15s, border-color 0.15s;
+    }
+
+    .toolbar-btn:hover {
+      background-color: var(--card-border);
+      border-color: var(--accent);
+    }
+
+    .toolbar-btn:active {
+      background-color: var(--accent);
+      color: #fff;
+    }
+
+    .toolbar-select {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      border: 1px solid var(--card-border);
+      border-radius: 4px;
+      padding: 2px 4px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      line-height: 1.2;
+    }
+
+    .toolbar-select:hover {
+      border-color: var(--accent);
+    }
+
+    .toolbar-popover {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 8px;
+      background-color: var(--panel-bg);
+      border: 1px solid var(--card-border);
+      border-bottom: none;
+      font-size: 0.75rem;
+    }
+
+    .toolbar-popover-label {
+      color: var(--text-muted);
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    .toolbar-popover-input {
+      flex: 1;
+      background-color: var(--bg-dark);
+      border: 1px solid var(--card-border);
+      border-radius: 4px;
+      color: var(--text-main);
+      padding: 2px 6px;
+      font-size: 0.75rem;
+      outline: none;
+    }
+
+    .toolbar-popover-input:focus {
+      border-color: var(--accent);
+    }
+
+    .toolbar-popover-btn {
+      padding: 2px 8px;
+      font-size: 0.72rem;
+      line-height: 1.2;
+    }
+
     .bbcode-box {
       background-color: #0e1012;
       border: 1px solid var(--card-border);
-      border-radius: 6px;
+      border-radius: 0 0 6px 6px;
       padding: 10px;
       font-family: monospace;
       font-size: 0.8rem;
       color: #a7f3d0;
-      max-height: 150px;
+      width: 100%;
+      height: 350px;
+      min-height: 150px;
+      resize: vertical;
       overflow-y: auto;
-      white-space: pre-wrap;
+      box-sizing: border-box;
     }
 
     .artifact-summary {
@@ -869,8 +1066,8 @@
       display: inline-flex;
       align-items: center;
       gap: 6px;
-      padding: 5px 10px;
-      border-radius: 6px;
+      padding: 5px 12px;
+      border-radius: 999px;
       background: transparent;
       border: 1px solid transparent;
       color: var(--text-muted);
@@ -891,10 +1088,38 @@
       border-color: var(--card-border);
     }
 
+    .stage-rail-item.stage-completed {
+      background-color: rgba(16, 185, 129, 0.12);
+      border-color: rgba(16, 185, 129, 0.4);
+      color: var(--success);
+    }
+
+    .stage-rail-item.stage-completed .stage-num {
+      background-color: rgba(16, 185, 129, 0.25);
+      color: var(--success);
+    }
+
+    .stage-rail-item.stage-completed.reached:hover {
+      background-color: rgba(16, 185, 129, 0.2);
+      border-color: var(--success);
+    }
+
     .stage-rail-item.stage-current {
-      background-color: rgba(59, 130, 246, 0.15);
+      background-color: var(--accent);
       border-color: var(--accent);
-      color: var(--text-main);
+      color: #ffffff;
+    }
+
+    .stage-rail-item.stage-current .stage-num {
+      background-color: #ffffff;
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .stage-rail-item.stage-current.reached:hover {
+      background-color: var(--accent-hover);
+      border-color: var(--accent-hover);
+      color: #ffffff;
     }
 
     .stage-num {
@@ -908,11 +1133,6 @@
       color: var(--text-main);
       font-size: 0.7rem;
       flex-shrink: 0;
-    }
-
-    .stage-rail-item.stage-current .stage-num {
-      background-color: var(--accent);
-      color: #ffffff;
     }
 
     .stage-check {
@@ -943,16 +1163,48 @@
 
     .stage-panel.stage-current {
       opacity: 1;
-      border-color: var(--card-border);
-      background-color: rgba(59, 130, 246, 0.04);
+      border-color: var(--accent);
+      background-color: rgba(59, 130, 246, 0.08);
     }
 
     /* The Scenes stage IS the existing scene-list panel: highlight it in
        place on stage 3; never dim it (it is primary content on every
        stage). */
     .scene-list-panel.stage-current {
-      border-right-color: var(--accent);
-      box-shadow: inset 0 0 0 1px rgba(59, 130, 246, 0.35);
+      border-color: var(--accent);
+      background-color: rgba(59, 130, 246, 0.08);
+    }
+
+    .sidecar-status {
+      font-size: 0.75rem;
+      margin-left: 8px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-weight: 500;
+      white-space: nowrap;
+    }
+
+    .sidecar-ok {
+      background: #198754;
+      color: #fff;
+    }
+
+    .sidecar-warn,
+    .sidecar-starting {
+      background: #ffc107;
+      color: #212529;
+    }
+
+    .sidecar-bad {
+      background: #dc3545;
+      color: #fff;
+    }
+
+    .btn-sidecar-stop {
+      padding: 2px 8px;
+      font-size: 0.75rem;
+      margin-left: 6px;
+      line-height: 1.2;
     }
   </style>
 </head>
@@ -962,6 +1214,7 @@
       <span id="header-logo">📦</span>
       <span id="header-modal-title">Empornium Megapack Builder</span>
       <span id="sidecar-status" class="sidecar-status" title="Backend sidecar on 127.0.0.1:9941">Sidecar: checking…</span>
+      <button id="btn-sidecar-stop" class="btn btn-secondary btn-sidecar-stop" style="display: none;" title="Stop Sidecar Backend">Stop sidecar</button>
     </div>
     <div style="display: flex; gap: 8px; align-items: center;">
       <button id="btn-header-close" class="btn btn-close-header" title="Close Review Modal">✕ Close</button>
@@ -1028,6 +1281,12 @@
          wizard's stage containers (todo 8). Existing controls keep their IDs;
          non-current stages are de-emphasized, never hidden. -->
     <div class="options-panel">
+      <!-- Change B: Busy banner shown while an operation is in flight -->
+      <div id="busy-banner" class="busy-banner" role="status" aria-live="polite" style="display:none;">
+        <span id="busy-banner-text"></span>
+        <button type="button" id="btn-busy-unlock" class="btn btn-secondary" style="display:none;">Unlock anyway</button>
+      </div>
+
       <!-- Stage 1: Setup — what the post is. The mode switcher moved here
            from the header (same IDs); all controls keep their IDs. -->
       <div class="stage-panel stage-current" id="stage-panel-1" data-stage-panel="1">
@@ -1122,17 +1381,6 @@
           <div style="font-weight: 600; color: #10b981;">🎉 Build Complete!</div>
           <div id="artifact-details"></div>
         </div>
-
-        <!-- BBCode Preview -->
-        <div class="form-group">
-          <div style="display: flex; justify-content: space-between; align-items: center;">
-            <label class="form-label">BBCode Preview</label>
-            <button id="btn-copy-bbcode" class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;">📋 Copy</button>
-          </div>
-          <div id="presentation-size-line" class="status-text" style="display: none; font-size: 0.8rem; margin-bottom: 6px;"></div>
-          <div id="bbcode-warning" class="status-text" style="display: none; color: #f59e0b; font-size: 0.8rem; margin-bottom: 6px;"></div>
-          <div class="bbcode-box" id="bbcode-preview">[b]Megapack Preview[/b]</div>
-        </div>
       </div>
 
       <!-- Build Progress Section. Deliberately OUTSIDE the stage containers:
@@ -1143,6 +1391,78 @@
           <div class="progress-bar" id="progress-bar"></div>
         </div>
         <div class="status-text" id="status-text">Preparing task...</div>
+      </div>
+
+      <!-- BBCode Preview Section. Hoisted outside the stage panels so it is
+           never de-emphasized across stages 1-3: it represents output and final
+           submission material rather than a stage-specific control. -->
+      <div id="bbcode-section">
+        <!-- BBCode Preview -->
+        <div class="form-group">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label class="form-label">BBCode Preview</label>
+            <button id="btn-copy-bbcode" class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;">📋 Copy</button>
+          </div>
+          <div id="presentation-size-line" class="status-text" style="display: none; font-size: 0.8rem; margin-bottom: 6px;"></div>
+          <div id="bbcode-warning" class="status-text" style="display: none; color: #f59e0b; font-size: 0.8rem; margin-bottom: 6px;"></div>
+          <div id="bbcode-edited-notice" class="bbcode-edited-notice" role="status" aria-live="polite">
+            <span id="bbcode-edited-notice-text"></span>
+            <button type="button" id="btn-bbcode-reset" class="btn btn-secondary bbcode-reset-btn"></button>
+          </div>
+          <div class="bbcode-toolbar" id="bbcode-toolbar" role="toolbar" aria-label="BBCode formatting">
+            <button type="button" class="toolbar-btn" id="btn-tag-b" data-tag="b" title="Bold [b]"><b>B</b></button>
+            <button type="button" class="toolbar-btn" id="btn-tag-i" data-tag="i" title="Italic [i]"><i>I</i></button>
+            <button type="button" class="toolbar-btn" id="btn-tag-u" data-tag="u" title="Underline [u]"><u>U</u></button>
+            <button type="button" class="toolbar-btn" id="btn-tag-s" data-tag="s" title="Strikethrough [s]"><s>S</s></button>
+            <select class="toolbar-select" id="toolbar-size" title="Font Size">
+              <option value="" disabled selected>Size</option>
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+              <option value="5">5</option>
+              <option value="6">6</option>
+              <option value="7">7</option>
+            </select>
+            <select class="toolbar-select" id="toolbar-color" title="Font Color">
+              <option value="" disabled selected>Color</option>
+              <option value="red">Red</option>
+              <option value="blue">Blue</option>
+              <option value="green">Green</option>
+              <option value="yellow">Yellow</option>
+              <option value="orange">Orange</option>
+              <option value="purple">Purple</option>
+              <option value="gray">Gray</option>
+              <option value="white">White</option>
+            </select>
+            <button type="button" class="toolbar-btn" id="btn-tag-center" data-tag="center" title="Center [center]">Center</button>
+            <button type="button" class="toolbar-btn" id="btn-tag-url" data-tag="url" title="URL Link [url=…]">Link</button>
+            <button type="button" class="toolbar-btn" id="btn-tag-img" data-tag="img" title="Image [img]">Img</button>
+            <button type="button" class="toolbar-btn" id="btn-tag-quote" data-tag="quote" title="Quote [quote]">Quote</button>
+            <button type="button" class="toolbar-btn" id="btn-tag-code" data-tag="code" title="Code [code]">Code</button>
+            <button type="button" class="toolbar-btn" id="btn-tag-spoiler" data-tag="spoiler" title="Spoiler [spoiler=…]">Spoiler</button>
+            <button type="button" class="toolbar-btn" id="btn-tag-hr" data-tag="hr" title="Horizontal Rule [hr]">HR</button>
+            <button type="button" class="toolbar-btn" id="btn-tag-list" data-tag="list" title="List [list]">List</button>
+          </div>
+          <div id="toolbar-popover" class="toolbar-popover" style="display: none;">
+            <span id="toolbar-popover-label" class="toolbar-popover-label">URL:</span>
+            <input type="text" id="toolbar-popover-input" class="toolbar-popover-input" placeholder="https://..." />
+            <button type="button" id="toolbar-popover-confirm" class="btn btn-secondary toolbar-popover-btn">Insert</button>
+            <button type="button" id="toolbar-popover-cancel" class="btn btn-secondary toolbar-popover-btn">Cancel</button>
+          </div>
+          <textarea class="bbcode-box" id="bbcode-preview">[b]Megapack Preview[/b]</textarea>
+          <!-- Unmapped Tags Notification Collapsible: collapsed by default, hidden when empty -->
+          <details id="unmapped-tags-collapsible" class="unmapped-tags-collapsible" style="display: none; margin-top: 8px; font-size: 0.85rem; background: rgba(0,0,0,0.2); border: 1px solid #374151; border-radius: 4px; padding: 6px 10px;">
+            <summary id="unmapped-tags-summary" style="cursor: pointer; font-weight: 500; color: #9ca3af; outline: none;"></summary>
+            <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 6px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 0.8rem; color: #9ca3af;">Add mappings in <code>backend/empornium_megapack/data/emp_tags.toml</code></span>
+                <button type="button" id="btn-copy-unmapped" class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;">📋 Copy</button>
+              </div>
+              <ul id="unmapped-tags-list" style="margin: 4px 0 0 16px; padding: 0; max-height: 150px; overflow-y: auto; color: #d1d5db;"></ul>
+            </div>
+          </details>
+        </div>
       </div>
     </div>
   </div>

@@ -1,4 +1,4 @@
-﻿import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -114,12 +114,49 @@ test.describe("Milestone 3 Challenger 2: Full End-to-End User Journey & Fault In
     await page.route("**/api/fs/exists", async (route) => {
       const postData = JSON.parse(route.request().postData() || "{}");
       const results = {};
-      for (const p of postData.paths || []) results[p] = false;
+      for (const p of postData.paths || []) results[p] = p.startsWith("C:\\Packs") ? false : true;
       return route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({ results })
       });
+    });
+
+    await page.route("**/api/run/*", async (route) => {
+      if (route.request().method() === "GET") {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            found: true,
+            result: {
+              status: "success",
+              pack_title: "Alpha Scene 🌸 (Ultra HD)",
+              torrent_path: "C:\\Packs\\Alpha Scene 🌸 (Ultra HD).torrent",
+              manifest_path: "C:\\Packs\\Alpha Scene 🌸 (Ultra HD)_manifest.json",
+              submission_path: "C:\\Packs\\Alpha Scene 🌸 (Ultra HD)_submission.json",
+              bbcode_path: "C:\\Packs\\Alpha Scene 🌸 (Ultra HD)_bbcode.txt",
+              upload_previews: true,
+              preview_only: false,
+              ready: true,
+              tracker_tags: ["4k", "hevc", "vr"],
+              uploaded_urls: ["https://hamsterimg.net/images/preview1.jpg", "https://hamsterimg.net/images/preview2.jpg"],
+              preflight: {
+                ready: true,
+                checks: [
+                  { id: "images_remote", label: "Preview Images", passed: true, detail: "All remote on HamsterImg" },
+                  { id: "tracker_tags", label: "Tracker Tags", passed: true, detail: "Tags valid" },
+                  { id: "category", label: "Category", passed: true, is_info: true, detail: "Category selected" },
+                  { id: "torrent_valid", label: "Torrent File", passed: true, detail: "Valid torrent" },
+                  { id: "payload_files", label: "Media Files Verification", passed: true, detail: "Files exist" },
+                  { id: "root_name", label: "Torrent Root Name", passed: true, detail: "Matches title" }
+                ]
+              }
+            }
+          })
+        });
+      }
+      return route.fallback();
     });
 
     await page.route("**/graphql", async (route) => {
@@ -173,6 +210,23 @@ test.describe("Milestone 3 Challenger 2: Full End-to-End User Journey & Fault In
         });
       }
 
+      if (query.includes("FindJob") || query.includes("findJob")) {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            data: {
+              findJob: {
+                id: postData?.variables?.id || "job-probe-77",
+                status: "FINISHED",
+                progress: 1.0,
+                error: null
+              }
+            }
+          })
+        });
+      }
+
       return route.fallback();
     });
 
@@ -192,7 +246,7 @@ test.describe("Milestone 3 Challenger 2: Full End-to-End User Journey & Fault In
           const parsed = JSON.parse(data);
           window.__mockWsSent.push(parsed);
 
-          if (parsed.type === "subscribe") {
+          if (parsed.type === "subscribe" && (!window.getBusyOperation || window.getBusyOperation() === "build")) {
             setTimeout(() => {
               if (this.onmessage) {
                 this.onmessage({
@@ -269,8 +323,8 @@ test.describe("Milestone 3 Challenger 2: Full End-to-End User Journey & Fault In
 
     // Verify BBCode preview contains performer and scene details
     const bbcodeBox = frame.locator("#bbcode-preview");
-    await expect(bbcodeBox).toContainText("Alpha Scene 🌸 (Ultra HD)");
-    await expect(bbcodeBox).toContainText("Performer One 💖");
+    await expect(bbcodeBox).toHaveValue(/Alpha Scene 🌸 \(Ultra HD\)/);
+    await expect(bbcodeBox).toHaveValue(/Performer One 💖/);
 
     // The seed-dir field starts EMPTY (no machine-path default in the release
     // audit build) — set it before probe/consolidate/build.
@@ -281,19 +335,25 @@ test.describe("Milestone 3 Challenger 2: Full End-to-End User Journey & Fault In
     await probeBtn.click();
     expect(probeDispatched).toBe(true);
 
+    // Wait for the probe job to finish and unlock controls before consolidating
+    const consolidateBtn = frame.locator("#btn-consolidate");
+    await expect(consolidateBtn).toBeEnabled({ timeout: 10000 });
+
     // 4. Trigger File Consolidation
     page.on("dialog", async (dialog) => {
       await dialog.accept();
     });
-    const consolidateBtn = frame.locator("#btn-consolidate");
     await consolidateBtn.click();
     // The consolidation flow now runs the read-only destination pre-check
     // (collision query + fs probe) before moveFiles — poll for the mutation.
     await expect.poll(() => moveDispatched).toBe(true);
 
+    // Wait for consolidate to finish and controls to be enabled before building
+    const buildBtn = frame.locator("#btn-build");
+    await expect(buildBtn).toBeEnabled({ timeout: 10000 });
+
     // 5. Trigger Build Megapack
     await frame.locator("#opt-upload-previews").check();
-    const buildBtn = frame.locator("#btn-build");
     await buildBtn.click();
     expect(buildDispatched).toBe(true);
     expect(buildPayloadCaptured).toBeTruthy();
@@ -337,6 +397,42 @@ test.describe("Milestone 3 Challenger 2: Full End-to-End User Journey & Fault In
         contentType: "application/json",
         body: JSON.stringify({ results })
       });
+    });
+
+    await page.route("**/api/run/*", async (route) => {
+      if (route.request().method() === "GET") {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            found: true,
+            result: {
+              status: "success",
+              pack_title: "Socket Drop Scene",
+              torrent_path: "C:\\Packs\\Socket Drop Scene.torrent",
+              manifest_path: "C:\\Packs\\Socket Drop Scene_manifest.json",
+              submission_path: "C:\\Packs\\Socket Drop Scene_submission.json",
+              bbcode_path: "C:\\Packs\\Socket Drop Scene_bbcode.txt",
+              upload_previews: false,
+              preview_only: true,
+              ready: true,
+              tracker_tags: ["socket.drop"],
+              preflight: {
+                ready: true,
+                checks: [
+                  { id: "images_remote", label: "Preview Images", passed: true, detail: "All remote" },
+                  { id: "tracker_tags", label: "Tracker Tags", passed: true, detail: "Tags valid" },
+                  { id: "category", label: "Category", passed: true, is_info: true, detail: "Category selected" },
+                  { id: "torrent_valid", label: "Torrent File", passed: true, detail: "Valid torrent" },
+                  { id: "payload_files", label: "Media Files Verification", passed: true, detail: "Files exist" },
+                  { id: "root_name", label: "Torrent Root Name", passed: true, detail: "Matches title" }
+                ]
+              }
+            }
+          })
+        });
+      }
+      return route.fallback();
     });
 
     await page.route("**/graphql", async (route) => {
@@ -560,9 +656,9 @@ test.describe("Milestone 3 Challenger 2: Full End-to-End User Journey & Fault In
     await notesInput.fill("Emoji notes: 🚀✨ and quotes: \"Special Release\"");
 
     const bbcodePreview = page.locator("#bbcode-preview");
-    await expect(bbcodePreview).toContainText("Mega Megapack 💖 2026 [Special Edition] /\\:?*");
-    await expect(bbcodePreview).toContainText("初音ミク");
-    await expect(bbcodePreview).toContainText("Emoji notes: 🚀✨");
+    await expect(bbcodePreview).toHaveValue(/Mega Megapack 💖 2026 \[Special Edition\] \/\\:\?\*/);
+    await expect(bbcodePreview).toHaveValue(/初音ミク/);
+    await expect(bbcodePreview).toHaveValue(/Emoji notes: 🚀✨/);
   });
 
   test("5. Modal Header Close and Cross-Origin postMessage Dismissal", async ({ page }) => {

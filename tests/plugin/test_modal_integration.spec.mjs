@@ -1,4 +1,4 @@
-﻿import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -165,17 +165,17 @@ test.describe("Empornium Megapack Builder Frontend - Full Integration Suite", ()
     // default), so set the title the old default used to provide.
     await page.locator("#pack-title").fill("My Awesome Megapack");
     const bbcodeBox = page.locator("#bbcode-preview");
-    await expect(bbcodeBox).toContainText("My Awesome Megapack");
-    await expect(bbcodeBox).toContainText("Alice Wonderland, Bob Builder");
-    await expect(bbcodeBox).toContainText("[b]Total Scenes:[/b] 2");
-    await expect(bbcodeBox).toContainText("1. [b]Scene Alpha [/b]");
-    await expect(bbcodeBox).toContainText("2. [b]Scene Beta [/b]");
+    await expect(bbcodeBox).toHaveValue(/My Awesome Megapack/);
+    await expect(bbcodeBox).toHaveValue(/Alice Wonderland, Bob Builder/);
+    await expect(bbcodeBox).toHaveValue(/\[b\]Total Scenes:\[\/b\] 2/);
+    await expect(bbcodeBox).toHaveValue(/1\. \[b\]Scene Alpha \[\/b\]/);
+    await expect(bbcodeBox).toHaveValue(/2\. \[b\]Scene Beta \[\/b\]/);
 
     // Change title and notes
     await page.locator("#pack-title").fill("Custom Megapack Title");
     await page.locator("#pack-notes").fill("Special release edition");
-    await expect(bbcodeBox).toContainText("Custom Megapack Title");
-    await expect(bbcodeBox).toContainText("[quote]Special release edition[/quote]");
+    await expect(bbcodeBox).toHaveValue(/Custom Megapack Title/);
+    await expect(bbcodeBox).toHaveValue(/\[quote\]Special release edition\[\/quote\]/);
 
     // Test BBCode Copy button
     const copyBtn = page.locator("#btn-copy-bbcode");
@@ -201,7 +201,7 @@ test.describe("Empornium Megapack Builder Frontend - Full Integration Suite", ()
     await page.route("**/api/fs/exists*", async (route) => {
       const postData = JSON.parse(route.request().postData() || "{}");
       const results = {};
-      for (const p of postData.paths || []) results[p] = false;
+      for (const p of postData.paths || []) results[p] = p.startsWith("C:\\Packs") ? false : true;
       return route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -279,6 +279,24 @@ test.describe("Empornium Megapack Builder Frontend - Full Integration Suite", ()
         });
       }
 
+      if (query.includes("FindJob") || query.includes("findJob")) {
+        await new Promise((r) => setTimeout(r, 300));
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            data: {
+              findJob: {
+                id: postData.variables?.id || "job-probe-99",
+                status: "FINISHED",
+                progress: 1.0,
+                error: null
+              }
+            }
+          })
+        });
+      }
+
       return route.continue();
     });
 
@@ -293,6 +311,9 @@ test.describe("Empornium Megapack Builder Frontend - Full Integration Suite", ()
     expect(probeCalledWith.plugin_id).toBe("empornium-megapack");
     await expect(page.locator("#status-text")).toContainText("Task ProbeFiles queued (Job ID: job-probe-99)");
 
+    // Wait for the probe job to finish and unlock controls before consolidating
+    await expect(page.locator("#btn-consolidate")).toBeEnabled({ timeout: 10000 });
+
     // 2. Consolidate Files (MoveFiles) — the flow now runs the read-only
     // destination pre-check first, so poll for the mutation on the wire.
     await page.locator("#btn-consolidate").click();
@@ -301,6 +322,9 @@ test.describe("Empornium Megapack Builder Frontend - Full Integration Suite", ()
     // Consolidation destination = the seed-dir field value (no pack-title
     // subfolder — in-place seeding, todo 6 of staged-wizard-inplace-seed).
     expect(moveFilesCalledWith.input.destination_folder).toBe("C:\\Packs");
+
+    // Wait for consolidate to finish and controls to be enabled before building
+    await expect(page.locator("#btn-build")).toBeEnabled({ timeout: 10000 });
 
     // 3. Build Megapack
     await page.locator("#btn-build").click();
@@ -378,6 +402,42 @@ test.describe("Empornium Megapack Builder Frontend - Full Integration Suite", ()
     });
 
     let pollCount = 0;
+
+    await page.route("**/api/run/*", async (route) => {
+      if (route.request().method() === "GET") {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            found: true,
+            result: {
+              status: "success",
+              pack_title: "My Awesome Megapack",
+              torrent_path: "C:\\Packs\\My Awesome Megapack.torrent",
+              manifest_path: "C:\\Packs\\My Awesome Megapack_manifest.json",
+              submission_path: "C:\\Packs\\My Awesome Megapack_submission.json",
+              bbcode_path: "C:\\Packs\\My Awesome Megapack_bbcode.txt",
+              upload_previews: false,
+              preview_only: true,
+              ready: true,
+              tracker_tags: ["scene.one"],
+              preflight: {
+                ready: true,
+                checks: [
+                  { id: "images_remote", label: "Preview Images", passed: true, detail: "All remote" },
+                  { id: "tracker_tags", label: "Tracker Tags", passed: true, detail: "Tags valid" },
+                  { id: "category", label: "Category", passed: true, is_info: true, detail: "Category selected" },
+                  { id: "torrent_valid", label: "Torrent File", passed: true, detail: "Valid torrent" },
+                  { id: "payload_files", label: "Media Files Verification", passed: true, detail: "Files exist" },
+                  { id: "root_name", label: "Torrent Root Name", passed: true, detail: "Matches title" }
+                ]
+              }
+            }
+          })
+        });
+      }
+      return route.fallback();
+    });
 
     await page.route("**/graphql", async (route) => {
       const postData = JSON.parse(route.request().postData() || "{}");

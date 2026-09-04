@@ -139,3 +139,51 @@ def test_stage4d_urls_with_brackets_and_spaces_not_html_escaped(tmp_path):
         assert "[" not in target, f"URL target '{target}' contains unencoded ["
         assert "]" not in target, f"URL target '{target}' contains unencoded ]"
         assert " " not in target, f"URL target '{target}' contains unencoded space"
+
+
+def test_megapack_contact_sheet_thumbnails_share_one_line(tmp_path):
+    """All megapack contact-sheet thumbnails are emitted on ONE line so the tracker's
+    nl2br cannot force one image per row (which made a large pack ~6x taller)."""
+    out_dir = tmp_path / "grid_out"
+    out_dir.mkdir()
+    pack_title = "Grid Layout Megapack"
+    pack_dir = out_dir / pack_title
+    pack_dir.mkdir()
+
+    scenes = []
+    for i in range(5):
+        media_file = pack_dir / f"scene_grid_{i}.mp4"
+        media_file.write_bytes(b"\x00" * 1024)
+        scenes.append({"id": 100 + i, "path": str(media_file)})
+
+    payload = {
+        "pack_title": pack_title,
+        "output_dir": str(out_dir),
+        "scenes": scenes,
+    }
+
+    remote_urls = [f"https://imgbox.com/sheet_{i}.jpg" for i in range(5)]
+
+    with patch.object(task, "upload_previews", return_value=remote_urls):
+        result = task.run_build_megapack(payload)
+
+    assert result["status"] == "success"
+    bbcode = Path(result["bbcode_path"]).read_text(encoding="utf-8")
+
+    marker = f"[img={THUMB_WIDTH}]"
+    assert bbcode.count(marker) == len(remote_urls)
+
+    # The regression: one thumbnail per line. Every thumbnail must share a
+    # single line, and that line must carry all of them.
+    thumb_lines = [ln for ln in bbcode.splitlines() if marker in ln]
+    assert len(thumb_lines) == 1, (
+        f"expected all {len(remote_urls)} thumbnails on one line, "
+        f"found {len(thumb_lines)} lines each carrying at least one"
+    )
+    assert thumb_lines[0].count(marker) == len(remote_urls)
+
+    # And they must be directly adjacent -- no separator that nl2br could
+    # turn into a line break between two thumbnails.
+    for url in remote_urls:
+        assert f"[url={url}][img={THUMB_WIDTH}]{url}[/img][/url]" in thumb_lines[0]
+    assert "[/url][url=" in thumb_lines[0]

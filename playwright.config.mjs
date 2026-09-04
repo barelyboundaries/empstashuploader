@@ -34,7 +34,16 @@ export default defineConfig({
     'test_empify_parity.spec.mjs',
     'test_defect_fixes_ux.spec.mjs',
     'test_presentation_budget.spec.mjs',
-    'test_sidecar_probe_diagnostics.spec.mjs'
+    'test_sidecar_probe_diagnostics.spec.mjs',
+    'test_adversarial_preview_challenger_2.spec.mjs',
+    'test_scene_grid_drag.spec.mjs',
+    'test_scene_card_interior.spec.mjs',
+    'test_bbcode_toolbar.spec.mjs',
+    'test_missing_source_reconcile.spec.mjs',
+    'test_sidecar_queue_flood.spec.mjs',
+    'test_progress_placement.spec.mjs',
+    'test_build_lockout.spec.mjs',
+    'test_tag_vocabulary_parity.spec.mjs'
   ],
   outputDir: path.join(evidenceDir, 'test-results'),
   fullyParallel: false,

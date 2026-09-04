@@ -36,4 +36,9 @@ tasks:
     description: "Upload a pasted cover image to HamsterImg and return its URL"
     defaultArgs:
       mode: upload_cover
+  - name: StartBackend
+    description: "Start the Empornium Megapack backend sidecar service if not already running"
+    defaultArgs:
+      mode: start_backend
+
 
