@@ -283,7 +283,9 @@ test.describe('Tag Vocabulary Parity between JS and Python', () => {
     // Wait for fetchVocabulary to fail and update BBCode
     const warning = page.locator('#bbcode-warning');
     await expect(warning).toBeVisible({ timeout: 5000 });
-    await expect(warning).toContainText('Tag vocabulary unavailable — tags shown unfiltered');
+    // The sidecar has never answered, so the honest message names the sidecar
+    // rather than claiming the vocabulary itself is broken.
+    await expect(warning).toContainText('Waiting for the sidecar');
 
     const preview = page.locator('#bbcode-preview');
     const val = await preview.inputValue();
@@ -356,7 +358,7 @@ test.describe('Tag Vocabulary Parity between JS and Python', () => {
     await page.goto('http://localhost:9999/plugins/empornium-megapack/review.html?scenes=1&mode=single');
 
     const warning = page.locator('#bbcode-warning');
-    await expect(warning).toContainText('Tag vocabulary unavailable', { timeout: 5000 });
+    await expect(warning).toContainText('Waiting for the sidecar', { timeout: 5000 });
     // Unfiltered: a blocklisted Stash tag leaks through while the vocabulary is absent.
     expect(await page.locator('#bbcode-preview').inputValue()).toContain('4K Available');
     await expect.poll(() => startBackendDispatched, { timeout: 5000 }).toBe(true);
@@ -365,6 +367,7 @@ test.describe('Tag Vocabulary Parity between JS and Python', () => {
     sidecarUp = true;
 
     await expect(page.locator('#sidecar-status')).toContainText('connected', { timeout: 12000 });
+    await expect(warning).not.toContainText('Waiting for the sidecar', { timeout: 12000 });
     await expect(warning).not.toContainText('Tag vocabulary unavailable', { timeout: 12000 });
 
     const recovered = await page.locator('#bbcode-preview').inputValue();

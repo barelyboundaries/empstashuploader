@@ -43,6 +43,11 @@
   let busyEscapeTimer = null;
   let cachedVocabulary = null;
   let vocabularyFetchAttempted = false;
+  // Distinguishes "the sidecar has not answered yet" from "the sidecar is up
+  // but the vocabulary is genuinely broken". The load-time fetch races
+  // StartBackend, so the first failure after a Stash restart is routine, not an
+  // error worth alarming about.
+  let sidecarEverHealthy = false;
   let vocabularyFetchFailed = false;
 
   // 1. Get Scene IDs from Query Parameters or Token Resolution
@@ -2499,10 +2504,20 @@
     const bbcodeWarning = document.getElementById("bbcode-warning");
     if (vocabularyFetchFailed && !cachedVocabulary) {
       if (bbcodeWarning) {
-        bbcodeWarning.textContent = "⚠️ Tag vocabulary unavailable — tags shown unfiltered";
+        // Until the sidecar has answered once, a failed fetch means it is still
+        // starting -- the load-time fetch races StartBackend and routinely loses
+        // after a Stash restart. Only call it unavailable once the sidecar is
+        // demonstrably up, which makes it a real fault worth acting on.
+        bbcodeWarning.textContent = sidecarEverHealthy
+          ? "⚠️ Tag vocabulary unavailable — tags shown unfiltered"
+          : "⏳ Waiting for the sidecar — tags stay unfiltered until it answers";
         bbcodeWarning.style.display = "block";
       }
-    } else if (bbcodeWarning && bbcodeWarning.textContent.includes("Tag vocabulary unavailable")) {
+    } else if (
+      bbcodeWarning &&
+      (bbcodeWarning.textContent.includes("Tag vocabulary unavailable") ||
+        bbcodeWarning.textContent.includes("Waiting for the sidecar"))
+    ) {
       bbcodeWarning.textContent = "";
       bbcodeWarning.style.display = "none";
     }
@@ -4935,6 +4950,7 @@
   // scroll past. fetchVocabulary() is idempotent: it returns the cache
   // immediately once populated, and clears the warning via updateBBCode().
   function onSidecarHealthy() {
+    sidecarEverHealthy = true;
     prefillScratchDirFromHealth();
     if (!cachedVocabulary) fetchVocabulary();
   }

@@ -23,7 +23,7 @@ const __dirname = path.dirname(__filename);
 // commit, so unreviewed or truncated asset changes can never slip through.
 const ASSET_RECORD = {
   // review.js: Change C — Empornium tag vocabulary resolution, fallback, and unmapped tags collapsible
-  'review.js': '6b191d9ccaef4b5f47ee106ef21ceb9d671f9ec97efdda439aa8bf2884941048',
+  'review.js': '039b6514f0ef05d7d564febfa535a3cd52b4c6595dbe9d1ac3d0ef8e25ec897b',
   // review.html: Change C — unmapped tags collapsible (#unmapped-tags-collapsible) under bbcode-preview
   'review.html': 'a0e4908b685a856690d3f3cb7f02e069c4033e85e0d83391d4268d955a1c79c6',
 };
