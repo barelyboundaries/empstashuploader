@@ -2502,12 +2502,13 @@
 
     // Change C: Degrade visibly if tag vocabulary is unavailable
     const bbcodeWarning = document.getElementById("bbcode-warning");
-    if (vocabularyFetchFailed && !cachedVocabulary) {
+    if (!cachedVocabulary) {
       if (bbcodeWarning) {
-        // Until the sidecar has answered once, a failed fetch means it is still
-        // starting -- the load-time fetch races StartBackend and routinely loses
-        // after a Stash restart. Only call it unavailable once the sidecar is
-        // demonstrably up, which makes it a real fault worth acting on.
+        // No vocabulary means the tags rendered below are unfiltered, whatever
+        // the reason -- so the condition is its absence, not a failed fetch that
+        // may not have been attempted yet. Which reason it is matters: before
+        // the sidecar has ever answered it is still starting, which is routine;
+        // once it is demonstrably up, a missing vocabulary is a real fault.
         bbcodeWarning.textContent = sidecarEverHealthy
           ? "⚠️ Tag vocabulary unavailable — tags shown unfiltered"
           : "⏳ Waiting for the sidecar — tags stay unfiltered until it answers";
@@ -5570,10 +5571,13 @@
     bindDomEvents();
   }
 
-  // Initial Load
+  // Initial Load. The vocabulary is deliberately NOT fetched here: it needs the
+  // sidecar, and firing it alongside refreshSidecarStatus() raced StartBackend
+  // and lost every time after a Stash restart. onSidecarHealthy() is its sole
+  // trigger, so it runs exactly once the sidecar is known to be answering --
+  // immediately when it is already up, and on recovery when it is not.
   loadScenes();
   prefillScratchDirFromHealth();
   refreshSidecarStatus();
-  fetchVocabulary();
 })();
 

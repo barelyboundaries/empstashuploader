@@ -374,4 +374,57 @@ test.describe('Tag Vocabulary Parity between JS and Python', () => {
     expect(recovered).toContain('blowjob');
     expect(recovered).not.toContain('4K Available');
   });
+
+  // Regression: the vocabulary fetch used to fire at load alongside
+  // refreshSidecarStatus(), racing StartBackend and failing whenever the sidecar
+  // was not already up. onSidecarHealthy() is now its only trigger.
+  test('sidecar already up: vocabulary loads without a failed attempt or warning', async ({ page }) => {
+    serveAssets(page);
+    let vocabRequests = 0;
+
+    await page.route('**/graphql', async (route) => {
+      const query = String((route.request().postDataJSON() || {}).query || '');
+      if (query.includes('JobQueue')) {
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { jobQueue: [] } }) });
+      }
+      return route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          data: {
+            findScenes: {
+              scenes: [{
+                id: '1', title: 'Scene 1',
+                files: [{ path: '/media/s1.mp4', height: 1080 }],
+                tags: [{ name: '4K Available' }, { name: 'Blowjob' }]
+              }]
+            }
+          }
+        })
+      });
+    });
+
+    // Sidecar healthy from the very first probe.
+    await page.route('**/health', async (route) => route.fulfill({
+      status: 200, contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok', version: '0.2.0' })
+    }));
+    await page.route('**/api/tags/vocabulary', async (route) => {
+      vocabRequests++;
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(FIXTURE_VOCABULARY) });
+    });
+
+    await page.goto('http://localhost:9999/plugins/empornium-megapack/review.html?scenes=1&mode=single');
+
+    // Tags filter, and the blocklisted one never reaches the preview.
+    await expect.poll(async () => page.locator('#bbcode-preview').inputValue(), { timeout: 8000 })
+      .toContain('blowjob');
+    const val = await page.locator('#bbcode-preview').inputValue();
+    expect(val).not.toContain('4K Available');
+
+    // No warning of either kind survives, and the fetch was not wasted on a miss.
+    const warning = page.locator('#bbcode-warning');
+    await expect(warning).not.toContainText('Waiting for the sidecar');
+    await expect(warning).not.toContainText('Tag vocabulary unavailable');
+    expect(vocabRequests).toBe(1);
+  });
 });
