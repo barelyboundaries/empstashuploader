@@ -211,6 +211,150 @@ def scene_title_default(scene, primary) -> str:
     return scene.scene_id
 
 
+# --- presentation banner ------------------------------------------------------------
+
+# Stash's own Blueprint interface colors, so the header reads as Stash rather
+# than as a generic uploader ad slot. Every banner paints its own background
+# and text colors: Empornium skins vary and none of them are safe to inherit.
+BANNER_BG = "#202b33"
+BANNER_STRIP_BG = "#30404d"
+BANNER_TEXT = "#f5f8fa"
+BANNER_MUTED = "#8a9ba8"
+BANNER_DIM = "#5c7080"
+BANNER_LINK = "#48aff0"
+BANNER_SIG = "#7b8894"
+
+STASH_URL = "https://stashapp.cc"
+UPLOADER_URL = "https://github.com/barelyboundaries/empstashuploader"
+UPLOADER_NAME = "Empornium Stash Uploader"
+
+BANNER_STYLES = ("plate", "rail", "signature", "off")
+DEFAULT_BANNER_STYLE = "plate"
+
+# A long megapack title at [size=6] wraps to three lines and swamps the strip
+# below it, so the display size steps down as the title grows.
+_BANNER_TITLE_SIZES = ((60, 6), (100, 5))
+_BANNER_TITLE_MIN_SIZE = 4
+
+
+def normalize_banner_style(value: str | None) -> str:
+    """Coerce a configured banner style to one of BANNER_STYLES."""
+    cleaned = str(value or "").strip().lower()
+    if cleaned in ("", "none", "false", "no", "0"):
+        return "off" if cleaned else DEFAULT_BANNER_STYLE
+    if cleaned in ("default", "true", "yes", "on", "1"):
+        return DEFAULT_BANNER_STYLE
+    return cleaned if cleaned in BANNER_STYLES else DEFAULT_BANNER_STYLE
+
+
+def _banner_title_size(title: str) -> int:
+    for limit, size in _BANNER_TITLE_SIZES:
+        if len(title) <= limit:
+            return size
+    return _BANNER_TITLE_MIN_SIZE
+
+
+def _banner_link(url: str, label: str, bold: bool = False, color: str = BANNER_LINK) -> str:
+    text = f"[b]{label}[/b]" if bold else label
+    return f"[url={url}][color={color}]{text}[/color][/url]"
+
+
+def render_banner(
+    style: str = DEFAULT_BANNER_STYLE,
+    title: str = "",
+    kind: str = "MEGAPACK",
+    subtitle: str = "",
+    stats: list[tuple[str, str]] | None = None,
+) -> str:
+    """Render the header that opens every generated presentation.
+
+    Pure BBCode by design: a hosted logo would rot and would count against
+    ``presentation_max_bytes``. Each style is emitted on a single physical
+    line because the tracker runs descriptions through ``nl2br`` -- a newline
+    between two table rows becomes a stray ``<br>`` and a blank band.
+
+    Every argument is raw text; escaping happens here, so callers must not
+    pre-escape (``bbcode_escape`` is idempotent, so passing escaped text is
+    harmless, but the banner's own markup must never be escaped).
+    """
+    resolved = normalize_banner_style(style)
+    if resolved == "off":
+        return ""
+
+    stash = _banner_link(STASH_URL, "Stash", bold=True)
+    uploader = _banner_link(UPLOADER_URL, UPLOADER_NAME, bold=True)
+
+    if resolved == "signature":
+        parts = [
+            f"[align=center][size=1][color={BANNER_SIG}]built from a [/color]",
+            _banner_link(STASH_URL, "Stash", bold=True, color=BANNER_SIG),
+            f"[color={BANNER_SIG}] library with the [/color]",
+            _banner_link(UPLOADER_URL, UPLOADER_NAME, bold=True, color=BANNER_SIG),
+            "[/size][/align][hr]",
+        ]
+        return "".join(parts)
+
+    clean_kind = bbcode_escape(kind).upper() or "RELEASE"
+
+    if resolved == "rail":
+        return "".join([
+            f"[bg={BANNER_BG}][table=100%,nball,nopad][tr]",
+            f"[td=5px,{BANNER_LINK}][/td][td=12px][/td]",
+            f"[td=vam][size=3][color={BANNER_TEXT}][b]STASH[/b][/color]",
+            f"[color={BANNER_DIM}] ▸ [/color]",
+            f"[color={BANNER_TEXT}][b]{clean_kind}[/b][/color][/size][/td]",
+            f"[td=vam][align=right][size=1][color={BANNER_MUTED}]catalogued in [/color]{stash}",
+            f"[color={BANNER_MUTED}] · posted with the [/color]{uploader}[/size][/align][/td]",
+            "[td=12px][/td][/tr][/table][/bg]",
+        ])
+
+    # plate: the banner absorbs the title and carries a spec strip, so the
+    # attribution rides along with figures a downloader actually wants above
+    # the fold instead of standing on its own as a credit.
+    clean_title = bbcode_escape(title)
+    clean_subtitle = bbcode_escape(subtitle)
+    eyebrow = f"STASH {clean_kind}"
+    if clean_subtitle:
+        eyebrow += f" · {clean_subtitle}"
+
+    lines = [
+        f"[bg={BANNER_BG}][table=100%,nball,nopad][tr][td=16px][/td]",
+        f"[td=vab][size=1][color={BANNER_MUTED}]{eyebrow}[/color][/size]",
+    ]
+    if clean_title:
+        size = _banner_title_size(clean_title)
+        lines.append(
+            f"[br][size={size}][font=Trebuchet MS][b][color={BANNER_TEXT}]"
+            f"{clean_title}[/color][/b][/font][/size]"
+        )
+    lines.extend([
+        "[/td]",
+        f"[td=vab][align=right][size=1]{_banner_link(STASH_URL, 'stashapp.cc')}",
+        f"[color={BANNER_DIM}] · [/color]{_banner_link(UPLOADER_URL, UPLOADER_NAME)}",
+        "[/size][/align][/td][td=16px][/td][/tr][/table][/bg]",
+    ])
+
+    cells = []
+    for label, value in stats or []:
+        if label is None or value is None:
+            continue
+        clean_label = bbcode_escape(str(label)).upper()
+        clean_value = bbcode_escape(str(value))
+        if clean_label and clean_value:
+            cells.append((clean_label, clean_value))
+    if cells:
+        width = max(1, 100 // len(cells))
+        lines.append(f"[bg={BANNER_STRIP_BG}][table=100%,nball][tr]")
+        for label, value in cells:
+            lines.append(
+                f"[td=vam,{width}%][align=center][size=1][color={BANNER_MUTED}]{label}[/color][/size]"
+                f"[br][size=3][color={BANNER_TEXT}][b]{value}[/b][/color][/size][/align][/td]"
+            )
+        lines.append("[/tr][/table][/bg]")
+
+    return "".join(lines)
+
+
 THUMB_WIDTH = 200
 # Thumbnails are generated at 2x the display width so they stay crisp on
 # high-DPI screens while costing a fraction of the full-size image.

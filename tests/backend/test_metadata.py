@@ -11,7 +11,11 @@ from empornium_megapack.metadata import (
     merge_tags,
     normalize_meta_input,
     pack_title_default,
+    render_banner,
+    normalize_banner_style,
     render_description,
+    STASH_URL,
+    UPLOADER_URL,
     resolution_for,
     scene_title_default,
 )
@@ -300,3 +304,88 @@ def test_apply_without_meta_still_works(tmp_path):
     assert resp.errors == []
     assert resp.meta is not None
     assert resp.meta.scenes[0].title == os.path.basename(f)
+
+
+# --- render_banner -------------------------------------------------------------------
+
+
+def test_normalize_banner_style_accepts_known_styles_and_falls_back():
+    for style in ("plate", "rail", "signature", "off"):
+        assert normalize_banner_style(style) == style
+    assert normalize_banner_style("PLATE") == "plate"
+    assert normalize_banner_style("  Rail  ") == "rail"
+    # Unset means "use the default"; an explicit falsy value means "off".
+    assert normalize_banner_style(None) == "plate"
+    assert normalize_banner_style("") == "plate"
+    assert normalize_banner_style("no") == "off"
+    assert normalize_banner_style("false") == "off"
+    assert normalize_banner_style("bogus") == "plate"
+
+
+def test_render_banner_off_is_empty():
+    assert render_banner("off", title="T", stats=[("Scenes", "3")]) == ""
+
+
+def test_every_banner_style_links_stash_and_the_repo():
+    for style in ("plate", "rail", "signature"):
+        markup = render_banner(style, title="T", stats=[("Scenes", "3")])
+        assert STASH_URL in markup, style
+        assert UPLOADER_URL in markup, style
+
+
+def test_banner_is_one_physical_line():
+    """The tracker runs the description through nl2br: a newline inside the
+    banner becomes a stray <br> and a blank band between the table rows."""
+    for style in ("plate", "rail", "signature"):
+        assert chr(10) not in render_banner(style, title="T", stats=[("Scenes", "3")]), style
+
+
+def test_banner_tags_are_balanced():
+    for style in ("plate", "rail", "signature"):
+        markup = render_banner(style, title="T", stats=[("Scenes", "3")])
+        for open_tag, close_tag in (("[bg=", "[/bg]"), ("[table=", "[/table]"),
+                                    ("[tr]", "[/tr]"), ("[td=", "[/td]")):
+            assert markup.count(open_tag) == markup.count(close_tag), (style, open_tag)
+
+
+def test_banner_escapes_its_arguments_but_not_its_own_markup():
+    markup = render_banner("plate", title="[b]evil[/b]", kind="MEGAPACK")
+    assert "&#91;b&#93;evil&#91;/b&#93;" in markup
+    assert "[b]evil[/b]" not in markup
+    assert "[bg=#202b33]" in markup
+
+
+def test_banner_drops_empty_stats_and_rebalances_widths():
+    markup = render_banner(
+        "plate", title="T",
+        stats=[("Scenes", "2"), ("Runtime", ""), ("Size", None), (None, "x"), ("Top res", "2160p")],
+    )
+    assert "RUNTIME" not in markup
+    assert "None" not in markup
+    assert markup.count("[td=vam,50%]") == 2
+
+
+def test_banner_with_no_usable_stats_emits_no_strip():
+    markup = render_banner("plate", title="T", stats=[("Runtime", "")])
+    assert "[bg=#30404d]" not in markup
+    assert "[bg=#202b33]" in markup
+
+
+def test_banner_title_size_steps_down_as_the_title_grows():
+    assert "[size=6][font=Trebuchet MS]" in render_banner("plate", title="x" * 20)
+    assert "[size=5][font=Trebuchet MS]" in render_banner("plate", title="x" * 80)
+    assert "[size=4][font=Trebuchet MS]" in render_banner("plate", title="x" * 140)
+
+
+def test_banner_subtitle_extends_the_eyebrow():
+    assert "STASH MEGAPACK · 2019 – 2023" in render_banner(
+        "plate", title="T", kind="MEGAPACK", subtitle="2019 – 2023"
+    )
+    assert "STASH RELEASE[/color]" in render_banner("plate", title="T", kind="RELEASE")
+
+
+def test_plate_without_a_title_still_renders_the_masthead():
+    markup = render_banner("plate", title="", stats=[("Scenes", "4")])
+    assert "[font=Trebuchet MS]" not in markup
+    assert STASH_URL in markup
+    assert "SCENES" in markup

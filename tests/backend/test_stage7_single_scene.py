@@ -339,8 +339,11 @@ def test_single_scene_bbcode_formatting(tmp_path):
     res = task.run_build_megapack(payload)
     bbcode = res["bbcode"]
 
-    # Assert single-scene structure
-    assert "[center][b][size=5]Solo Star Performance [1080p] [30:00][/size][/b][/center]" in bbcode
+    # Assert single-scene structure. The banner carries the title; the
+    # resolution and runtime badges moved into its spec strip.
+    assert "[color=#f5f8fa]Solo Star Performance[/color]" in bbcode
+    assert "RESOLUTION[/color][/size][br][size=3][color=#f5f8fa][b]1080p[/b]" in bbcode
+    assert "RUNTIME[/color][/size][br][size=3][color=#f5f8fa][b]30:00[/b]" in bbcode
     assert "[b]Studio:[/b] Star Studios" in bbcode
     assert "[b]Performers:[/b] Stella Bright" in bbcode
     assert "[b]Tags:[/b] 1080p, Solo" in bbcode
@@ -520,8 +523,11 @@ def test_single_scene_adversarial_metadata_special_chars_and_unicode(tmp_path):
     assert res["status"] == "success"
     bbcode = res["bbcode"]
 
-    # Brackets in title should be escaped as &#91; and &#93; while badges [2160p] [1:30:30] are raw BBCode
-    assert "&#91;4K Ultra&#93; Special & Rare: Élodie's Scene &#91;2026&#93; 🎬 [2160p] [1:30:30]" in bbcode
+    # Brackets in title are escaped as &#91;/&#93; inside the banner masthead,
+    # whose own markup stays raw; the badges are strip cells now.
+    assert "[color=#f5f8fa]&#91;4K Ultra&#93; Special & Rare: Élodie's Scene &#91;2026&#93; 🎬[/color]" in bbcode
+    assert "RESOLUTION[/color][/size][br][size=3][color=#f5f8fa][b]2160p[/b]" in bbcode
+    assert "RUNTIME[/color][/size][br][size=3][color=#f5f8fa][b]1:30:30[/b]" in bbcode
     assert "[b]Studio:[/b] Art & Lust Productions &#91;Europe&#93;" in bbcode
     assert "[b]Performers:[/b] Jane \"The Star\" Doe & Élodie O'Connor" in bbcode
     assert "[b]Tags:[/b] 4k.uhd, exclusive.release, star.talent" in bbcode

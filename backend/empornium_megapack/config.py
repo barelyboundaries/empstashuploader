@@ -76,6 +76,9 @@ class Settings(BaseSettings):
     screen_extract_timeout: int = 120
     include_performer_images: bool = True
     include_scene_cover: bool = True
+    # Header that opens every presentation: "plate" (masthead + spec strip),
+    # "rail" (one-line credit bar), "signature" (muted credit line) or "off".
+    presentation_banner: str = "plate"
     vcsi_binary: str = ""
     ffmpeg_binary: str = ""
     empornium_announce_url: str = ""

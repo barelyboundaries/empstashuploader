@@ -74,6 +74,7 @@ single_scene_screens = 10
 screen_extract_timeout = 120
 include_performer_images = true
 include_scene_cover = true
+presentation_banner = "plate"
 vcsi_binary = ""
 ffmpeg_binary = ""
 empornium_announce_url = ""
@@ -94,6 +95,7 @@ path_mappings = []
 | `output_dir` / `scratch_dir` | Prefill the wizard's stage 2 fields so you don't retype them each run. |
 | `contact_sheet_layout` | Contact sheet grid, `3x6` by default. |
 | `single_scene_screens` | How many screens a Single Scene release grid contains. |
+| `presentation_banner` | The header that opens every presentation. See below. |
 | `ffmpeg_binary` | Set this if ffmpeg isn't on the PATH Stash sees. |
 | `path_mappings` | Translate Stash's view of a path to the backend's, when they differ (containers, network mounts). |
 
@@ -102,8 +104,29 @@ path_mappings = []
 - **Contact sheets degrade and continue.** If an image fails, the build carries on with
   an explicit placeholder rather than aborting. This is the default and by design;
   there is no strictness toggle. The pre-flight checklist is what catches the result.
+- **Contact sheets are folded into a spoiler.** Both a single-scene release and a
+  megapack put their sheets behind one `[spoiler=Show N contact sheets]` click, so a
+  long pack opens as a readable post instead of a wall of thumbnails. Whether that also
+  saves the reader bandwidth depends on Empornium's spoiler: browsers do fetch images
+  inside a `display:none` container, so the saving is real only if the tracker injects
+  the spoiler's HTML on click rather than hiding it with CSS.
 - **The announce URL lives only inside the built `.torrent`.** It never appears in the
   UI, the logs, or the BBCode.
+- **The presentation banner is pure BBCode.** No hosted logo, so there is nothing to keep
+  alive and nothing charged against `presentation_max_bytes`. It paints its own background
+  and text colors, so it renders the same on every Empornium skin, and it always links to
+  [Stash](https://stashapp.cc) and to
+  [the uploader repo](https://github.com/barelyboundaries/empstashuploader).
+
+  | `presentation_banner` | Header |
+  |---|---|
+  | `plate` (default) | Masthead carrying the release title, plus a spec strip: scenes, runtime, size, top resolution, codec. Replaces the old centred title line. |
+  | `rail` | One slim credit bar above the post. The centred title line stays. |
+  | `signature` | A muted one-line credit above a rule. The centred title line stays. |
+  | `off` | No banner at all. |
+
+  A single build can override the configured default by passing `banner` in the task
+  payload — useful for one-off uploads without editing the config.
 
 ## Updating and uninstalling
 

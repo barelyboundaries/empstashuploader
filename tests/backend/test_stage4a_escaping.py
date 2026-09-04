@@ -76,8 +76,10 @@ def test_stage4a_bbcode_escaping_evil_tags(tmp_path):
     # 4. notes must be escaped while preserving line breaks
     assert "Line 1 with &#91;b&#93;bold&#91;/b&#93;\nLine 2 with &#91;url&#93;link&#91;/url&#93;\nLine 3 &#91;quote&#93;quote&#91;/quote&#93;" in bbcode_content
 
-    # 5. Structure markers must remain intact
-    assert "[center][b][size=5]&#91;b&#93;evil" in bbcode_content
+    # 5. Structure markers must remain intact. The title now sits in the
+    #    banner masthead: its brackets are escaped, the banner's own are not.
+    assert "[color=#f5f8fa]&#91;b&#93;evil" in bbcode_content
+    assert "[bg=#202b33]" in bbcode_content
     assert "[b]Performers:[/b]" in bbcode_content
     assert "[b]Tags:[/b]" in bbcode_content
     assert "[b]Scenes Included:[/b] 1" in bbcode_content
@@ -85,7 +87,11 @@ def test_stage4a_bbcode_escaping_evil_tags(tmp_path):
 
 
 def test_stage4a_clean_input_byte_identity(tmp_path):
-    """Clean input produces standard BBCode format with exact section headings and ordering."""
+    """Clean input produces standard BBCode format with exact section headings and ordering.
+
+    Pinned with the banner off so a header redesign cannot mask a regression in
+    the body; test_stage4a_banner_byte_identity pins the banner itself.
+    """
     out_dir = tmp_path / "stage4a_clean_out"
     out_dir.mkdir()
     pack_title = "Clean Megapack 2026"
@@ -102,6 +108,7 @@ def test_stage4a_clean_input_byte_identity(tmp_path):
         "tags": ["Studio Alpha", "1080p"],
         "notes": "Official studio release notes.",
         "scenes": [{"id": 10, "path": str(media_file)}],
+        "banner": "off",
     }
 
     result = task.run_build_megapack(payload)
@@ -126,10 +133,84 @@ def test_stage4a_clean_input_byte_identity(tmp_path):
         "",
         "[quote]Official studio release notes.[/quote]",
         "",
+        "[b]Contact Sheets[/b]",
+        "",
+        "[spoiler=Show contact sheet]",
         f"[url={safe_url}][img=200]{safe_thumb}[/img][/url]",
+        "[/spoiler]",
     ]
     expected_content = "\n".join(expected_lines)
     assert content == expected_content
+
+
+def test_stage4a_banner_byte_identity(tmp_path):
+    """The default 'plate' banner is pinned exactly, on one physical line.
+
+    The tracker runs descriptions through nl2br, so a newline anywhere inside
+    the banner becomes a blank band between the masthead and the spec strip.
+    Stats with no value (this pack has no duration, height or codec) are
+    dropped and the surviving cells share the width.
+    """
+    out_dir = tmp_path / "stage4a_banner_out"
+    out_dir.mkdir()
+    pack_title = "Clean Megapack 2026"
+    pack_dir = out_dir / pack_title
+    pack_dir.mkdir()
+
+    media_file = pack_dir / "clean_scene.mp4"
+    media_file.write_bytes(b"\x00" * 1024)
+
+    result = task.run_build_megapack({
+        "pack_title": pack_title,
+        "output_dir": str(out_dir),
+        "performers": ["Alice Stone"],
+        "notes": "Official studio release notes.",
+        "scenes": [{"id": 10, "path": str(media_file)}],
+    })
+
+    # line 0/1 are the local-file preview warning and its blank line
+    banner = result["bbcode"].split(chr(10))[2]
+    assert banner == (
+        "[bg=#202b33][table=100%,nball,nopad][tr][td=16px][/td]"
+        "[td=vab][size=1][color=#8a9ba8]STASH MEGAPACK[/color][/size]"
+        "[br][size=6][font=Trebuchet MS][b][color=#f5f8fa]Clean Megapack 2026[/color][/b][/font][/size][/td]"
+        "[td=vab][align=right][size=1]"
+        "[url=https://stashapp.cc][color=#48aff0]stashapp.cc[/color][/url]"
+        "[color=#5c7080] · [/color]"
+        "[url=https://github.com/barelyboundaries/empstashuploader]"
+        "[color=#48aff0]Empornium Stash Uploader[/color][/url]"
+        "[/size][/align][/td][td=16px][/td][/tr][/table][/bg]"
+        "[bg=#30404d][table=100%,nball][tr]"
+        "[td=vam,50%][align=center][size=1][color=#8a9ba8]SCENES[/color][/size]"
+        "[br][size=3][color=#f5f8fa][b]1[/b][/color][/size][/align][/td]"
+        "[td=vam,50%][align=center][size=1][color=#8a9ba8]SIZE[/color][/size]"
+        "[br][size=3][color=#f5f8fa][b]1 KB[/b][/color][/size][/align][/td]"
+        "[/tr][/table][/bg]"
+    )
+
+
+def test_stage4a_banner_off_removes_it_and_restores_the_centred_title(tmp_path):
+    """The 'off' style is a real opt-out, not a blank line."""
+    out_dir = tmp_path / "stage4a_banner_off_out"
+    out_dir.mkdir()
+    pack_title = "Clean Megapack 2026"
+    pack_dir = out_dir / pack_title
+    pack_dir.mkdir()
+
+    media_file = pack_dir / "clean_scene.mp4"
+    media_file.write_bytes(b"\x00" * 1024)
+
+    result = task.run_build_megapack({
+        "pack_title": pack_title,
+        "output_dir": str(out_dir),
+        "scenes": [{"id": 10, "path": str(media_file)}],
+        "banner": "off",
+    })
+
+    bbcode = result["bbcode"]
+    assert "stashapp.cc" not in bbcode
+    assert "[bg=#202b33]" not in bbcode
+    assert "[center][b][size=5]Clean Megapack 2026[/size][/b][/center]" in bbcode
 
 
 def test_stage4a_safe_title_disk_isolation(tmp_path):

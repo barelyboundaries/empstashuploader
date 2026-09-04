@@ -384,6 +384,9 @@ try:
         merge_tags,
         merge_tags_detailed,
         empify,
+        render_banner,
+        normalize_banner_style,
+        DEFAULT_BANNER_STYLE,
         THUMB_WIDTH,
         THUMB_RENDER_WIDTH,
     )
@@ -409,6 +412,9 @@ except ImportError:
     merge_tags = None
     merge_tags_detailed = None
     empify = None
+    render_banner = None
+    normalize_banner_style = None
+    DEFAULT_BANNER_STYLE = "plate"
     THUMB_WIDTH = 150
     THUMB_RENDER_WIDTH = 300
     create_torrent = None
@@ -431,6 +437,84 @@ def make_thumbnail(src: str | Path, dest: str | Path, max_width: int) -> Path:
 
 def fit_presentation_budget(paths: list[Path], budget: int, floor: int) -> tuple[int, list[Path]]:
     return _domain_fit_presentation_budget(paths, budget, floor)
+
+
+def _contact_sheet_spoiler_label(count: int) -> str:
+    """Spoiler summary for the contact sheets, naming what is behind the click.
+
+    The count matters on a megapack: "Show 130 contact sheets" tells a reader
+    what they are about to pull down, which a bare "Click to view" does not.
+    """
+    if count == 1:
+        return "Show contact sheet"
+    return f"Show {count} contact sheets"
+
+
+def _format_pack_size(total_bytes: int) -> str:
+    """Human-readable pack size for the banner spec strip."""
+    if not total_bytes or total_bytes <= 0:
+        return ""
+    size = float(total_bytes)
+    for unit in ("B", "KB", "MB", "GB"):
+        if size < 1024 or unit == "GB":
+            precision = 0 if unit in ("B", "KB") else 1
+            return f"{size:.{precision}f} {unit}"
+        size /= 1024
+    return ""
+
+
+def _scene_field(scene: Any, key: str) -> Any:
+    return scene.get(key) if isinstance(scene, dict) else getattr(scene, key, None)
+
+
+def _pack_year_span(scenes: List[Any]) -> str:
+    """"2019 - 2023", or a single year, from whatever scene dates survived."""
+    years = set()
+    for scene in scenes or []:
+        raw = _scene_field(scene, "date")
+        if not raw:
+            continue
+        text = str(raw).strip()[:4]
+        if len(text) == 4 and text.isdigit():
+            years.add(text)
+    if not years:
+        return ""
+    low, high = min(years), max(years)
+    return low if low == high else f"{low} – {high}"
+
+
+def _top_resolution(scenes: List[Any]) -> str:
+    if resolution_for is None:
+        return ""
+    heights = [h for h in (_scene_field(s, "height") for s in scenes or []) if h]
+    if not heights:
+        return ""
+    return resolution_for(max(int(h) for h in heights))
+
+
+def _dominant_codec(scenes: List[Any]) -> str:
+    counts: Dict[str, int] = {}
+    for scene in scenes or []:
+        codec = _scene_field(scene, "video_codec")
+        if codec and str(codec).strip():
+            key = str(codec).strip()
+            counts[key] = counts.get(key, 0) + 1
+    if not counts:
+        return ""
+    return max(counts.items(), key=lambda kv: kv[1])[0]
+
+
+def _total_runtime(scenes: List[Any]) -> str:
+    if format_duration is None:
+        return ""
+    total = 0.0
+    for scene in scenes or []:
+        duration = _scene_field(scene, "duration")
+        try:
+            total += float(duration or 0)
+        except (TypeError, ValueError):
+            continue
+    return format_duration(total)
 
 
 def _extract_names(items: Any) -> List[str]:
@@ -1771,6 +1855,19 @@ def run_build_megapack(payload: Any, server_connection: Optional[Dict[str, Any]]
         esc_title = bbcode_escape(pack_title) if pack_title else ""
         esc_notes = bbcode_escape(notes, keep_newlines=True) if notes else ""
 
+        # Presentation banner. Payload overrides the configured default so a
+        # single upload can opt out without editing config; "plate" absorbs the
+        # title, so the separate centred title line is dropped for that style.
+        banner_style = "off"
+        if render_banner is not None:
+            raw_style = payload.get("banner", payload.get("presentation_banner"))
+            if raw_style is None:
+                raw_style = getattr(settings, "presentation_banner", DEFAULT_BANNER_STYLE)
+            banner_style = normalize_banner_style(raw_style)
+        pack_size = _format_pack_size(
+            sum(os.path.getsize(fp) for fp in file_paths if os.path.exists(fp))
+        )
+
         # 1. Unified Studio header
         studio = pack_studio(scenes)
 
@@ -1824,9 +1921,24 @@ def run_build_megapack(payload: Any, server_connection: Optional[Dict[str, Any]]
                 meta_badges.append(f"[{dur_tag}]")
             meta_suffix = f" {' '.join(meta_badges)}" if meta_badges else ""
 
-            bbcode_lines = [
-                f"[center][b][size=5]{esc_title}{meta_suffix}[/size][/b][/center]",
-            ]
+            banner = render_banner(
+                banner_style,
+                title=pack_title,
+                kind="RELEASE",
+                subtitle=studio or "",
+                stats=[
+                    ("Runtime", dur_tag),
+                    ("Resolution", res_tag),
+                    ("Size", pack_size),
+                    ("Codec", str(_dominant_codec(scenes) or "")),
+                ],
+            ) if banner_style != "off" else ""
+
+            bbcode_lines = [banner] if banner else []
+            if banner_style != "plate":
+                bbcode_lines.append(
+                    f"[center][b][size=5]{esc_title}{meta_suffix}[/size][/b][/center]"
+                )
             if studio:
                 bbcode_lines.append(f"\n[b]Studio:[/b] {bbcode_escape(studio)}")
             bbcode_lines.append(f"\n[b]Performers:[/b] {joined_performers}")
@@ -1836,9 +1948,23 @@ def run_build_megapack(payload: Any, server_connection: Optional[Dict[str, Any]]
             if esc_notes:
                 bbcode_lines.append(f"\n[quote]{esc_notes}[/quote]\n")
         else:
-            bbcode_lines = [
-                f"[center][b][size=5]{esc_title}[/size][/b][/center]",
-            ]
+            banner = render_banner(
+                banner_style,
+                title=pack_title,
+                kind="MEGAPACK",
+                subtitle=_pack_year_span(scenes) or studio or "",
+                stats=[
+                    ("Scenes", str(len(scenes)) if scenes else ""),
+                    ("Runtime", _total_runtime(scenes)),
+                    ("Size", pack_size),
+                    ("Top res", _top_resolution(scenes)),
+                    ("Codec", _dominant_codec(scenes)),
+                ],
+            ) if banner_style != "off" else ""
+
+            bbcode_lines = [banner] if banner else []
+            if banner_style != "plate":
+                bbcode_lines.append(f"[center][b][size=5]{esc_title}[/size][/b][/center]")
             if studio:
                 bbcode_lines.append(f"\n[b]Studio:[/b] {bbcode_escape(studio)}")
             bbcode_lines.extend([
@@ -1930,7 +2056,7 @@ def run_build_megapack(payload: Any, server_connection: Optional[Dict[str, Any]]
 
             if contact_sheet_urls:
                 bbcode_lines.append("\n[b]Contact Sheet[/b]\n")
-                bbcode_lines.append("[spoiler=Click to view]")
+                bbcode_lines.append(f"[spoiler={_contact_sheet_spoiler_label(len(contact_sheet_urls))}]")
                 for url in contact_sheet_urls:
                     bbcode_lines.append(f"[img]{_sanitize_image_url(url)}[/img]")
                 bbcode_lines.append("[/spoiler]")
@@ -1951,7 +2077,16 @@ def run_build_megapack(payload: Any, server_connection: Optional[Dict[str, Any]]
                 safe_thumb = _sanitize_image_url(thumb_u)
                 sheets_markup.append(f"[url={safe_full}][img={THUMB_WIDTH}]{safe_thumb}[/img][/url]")
             if sheets_markup:
+                # Folded away like the single-scene sheet: a 130-scene pack is
+                # otherwise a wall of thumbnails every reader pays for on load.
+                # The joined single line above stays intact inside the spoiler.
+                # Exactly one blank line before the heading: the notes block
+                # above already ends in a newline, the bare [hr] does not.
+                gap = "" if bbcode_lines and bbcode_lines[-1].endswith("\n") else "\n"
+                bbcode_lines.append(f"{gap}[b]Contact Sheets[/b]\n")
+                bbcode_lines.append(f"[spoiler={_contact_sheet_spoiler_label(len(sheets_markup))}]")
                 bbcode_lines.append("".join(sheets_markup))
+                bbcode_lines.append("[/spoiler]")
 
         bbcode_content = "\n".join(bbcode_lines)
         bbcode_path = os.path.join(artifact_dir, f"{safe_title}_bbcode.txt")

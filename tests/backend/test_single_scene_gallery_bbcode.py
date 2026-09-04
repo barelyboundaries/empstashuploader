@@ -132,7 +132,7 @@ class TestSingleSceneGalleryBBCode:
         bbcode = _run(_payload(media_dir, media_file), _full_gallery(tmp_path))["bbcode"]
 
         assert "[b]Contact Sheet[/b]" in bbcode
-        spoiler = bbcode[bbcode.index("[spoiler=Click to view]"):bbcode.index("[/spoiler]")]
+        spoiler = bbcode[bbcode.index("[spoiler=Show contact sheet]"):bbcode.index("[/spoiler]")]
         assert f"[img]{HOST}/sheet.jpg[/img]" in spoiler
 
     def test_sections_appear_in_reading_order(self, media, tmp_path):
@@ -151,7 +151,8 @@ class TestSingleSceneGalleryBBCode:
         media_dir, media_file = media
         bbcode = _run(_payload(media_dir, media_file), _full_gallery(tmp_path))["bbcode"]
 
-        assert "[center][b][size=5]Anji And Honey [2160p] [17:37][/size][/b][/center]" in bbcode
+        assert "[color=#f5f8fa]Anji And Honey[/color]" in bbcode
+        assert "STASH RELEASE · Baddies Galleryy" in bbcode
         assert "[b]Studio:[/b] Baddies Galleryy" in bbcode
         assert "[b]Performers:[/b] Auhneesh Nicole & Honey Dew" in bbcode
         assert "[quote]Volleyball court.[/quote]" in bbcode
@@ -195,7 +196,11 @@ class TestGalleryDegradation:
 
 class TestMegapackUnchanged:
     def test_megapack_keeps_the_flat_linked_thumbnail_list(self, tmp_path):
-        """Megapacks are already image-heavy; the gallery must not apply there."""
+        """Megapacks keep the flat list; only the single-scene gallery is excluded.
+
+        The list itself is folded into a spoiler (see TestContactSheetSpoiler),
+        but it stays a flat run of linked thumbnails rather than a gallery.
+        """
         media_dir = tmp_path / "pack"
         media_dir.mkdir(parents=True)
         files = []
@@ -222,4 +227,74 @@ class TestMegapackUnchanged:
         gallery.assert_not_called()
         for url in sheet_urls:
             assert f"[url={url}][img={task.THUMB_WIDTH}]{url}[/img][/url]" in res["bbcode"]
-        assert "[spoiler=Click to view]" not in res["bbcode"]
+        assert "[b]Screens[/b]" not in res["bbcode"]
+        assert "[b]Performers[/b]" not in res["bbcode"]
+
+
+class TestContactSheetSpoiler:
+    """Sheets sit behind a click so a long pack does not open as a wall of images."""
+
+    def test_megapack_sheet_wall_is_folded_away_and_counted(self, tmp_path):
+        media_dir = tmp_path / "pack"
+        media_dir.mkdir(parents=True)
+        files = []
+        for name in ("one.mp4", "two.mp4", "three.mp4"):
+            f = media_dir / name
+            f.write_bytes(b"MEDIA" * 4096)
+            files.append(f)
+
+        payload = {
+            "single_scene": False,
+            "pack_title": "Pack",
+            "output_dir": str(media_dir),
+            "scenes": [
+                {"id": i, "title": n.stem, "path": str(n), "performers": ["A"],
+                 "tags": ["X"], "height": 1080, "duration": 600}
+                for i, n in enumerate(files, 1)
+            ],
+        }
+
+        sheet_urls = [f"{HOST}/cs{i}.jpg" for i in range(1, 4)]
+        with mock.patch.object(task, "upload_previews", return_value=sheet_urls):
+            bbcode = task.run_build_megapack(payload)["bbcode"]
+
+        assert "[b]Contact Sheets[/b]" in bbcode
+        assert "[spoiler=Show 3 contact sheets]" in bbcode
+
+        opened = bbcode.index("[spoiler=Show 3 contact sheets]")
+        closed = bbcode.index("[/spoiler]")
+        spoiler = bbcode[opened:closed]
+        # every sheet is inside the fold, and none escaped above it
+        for url in sheet_urls:
+            assert url in spoiler
+        assert "[img" not in bbcode[:opened]
+
+    def test_the_joined_thumbnail_line_survives_the_fold(self, tmp_path):
+        """nl2br: a newline between two [img] tags forces one thumbnail per row."""
+        media_dir = tmp_path / "pack"
+        media_dir.mkdir(parents=True)
+        for name in ("one.mp4", "two.mp4"):
+            (media_dir / name).write_bytes(b"MEDIA" * 4096)
+
+        payload = {
+            "single_scene": False,
+            "pack_title": "Pack",
+            "output_dir": str(media_dir),
+            "scenes": [
+                {"id": i, "title": n, "path": str(media_dir / n), "performers": ["A"],
+                 "tags": ["X"], "height": 1080, "duration": 600}
+                for i, n in enumerate(("one.mp4", "two.mp4"), 1)
+            ],
+        }
+
+        sheet_urls = [f"{HOST}/cs1.jpg", f"{HOST}/cs2.jpg"]
+        with mock.patch.object(task, "upload_previews", return_value=sheet_urls):
+            bbcode = task.run_build_megapack(payload)["bbcode"]
+
+        thumbs = [ln for ln in bbcode.split(chr(10)) if "[img=" in ln]
+        assert len(thumbs) == 1, thumbs
+
+    def test_label_is_singular_for_one_sheet(self):
+        assert task._contact_sheet_spoiler_label(1) == "Show contact sheet"
+        assert task._contact_sheet_spoiler_label(2) == "Show 2 contact sheets"
+        assert task._contact_sheet_spoiler_label(130) == "Show 130 contact sheets"
