@@ -4925,6 +4925,20 @@
     }
   }
 
+  // Everything that becomes possible the moment the sidecar answers. Called
+  // from BOTH recovery paths in _doRefreshSidecarStatus: the fast probe at the
+  // top, and the post-StartBackend poll loop below it. The second is the common
+  // one in practice -- sidecar down at page load, auto-start dispatched, poll
+  // until healthy -- which is exactly when the one-shot vocabulary fetch at load
+  // has already failed. Without the retry the failure latches and the page emits
+  // unfiltered tags for the rest of the session behind a warning that is easy to
+  // scroll past. fetchVocabulary() is idempotent: it returns the cache
+  // immediately once populated, and clears the warning via updateBBCode().
+  function onSidecarHealthy() {
+    prefillScratchDirFromHealth();
+    if (!cachedVocabulary) fetchVocabulary();
+  }
+
   // Sidecar refresh state & candidate probe helper
   let activeSidecarRefreshPromise = null;
   const MAX_START_BACKEND_DISPATCHES = 3;
@@ -5039,7 +5053,7 @@
         badge.className = "sidecar-status sidecar-warn";
       }
       if (btnStop) btnStop.style.display = "inline-flex";
-      prefillScratchDirFromHealth();
+      onSidecarHealthy();
       return;
     }
 
@@ -5137,7 +5151,7 @@
         badge.className = "sidecar-status sidecar-warn";
       }
       if (btnStop) btnStop.style.display = "inline-flex";
-      prefillScratchDirFromHealth();
+      onSidecarHealthy();
     } else {
       // Health probe timed out. Consult queue before claiming failure.
       const finalQueue = await fetchJobQueue();

@@ -289,4 +289,86 @@ test.describe('Tag Vocabulary Parity between JS and Python', () => {
     const val = await preview.inputValue();
     expect(val).toContain('[b]Tags:[/b] Custom Unmapped Tag');
   });
+
+  // The vocabulary is fetched once at load, which routinely lands while the
+  // sidecar is still starting. Recovery must retry it, or the failure latches
+  // and the page emits unfiltered tags for the rest of the session.
+  //
+  // Drives the REAL recovery path: sidecar down at load -> StartBackend
+  // auto-dispatched -> post-dispatch poll loop observes health. That path, not
+  // the fast probe at the top of _doRefreshSidecarStatus, is the common one.
+  test('vocabulary fetch retries when the sidecar recovers, clearing the warning', async ({ page }) => {
+    serveAssets(page);
+
+    let sidecarUp = false;
+    let startBackendDispatched = false;
+
+    await page.route('**/graphql', async (route) => {
+      const body = route.request().postDataJSON() || {};
+      const query = String(body.query || '');
+      if (query.includes('JobQueue')) {
+        return route.fulfill({
+          status: 200, contentType: 'application/json',
+          body: JSON.stringify({ data: { jobQueue: [] } })
+        });
+      }
+      if (query.includes('RunStartBackend')) {
+        startBackendDispatched = true;
+        return route.fulfill({
+          status: 200, contentType: 'application/json',
+          body: JSON.stringify({ data: { runPluginTask: 'job-startbackend-1' } })
+        });
+      }
+      return route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({
+          data: {
+            findScenes: {
+              scenes: [
+                {
+                  id: '1',
+                  title: 'Scene 1',
+                  files: [{ path: '/media/s1.mp4', height: 1080 }],
+                  tags: [{ name: '4K Available' }, { name: 'Blowjob' }]
+                }
+              ]
+            }
+          }
+        })
+      });
+    });
+
+    await page.route('**/health', async (route) => {
+      if (!sidecarUp) return route.abort('failed');
+      return route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify({ status: 'ok', version: '0.2.0' })
+      });
+    });
+    await page.route('**/api/tags/vocabulary', async (route) => {
+      if (!sidecarUp) return route.abort('failed');
+      return route.fulfill({
+        status: 200, contentType: 'application/json',
+        body: JSON.stringify(FIXTURE_VOCABULARY)
+      });
+    });
+
+    await page.goto('http://localhost:9999/plugins/empornium-megapack/review.html?scenes=1&mode=single');
+
+    const warning = page.locator('#bbcode-warning');
+    await expect(warning).toContainText('Tag vocabulary unavailable', { timeout: 5000 });
+    // Unfiltered: a blocklisted Stash tag leaks through while the vocabulary is absent.
+    expect(await page.locator('#bbcode-preview').inputValue()).toContain('4K Available');
+    await expect.poll(() => startBackendDispatched, { timeout: 5000 }).toBe(true);
+
+    // Sidecar comes up; the post-dispatch poll loop must notice and retry.
+    sidecarUp = true;
+
+    await expect(page.locator('#sidecar-status')).toContainText('connected', { timeout: 12000 });
+    await expect(warning).not.toContainText('Tag vocabulary unavailable', { timeout: 12000 });
+
+    const recovered = await page.locator('#bbcode-preview').inputValue();
+    expect(recovered).toContain('blowjob');
+    expect(recovered).not.toContain('4K Available');
+  });
 });
