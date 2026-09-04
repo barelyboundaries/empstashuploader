@@ -43,7 +43,8 @@ export default defineConfig({
     'test_sidecar_queue_flood.spec.mjs',
     'test_progress_placement.spec.mjs',
     'test_build_lockout.spec.mjs',
-    'test_tag_vocabulary_parity.spec.mjs'
+    'test_tag_vocabulary_parity.spec.mjs',
+    'test_locations_lock.spec.mjs'
   ],
   outputDir: path.join(evidenceDir, 'test-results'),
   fullyParallel: false,

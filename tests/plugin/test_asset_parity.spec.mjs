@@ -22,10 +22,10 @@ const __dirname = path.dirname(__filename);
 // mismatch — that is the signal to refresh ASSET_RECORD below in the same
 // commit, so unreviewed or truncated asset changes can never slip through.
 const ASSET_RECORD = {
-  // review.js: Change C — Empornium tag vocabulary resolution, fallback, and unmapped tags collapsible
-  'review.js': 'a1a14d8ba7140eab286438af45635c69a54e584f30601ae15bfd71d1f4afb56a',
-  // review.html: Change C — unmapped tags collapsible (#unmapped-tags-collapsible) under bbcode-preview
-  'review.html': 'a0e4908b685a856690d3f3cb7f02e069c4033e85e0d83391d4268d955a1c79c6',
+  // review.js: Change A — Stage 2 locations lockout and probeResultsMap wiring
+  'review.js': '5dd0acac849823975f092524c9053bdd0359a93b6b3bb8cbbb857541bc4515be',
+  // review.html: Change A — #locations-locked-notice and #btn-unlock-locations inside #stage-panel-2
+  'review.html': '0733b25f0ec5d80c78b22198bd84032218571254eec01370f0baf3af805c617a',
 };
 
 function sha256(filePath) {

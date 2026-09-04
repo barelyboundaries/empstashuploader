@@ -22,6 +22,8 @@
   let missingSourceSceneIds = new Set(); // sceneId (string) -> no known file exists on disk, per reconcileSourceFiles()
   let showOnlyConflicts = false;
   let probeResultsMap = {};
+  let locationsLocked = false;
+  let committedLocations = { seedDir: "", scratchDir: "" };
   let activeJobId = null;
   let activeRunId = null;
   let bufferedLogs = [];
@@ -2615,7 +2617,8 @@
 
   // 6. Probe Files via Stash Task (ProbeFiles)
   async function probeFiles() {
-    const outputDir = document.getElementById("output-dir")?.value || "";
+    const { seedDir, scratchDir } = effectiveLocations();
+    const outputDir = seedDir;
     const targetDir = currentMode === "single" ? outputDir : getPackDestinationFolder(outputDir);
     const active = activeScenes();
     const filesPayload = active.map((s) => {
@@ -2633,9 +2636,8 @@
       seed_dir: outputDir,
       files: filesPayload
     };
-    const probeScratchDir = (document.getElementById("scratch-dir")?.value || "").trim();
-    if (probeScratchDir) {
-      payload.scratch_dir = probeScratchDir;
+    if (scratchDir) {
+      payload.scratch_dir = scratchDir;
     }
 
     showStatus("Probing filesystem for creation dates and hardlink compatibility...", 0.05);
@@ -2764,7 +2766,8 @@
 
   async function consolidateFiles() {
     refreshSidecarStatus(); // fire-and-forget: re-probe the badge on user action
-    const rawOutput = (document.getElementById("output-dir")?.value || "").trim();
+    const { seedDir } = effectiveLocations();
+    const rawOutput = (seedDir || "").trim();
     if (!rawOutput) {
       alert("Please specify a destination directory.");
       return;
@@ -3205,6 +3208,7 @@
 
   // 8. Trigger Megapack or Single-Scene Build Task (BuildMegapack / BuildSingleScene) & Track Progress
   async function buildMegapack() {
+    const { seedDir, scratchDir } = effectiveLocations();
     bbcodeIsFinal = false;
     bbcodeUserEdited = false;
     lastFinalBBCode = null;
@@ -3220,7 +3224,7 @@
     const isSingle = currentMode === "single";
     const allFiles = active.map((s) => (getPrimaryFile(s).path || "").trim()).filter(Boolean);
     const rawAllFiles = active.flatMap((s) => (s.files || []).map((f) => (f.path || "").trim()).filter(Boolean));
-    const outputDir = (document.getElementById("output-dir")?.value || "").trim();
+    const outputDir = (seedDir || "").trim();
 
     // Pre-flight client-side validation gate
     if (isSingle) {
@@ -3322,7 +3326,6 @@
     }
     // scratch_dir (todo 8): the #scratch-dir input feeds the payload; the key
     // is omitted when empty — task.py's legacy fallback handles absence.
-    const scratchDir = (document.getElementById("scratch-dir")?.value || "").trim();
     if (scratchDir) {
       payload.scratch_dir = scratchDir;
     }
@@ -3773,6 +3776,19 @@
 
   function onTaskComplete(taskType, payload) {
     showStatus(`🎉 ${taskType} completed successfully!`, 1.0);
+
+    if (taskType === "ProbeFiles") {
+      const files = Array.isArray(payload?.files) ? payload.files : [];
+      probeResultsMap = {};
+      for (const f of files) {
+        if (f && f.scene_id != null) {
+          probeResultsMap[String(f.scene_id)] = f;
+          probeResultsMap[f.scene_id] = f;
+        }
+      }
+      renderScenes();
+      return;
+    }
 
     if (taskType === "UploadCoverImage") {
       const statusEl = document.getElementById("cover-status");
@@ -4253,7 +4269,18 @@
         } else {
           // Note: mode-megapack, mode-single, btn-build, btn-consolidate are
           // derived authoritatively by updateActionAvailability() on unlock.
-          if (!["btn-build", "btn-consolidate", "mode-megapack", "mode-single"].includes(id)) {
+          // Exclude stage 2 inputs and browse buttons so applyLocationsLock()
+          // retains exclusive authority over them.
+          if (![
+            "btn-build",
+            "btn-consolidate",
+            "mode-megapack",
+            "mode-single",
+            "output-dir",
+            "scratch-dir",
+            "btn-browse-dir",
+            "btn-browse-scratch"
+          ].includes(id)) {
             el.disabled = false;
           }
         }
@@ -4268,6 +4295,7 @@
     }
     const linkChooseCover = document.getElementById("link-choose-cover");
     if (linkChooseCover) {
+      linkChooseCover.tabIndex = isBusy ? -1 : 0;
       linkChooseCover.style.pointerEvents = isBusy ? "none" : "";
     }
 
@@ -4303,6 +4331,117 @@
     if (bbcodeResetBtn) {
       bbcodeResetBtn.disabled = isBuildTier;
     }
+
+    applyLocationsLock();
+  }
+
+  function applyLocationsLock() {
+    const outDir = document.getElementById("output-dir");
+    const scratchDir = document.getElementById("scratch-dir");
+    const browseDirBtn = document.getElementById("btn-browse-dir");
+    const browseScratchBtn = document.getElementById("btn-browse-scratch");
+    const unlockBtn = document.getElementById("btn-unlock-locations");
+    const notice = document.getElementById("locations-locked-notice");
+
+    if (outDir) {
+      outDir.readOnly = locationsLocked;
+      outDir.classList.toggle("locked", locationsLocked);
+      if (locationsLocked) {
+        outDir.setAttribute("readonly", "");
+        outDir.setAttribute("aria-readonly", "true");
+      } else {
+        outDir.removeAttribute("readonly");
+        outDir.removeAttribute("aria-readonly");
+      }
+      if (!uiBusy) {
+        outDir.disabled = false;
+      }
+    }
+
+    if (scratchDir) {
+      scratchDir.readOnly = locationsLocked;
+      scratchDir.classList.toggle("locked", locationsLocked);
+      if (locationsLocked) {
+        scratchDir.setAttribute("readonly", "");
+        scratchDir.setAttribute("aria-readonly", "true");
+      } else {
+        scratchDir.removeAttribute("readonly");
+        scratchDir.removeAttribute("aria-readonly");
+      }
+      if (!uiBusy) {
+        scratchDir.disabled = false;
+      }
+    }
+
+    const disableBrowse = locationsLocked || uiBusy;
+    if (browseDirBtn) {
+      browseDirBtn.disabled = disableBrowse;
+    }
+    if (browseScratchBtn) {
+      browseScratchBtn.disabled = disableBrowse;
+    }
+
+    if (unlockBtn) {
+      unlockBtn.style.display = locationsLocked ? "inline-flex" : "none";
+      unlockBtn.disabled = uiBusy;
+    }
+
+    if (notice) {
+      notice.style.display = locationsLocked ? "flex" : "none";
+    }
+  }
+
+  function effectiveLocations() {
+    const liveSeed = (document.getElementById("output-dir")?.value || "").trim();
+    const liveScratch = (document.getElementById("scratch-dir")?.value || "").trim();
+
+    if (locationsLocked) {
+      if (liveSeed !== committedLocations.seedDir || liveScratch !== committedLocations.scratchDir) {
+        throw new Error(
+          "Locations drift detected: current form values diverge from locked locations. Unlock Stage 2 to modify paths."
+        );
+      }
+      return {
+        seedDir: committedLocations.seedDir,
+        scratchDir: committedLocations.scratchDir
+      };
+    }
+
+    return {
+      seedDir: liveSeed,
+      scratchDir: liveScratch
+    };
+  }
+
+  function handleUnlockLocations() {
+    if (uiBusy) return;
+    const confirmed = window.confirm(
+      "Unlocking locations will invalidate probe results, consolidated file records, and build outputs. Are you sure you want to unlock Stage 2 locations?"
+    );
+    if (!confirmed) return;
+
+    locationsLocked = false;
+    committedLocations = { seedDir: "", scratchDir: "" };
+    probeResultsMap = {};
+    consolidatedFileIds.clear();
+    missingSourceSceneIds = new Set();
+    selectedFileBySceneId.clear();
+    bbcodeIsFinal = false;
+    currentStage = 2;
+    maxStageReached = 2;
+
+    const summaryBox = document.getElementById("artifact-summary");
+    if (summaryBox) summaryBox.style.display = "none";
+    const detailsBox = document.getElementById("artifact-details");
+    if (detailsBox) detailsBox.innerHTML = "";
+
+    applyLocationsLock();
+    renderStageState();
+    renderScenes();
+    updateBBCode();
+    updateActionAvailability();
+    focusStagePanel(2);
+    showStatus("Locations unlocked. Downstream state has been reset.", 0, false);
   }
 
   function setUiBusy(on, tier = null, label = null) {
@@ -4560,6 +4699,9 @@
         focusStagePanel(2);
         return;
       }
+      committedLocations = { seedDir, scratchDir };
+      locationsLocked = true;
+      applyLocationsLock();
     }
     currentStage += 1;
     if (currentStage > maxStageReached) maxStageReached = currentStage;
@@ -4600,7 +4742,7 @@
   }
 
   function openDirectoryBrowser(targetInputId = "output-dir") {
-    if (uiBusy) return;
+    if (uiBusy || (locationsLocked && (targetInputId === "output-dir" || targetInputId === "scratch-dir"))) return;
     const modal = document.getElementById("dir-browser-modal");
     if (!modal) return;
     dirBrowserTargetId = targetInputId || "output-dir";
@@ -4913,6 +5055,11 @@
   window.setBusyStartedAt = (ts) => { busyStartedAt = ts; };
   window.onTaskComplete = onTaskComplete;
   window.handleJobUpdate = handleJobUpdate;
+  window.applyLocationsLock = applyLocationsLock;
+  window.effectiveLocations = effectiveLocations;
+  window.handleUnlockLocations = handleUnlockLocations;
+  window.getLocationsLocked = () => locationsLocked;
+  window.getCommittedLocations = () => committedLocations;
 
   // Prefill the scratch dir from the backend /health payload (todo 8 added
   // the field there). Best-effort: a down sidecar, non-200, or missing field
@@ -5561,7 +5708,14 @@
       }
     }
 
+    const unlockLocationsBtn = document.getElementById("btn-unlock-locations");
+    if (unlockLocationsBtn && !unlockLocationsBtn.dataset.bound) {
+      unlockLocationsBtn.dataset.bound = "true";
+      unlockLocationsBtn.addEventListener("click", handleUnlockLocations);
+    }
+
     renderStageState();
+    applyLocationsLock();
     initBBCodeToolbar();
   }
 
