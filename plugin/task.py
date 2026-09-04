@@ -2139,10 +2139,20 @@ def run_upload_cover(payload: Dict[str, Any]) -> Dict[str, Any]:
 # meaningful on the server's filesystem, and both are large.
 _SENTINEL_EXCLUDED_KEYS = ("submission_payload", "contact_sheets")
 
-# Guard against emitting a log line large enough to risk truncation in transit.
-# BBCode is the only unbounded field (one block per scene in a megapack).
-_SENTINEL_MAX_CHARS = 100000
+# Stash reads plugin stderr one line at a time. A line past its per-line ceiling
+# is dropped AND leaves the stream unreadable, after which every further write
+# raises OSError ([Errno 22] Invalid argument on Windows) -- which used to turn a
+# finished build into a reported failure. Keep every sentinel line well under the
+# ceiling: 36 KB lines have been observed to survive, so 30 KB leaves margin.
+# (The old 100000 was too high to bind: a megapack result lands under it and was
+# emitted as one ~70 KB line.)
+_SENTINEL_MAX_CHARS = 30000
 _BBCODE_CHUNK_CHARS = 4000
+
+# Shed in this order to bring an oversized sentinel under the cap. BBCode has its
+# own chunked channel and the sidecar run store holds the full result, so nothing
+# is lost outright -- only the degraded log-fallback path sees fewer fields.
+_SENTINEL_SHEDDABLE_KEYS = ("bbcode", "uploaded_urls", "image_urls", "scenes")
 
 
 def get_sidecar_port() -> int:
@@ -2350,20 +2360,49 @@ def run_start_backend(payload: Dict[str, Any]) -> Dict[str, Any]:
     return {"status": "ok", "action": "started", "port": port}
 
 
-def post_result_to_sidecar(payload: Any, result: Any) -> None:
+_stderr_broken = False
+
+
+def _stderr_write(text: str) -> bool:
+    """Write one log line to stderr, tolerating a stderr Stash stopped reading.
+
+    Stash consumes plugin stderr line by line; an over-long line makes it stop
+    reading and close the pipe, after which every further write raises OSError
+    (EINVAL -- "[Errno 22] Invalid argument" on Windows). Once that has happened
+    the buffered write is retried by every later call and keeps failing, so the
+    stream is latched off instead. A dead log stream must never fail an otherwise
+    finished build, so errors here are swallowed and reported via the return.
+    """
+    global _stderr_broken
+    if _stderr_broken:
+        return False
+    try:
+        sys.stderr.write(text)
+        sys.stderr.flush()
+        return True
+    except Exception:
+        _stderr_broken = True
+        return False
+
+
+def post_result_to_sidecar(payload: Any, result: Any) -> bool:
     """
     Posts task execution result to the sidecar run store via HTTP POST.
     Best-effort: timeout <= 3s, catches all errors, never raises or delays the build.
+
+    Returns True only when the run store accepted the result, so a caller can tell
+    "finished and stored" apart from "failed".
     """
+    run_id = "<unknown>"
     try:
         if not isinstance(result, dict):
-            return
-        run_id = payload.get("run_id") if isinstance(payload, dict) else None
-        if not run_id or not isinstance(run_id, str):
-            return
-        run_id = str(run_id).strip()
+            return False
+        raw_run_id = payload.get("run_id") if isinstance(payload, dict) else None
+        if not raw_run_id or not isinstance(raw_run_id, str):
+            return False
+        run_id = str(raw_run_id).strip()
         if not run_id:
-            return
+            return False
 
         compact = {k: v for k, v in result.items() if k not in _SENTINEL_EXCLUDED_KEYS}
 
@@ -2377,11 +2416,10 @@ def post_result_to_sidecar(payload: Any, result: Any) -> None:
 
         body_bytes = json.dumps(compact, ensure_ascii=False).encode("utf-8")
         if len(body_bytes) > 2 * 1024 * 1024:
-            sys.stderr.write(
+            _stderr_write(
                 f"\x01w\x02[Sidecar] Result payload ({len(body_bytes)} bytes) exceeds 2MB limit; skipping sidecar POST\n"
             )
-            sys.stderr.flush()
-            return
+            return False
 
         req = urllib.request.Request(
             url,
@@ -2395,25 +2433,24 @@ def post_result_to_sidecar(payload: Any, result: Any) -> None:
 
         with urllib.request.urlopen(req, timeout=3.0) as resp:
             if resp.status not in (200, 201, 204):
-                sys.stderr.write(
+                _stderr_write(
                     f"\x01w\x02[Sidecar] HTTP {resp.status} posting run result for {run_id}\n"
                 )
-                sys.stderr.flush()
+                return False
+        return True
     except urllib.error.HTTPError as http_err:
-        sys.stderr.write(
+        _stderr_write(
             f"\x01w\x02[Sidecar] HTTP {http_err.code} posting run result for {run_id}: {http_err.reason}\n"
         )
-        sys.stderr.flush()
     except urllib.error.URLError as url_err:
-        sys.stderr.write(
+        _stderr_write(
             f"\x01w\x02[Sidecar] Transport error posting run result for {run_id}: {url_err.reason}\n"
         )
-        sys.stderr.flush()
     except Exception as exc:
-        sys.stderr.write(
+        _stderr_write(
             f"\x01w\x02[Sidecar] Failed to post run result for {run_id}: {exc}\n"
         )
-        sys.stderr.flush()
+    return False
 
 
 def emit_result_sentinel(payload, result):
@@ -2422,6 +2459,12 @@ def emit_result_sentinel(payload, result):
     UI can read it. Stash's job API does not expose plugin stdout, so a result
     written only there never reaches the browser. This is the success-side
     counterpart to EMPORNIUM_TASK_FAILED.
+
+    The line is held under _SENTINEL_MAX_CHARS by shedding large recoverable
+    fields in _SENTINEL_SHEDDABLE_KEYS order: Stash drops an over-long line and
+    stops reading the stream, so an oversized sentinel costs the result AND every
+    later log line from this task. The sidecar run store holds the full result;
+    this line is the fallback for when it does not answer.
 
     Best-effort: a failure here must not fail an otherwise successful build.
     """
@@ -2434,16 +2477,38 @@ def emit_result_sentinel(payload, result):
 
         compact = {k: v for k, v in result.items() if k not in _SENTINEL_EXCLUDED_KEYS}
         encoded = json.dumps(compact, ensure_ascii=False, separators=(",", ":"))
-        if len(encoded) > _SENTINEL_MAX_CHARS:
-            compact.pop("bbcode", None)
-            compact["bbcode_truncated"] = True
+
+        shed = []
+        for key in _SENTINEL_SHEDDABLE_KEYS:
+            if len(encoded) <= _SENTINEL_MAX_CHARS:
+                break
+            if key not in compact:
+                continue
+            compact.pop(key, None)
+            shed.append(key)
+            if key == "bbcode":
+                # Pre-existing contract read by review.js; the full BBCode still
+                # arrives on the chunked EMPORNIUM_TASK_BBCODE channel.
+                compact["bbcode_truncated"] = True
+            compact["sentinel_shed_keys"] = list(shed)
             encoded = json.dumps(compact, ensure_ascii=False, separators=(",", ":"))
 
-        sys.stderr.write(f"\x01i\x02EMPORNIUM_TASK_RESULT {run_id}: {encoded}\n")
-        sys.stderr.flush()
+        if len(encoded) > _SENTINEL_MAX_CHARS:
+            # Nothing left worth shedding. Emit an identifiable stub rather than a
+            # line Stash would drop, taking the rest of the log stream with it.
+            compact = {
+                "status": compact.get("status"),
+                "task": compact.get("task"),
+                "run_id": compact.get("run_id"),
+                "bbcode_truncated": compact.get("bbcode_truncated", False),
+                "sentinel_truncated": True,
+                "sentinel_shed_keys": list(shed),
+            }
+            encoded = json.dumps(compact, ensure_ascii=False, separators=(",", ":"))
+
+        _stderr_write(f"\x01i\x02EMPORNIUM_TASK_RESULT {run_id}: {encoded}\n")
     except Exception as exc:
-        sys.stderr.write(f"\x01w\x02Failed to emit result sentinel: {exc}\n")
-        sys.stderr.flush()
+        _stderr_write(f"\x01w\x02Failed to emit result sentinel: {exc}\n")
 
 
 def emit_bbcode_sentinel(payload, result):
@@ -2470,19 +2535,22 @@ def emit_bbcode_sentinel(payload, result):
         total_chunks = len(chunks)
 
         for idx, chunk in enumerate(chunks, 1):
-            sys.stderr.write(f"\x01i\x02EMPORNIUM_TASK_BBCODE {run_id} {idx}/{total_chunks}: {chunk}\n")
-            sys.stderr.flush()
+            if not _stderr_write(f"\x01i\x02EMPORNIUM_TASK_BBCODE {run_id} {idx}/{total_chunks}: {chunk}\n"):
+                # Log stream is gone; the remaining chunks cannot arrive and the
+                # UI discards a partial set anyway.
+                return
     except Exception as exc:
-        sys.stderr.write(f"\x01w\x02Failed to emit bbcode sentinel: {exc}\n")
-        sys.stderr.flush()
+        _stderr_write(f"\x01w\x02Failed to emit bbcode sentinel: {exc}\n")
 
 
 def main():
     payload = {}
+    build_completed = False
+    result_stored = False
     try:
         check_dependencies()
         mode, payload, server_connection = parse_input_payload()
-        
+
         if mode == "probe" or "probe" in str(mode).lower():
             result = run_probe_files(payload)
         elif mode == "upload_cover" or "upload_cover" in str(mode).lower() or "uploadcover" in str(mode).lower():
@@ -2494,17 +2562,36 @@ def main():
             result = run_build_megapack(payload, server_connection)
         else:
             result = run_build_megapack(payload, server_connection)
-        
-        post_result_to_sidecar(payload, result)
+
+        # Past this point the work is done and its artifacts are on disk. Anything
+        # that fails below is a reporting failure, not a build failure.
+        build_completed = True
+
+        result_stored = post_result_to_sidecar(payload, result)
         emit_result_sentinel(payload, result)
         emit_bbcode_sentinel(payload, result)
 
-        sys.stdout.write(json.dumps(result, indent=2))
-        sys.stdout.write("\n")
-        sys.stdout.flush()
+        try:
+            sys.stdout.write(json.dumps(result, indent=2))
+            sys.stdout.write("\n")
+            sys.stdout.flush()
+        except Exception:
+            # Stash's job API does not expose plugin stdout, so losing this write
+            # costs nothing -- and it must not fail a finished build.
+            pass
         sys.exit(0)
     except Exception as err:
         run_id = payload.get("run_id") if isinstance(payload, dict) else None
+        if build_completed:
+            # The task finished; this came from the reporting leg (typically a
+            # stderr Stash stopped reading). Overwriting the stored result with a
+            # failure, or exiting non-zero, would report a completed build as a
+            # failed one -- which is exactly the bug this guards.
+            detail = "result is in the sidecar run store" if result_stored else "result could not be stored"
+            _stderr_write(
+                f"\x01w\x02Task completed, but result reporting failed ({detail}): {err}\n"
+            )
+            sys.exit(0)
         if run_id:
             fail_result = {
                 "status": "failed",
@@ -2513,12 +2600,11 @@ def main():
                 "traceback": traceback.format_exc(),
             }
             post_result_to_sidecar(payload, fail_result)
-            sys.stderr.write(f"\x01e\x02EMPORNIUM_TASK_FAILED {run_id}: {err}\n")
+            _stderr_write(f"\x01e\x02EMPORNIUM_TASK_FAILED {run_id}: {err}\n")
         else:
-            sys.stderr.write(f"\x01e\x02EMPORNIUM_TASK_FAILED: {err}\n")
-        sys.stderr.write(f"\x01e\x02Task execution failed: {err}\n")
-        traceback.print_exc(file=sys.stderr)
-        sys.stderr.flush()
+            _stderr_write(f"\x01e\x02EMPORNIUM_TASK_FAILED: {err}\n")
+        _stderr_write(f"\x01e\x02Task execution failed: {err}\n")
+        _stderr_write(traceback.format_exc())
         sys.exit(1)
 
 
