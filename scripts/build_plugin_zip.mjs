@@ -165,13 +165,26 @@ try {
     cpSync(abs, dest);
   }
   // Vendored tier-4 package: backend/empornium_megapack -> stage/empornium_megapack
+  // Recurses deliberately: the package carries data/ (the Empornium tag
+  // vocabulary) beside its modules, and the old flat copy shipped tags.py
+  // without the TOML it loads -- an install that fails closed on first build.
   const pkgFiles = [];
-  for (const ent of readdirSync(backendPkg, { withFileTypes: true })) {
-    if (ent.isDirectory() && ent.name === "__pycache__") continue;
-    if (ent.isFile()) pkgFiles.push(ent.name);
-  }
+  const collectPkg = (dir, prefix = "") => {
+    for (const ent of readdirSync(dir, { withFileTypes: true })) {
+      if (ent.name === "__pycache__" || ent.name.endsWith(".pyc")) continue;
+      const rel = prefix ? `${prefix}/${ent.name}` : ent.name;
+      if (ent.isDirectory()) collectPkg(join(dir, ent.name), rel);
+      else if (ent.isFile()) pkgFiles.push(rel);
+    }
+  };
+  collectPkg(backendPkg);
   mkdirSync(join(stage, "empornium_megapack"), { recursive: true });
-  for (const f of pkgFiles) cpSync(join(backendPkg, f), join(stage, "empornium_megapack", f));
+  for (const f of pkgFiles) {
+    const segs = f.split("/");
+    const dest = join(stage, "empornium_megapack", ...segs);
+    mkdirSync(dirname(dest), { recursive: true });
+    cpSync(join(backendPkg, ...segs), dest);
+  }
 
   // Installers + start scripts from repo root + generated 3-line INSTALL.txt
   // (README itself is written by a parallel task and is intentionally NOT
@@ -203,6 +216,7 @@ try {
   const required = [
     "empornium-megapack.yml", "main.js", "style.css", "task.py", "requirements.txt",
     "assets/review.html", "assets/review.js", "empornium_megapack/main.py",
+    "empornium_megapack/tags.py", "empornium_megapack/data/emp_tags.toml",
     "install.ps1", "install.sh", "start_backend.ps1", "start_backend.sh", "INSTALL.txt",
     "BUILD_STAMP",
   ];
