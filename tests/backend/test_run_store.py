@@ -181,11 +181,14 @@ def test_run_store_module_singleton():
 # ==============================================================================
 
 @pytest.fixture(autouse=True)
-def clean_run_store():
-    """Ensure clean global run_store before and after each test."""
-    run_store.clear()
+def clean_run_store(tmp_path, monkeypatch):
+    """Ensure clean global run_store and isolated runs_dir before and after each test."""
+    test_runs_dir = tmp_path / "runs"
+    test_runs_dir.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(run_store, "runs_dir", test_runs_dir)
+    run_store.clear(clear_disk=True)
     yield
-    run_store.clear()
+    run_store.clear(clear_disk=True)
 
 
 @pytest.fixture
@@ -435,3 +438,256 @@ def test_post_result_to_sidecar_skips_when_no_run_id():
         task_module.post_result_to_sidecar(None, {"status": "ok"})
         task_module.post_result_to_sidecar({"run_id": ""}, {"status": "ok"})
         mock_urlopen.assert_not_called()
+
+
+# ==============================================================================
+# 1b. RunStore Disk Persistence, Eviction, and Security Tests (Change C1)
+# ==============================================================================
+
+def test_run_store_disk_persistence_roundtrip(tmp_path):
+    """Verify store_run with persist=True writes <runs_dir>/<run_id>.json and roundtrips."""
+    runs_dir = tmp_path / "runs"
+    store = RunStore(runs_dir=runs_dir)
+    run_id = "build-run-2026-09-04-001"
+    result_data = {
+        "status": "success",
+        "task": "build",
+        "mode": "megapack",
+        "pack_title": "Test Disk Megapack",
+        "torrent_path": "/path/to/test.torrent",
+        "bbcode": "[b]Test BBCode[/b]",
+        "contact_sheets": ["sheet1.jpg", "sheet2.jpg"],
+    }
+
+    # 1. Store with persist=True
+    t0 = 1725440000.0
+    store.store_run(run_id, result_data, persist=True, current_time=t0)
+
+    # 2. Verify file exists on disk
+    expected_file = runs_dir / f"{run_id}.json"
+    assert expected_file.is_file(), f"Expected persistence file {expected_file} was not created"
+
+    # 3. Verify disk JSON structure
+    disk_content = json.loads(expected_file.read_text(encoding="utf-8"))
+    assert disk_content["run_id"] == run_id
+    assert disk_content["created_at"] == t0
+    assert disk_content["result"] == result_data
+
+    # 4. Verify in-memory retrieval returns exact result
+    assert store.get_run(run_id) == result_data
+
+    # 5. Verify persist=False does NOT write to disk
+    transient_id = "probe-run-transient-001"
+    store.store_run(transient_id, {"status": "ok"}, persist=False)
+    assert not (runs_dir / f"{transient_id}.json").exists()
+
+
+def test_run_store_restart_survival(tmp_path):
+    """Verify persisted runs reload into a fresh RunStore instance; transient runs do not."""
+    runs_dir = tmp_path / "runs"
+    store1 = RunStore(runs_dir=runs_dir)
+
+    # Store 2 persisted runs and 1 transient run
+    store1.store_run("run-persisted-1", {"pack_title": "Run 1", "status": "success"}, persist=True)
+    store1.store_run("run-persisted-2", {"pack_title": "Run 2", "status": "success"}, persist=True)
+    store1.store_run("run-transient-3", {"task": "probe", "status": "ok"}, persist=False)
+
+    assert len(store1) == 3
+
+    # Instantiate fresh store pointing to same runs_dir (simulating restart)
+    store2 = RunStore(runs_dir=runs_dir)
+    if hasattr(store2, "load_from_disk"):
+        store2.load_from_disk()
+
+    # Persisted runs survive
+    assert store2.get_run("run-persisted-1") == {"pack_title": "Run 1", "status": "success"}
+    assert store2.get_run("run-persisted-2") == {"pack_title": "Run 2", "status": "success"}
+
+    # Transient run did NOT survive
+    assert store2.get_run("run-transient-3") is None
+    assert len(store2) == 2
+
+
+def test_run_store_restart_corrupted_disk_files_handled_gracefully(tmp_path):
+    """Verify malformed or invalid files in runs_dir are skipped without crashing startup."""
+    runs_dir = tmp_path / "runs"
+    runs_dir.mkdir(parents=True, exist_ok=True)
+
+    # Valid file
+    valid_data = {"run_id": "valid-run-001", "created_at": 100.0, "result": {"pack_title": "Good"}}
+    (runs_dir / "valid-run-001.json").write_text(json.dumps(valid_data), encoding="utf-8")
+
+    # Malformed JSON file
+    (runs_dir / "corrupt-json.json").write_text("NOT_VALID_JSON{:::<", encoding="utf-8")
+
+    # Empty file
+    (runs_dir / "empty-file.json").write_text("", encoding="utf-8")
+
+    # Non-json file
+    (runs_dir / "random.txt").write_text("ignore me", encoding="utf-8")
+
+    # File with mismatched schema / missing result
+    (runs_dir / "bad-schema.json").write_text(json.dumps({"foo": "bar"}), encoding="utf-8")
+
+    # Startup / reload
+    store = RunStore(runs_dir=runs_dir)
+    if hasattr(store, "load_from_disk"):
+        store.load_from_disk()
+
+    # Valid run is present; corrupt files skipped without raising
+    assert store.get_run("valid-run-001") == {"pack_title": "Good"}
+    assert store.get_run("corrupt-json") is None
+    assert len(store) == 1
+
+
+def test_run_store_max_disk_cap_pruning_oldest_runs(tmp_path):
+    """Verify that when max_disk_runs is exceeded, oldest runs by created_at are pruned on disk."""
+    runs_dir = tmp_path / "runs"
+    cap = 5
+    store = RunStore(runs_dir=runs_dir, max_disk_runs=cap)
+    t0 = 1000.0
+
+    # Fill to cap
+    for i in range(cap):
+        store.store_run(f"run-{i:03d}", {"index": i}, current_time=t0 + i * 10, persist=True)
+
+    assert len(list(runs_dir.glob("*.json"))) == cap
+    for i in range(cap):
+        assert (runs_dir / f"run-{i:03d}.json").is_file()
+
+    # Add 6th run (exceeds cap of 5)
+    store.store_run("run-005", {"index": 5}, current_time=t0 + cap * 10, persist=True)
+
+    # Disk file count must remain <= cap
+    disk_files = sorted([f.name for f in runs_dir.glob("*.json")])
+    assert len(disk_files) == cap
+
+    # Oldest run-000 must be deleted from disk and purged from memory
+    assert not (runs_dir / "run-000.json").exists()
+    assert store.get_run("run-000") is None
+
+    # Newer runs (run-001 to run-005) must remain on disk and in memory
+    for i in range(1, 6):
+        assert (runs_dir / f"run-{i:03d}.json").is_file()
+        assert store.get_run(f"run-{i:03d}") == {"index": i}
+
+
+def test_run_store_200_cap_exact_boundary(tmp_path):
+    """Verify default max_disk_runs=200 caps disk storage at exactly 200 runs."""
+    runs_dir = tmp_path / "runs"
+    store = RunStore(runs_dir=runs_dir)
+    assert getattr(store, "max_disk_runs", 200) == 200
+    t0 = 1000.0
+
+    # Store 205 runs
+    for i in range(205):
+        store.store_run(f"run-{i:04d}", {"i": i}, current_time=t0 + i, persist=True)
+
+    # Exactly 200 files on disk
+    assert len(list(runs_dir.glob("*.json"))) == 200
+
+    # Oldest 5 pruned
+    for i in range(5):
+        assert not (runs_dir / f"run-{i:04d}.json").exists()
+        assert store.get_run(f"run-{i:04d}") is None
+
+    # Newest 200 preserved
+    for i in range(5, 205):
+        assert (runs_dir / f"run-{i:04d}.json").exists()
+        assert store.get_run(f"run-{i:04d}") == {"i": i}
+
+
+def test_run_store_ttl_split_persisted_vs_transient(tmp_path):
+    """Verify build runs (persist=True) have no TTL; probe/consolidate runs expire after 1h."""
+    runs_dir = tmp_path / "runs"
+    store = RunStore(runs_dir=runs_dir, default_ttl=3600.0)
+    t0 = 10000.0
+
+    # Store 1 transient probe run and 1 persisted build run
+    store.store_run("probe-run-001", {"task": "probe", "scenes": [1]}, persist=False, current_time=t0)
+    store.store_run("build-run-001", {"task": "build", "pack_title": "Megapack"}, persist=True, current_time=t0)
+
+    # At t0 + 1800s (30m): both accessible
+    assert store.get_run("probe-run-001", current_time=t0 + 1800.0) is not None
+    assert store.get_run("build-run-001", current_time=t0 + 1800.0) is not None
+
+    # At t0 + 3601s (1h 1s): probe run expired, build run still present
+    assert store.get_run("probe-run-001", current_time=t0 + 3601.0) is None
+    assert store.get_run("build-run-001", current_time=t0 + 3601.0) == {"task": "build", "pack_title": "Megapack"}
+
+    # At t0 + 86400s (24h later): sweep_expired should NOT prune persisted run
+    swept = store.sweep_expired(current_time=t0 + 86400.0)
+    assert store.get_run("build-run-001", current_time=t0 + 86400.0) is not None
+    assert (runs_dir / "build-run-001.json").is_file()
+
+
+def test_run_store_path_traversal_rejection_security(tmp_path):
+    """Verify RUN_ID_REGEX rejects path traversal attempts before touching the filesystem."""
+    runs_dir = tmp_path / "runs"
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    store = RunStore(runs_dir=runs_dir)
+
+    sentinel_file = tmp_path / "secret.txt"
+    sentinel_file.write_text("CONFIDENTIAL", encoding="utf-8")
+
+    traversal_ids = [
+        "../../secret",
+        "../secret",
+        "..\\secret",
+        "....//secret",
+        "/etc/passwd",
+        "C:\\boot.ini",
+        "..",
+        ".",
+        "run;rm -rf",
+        "run\x00evil",
+        "run 123",
+        "run*bad",
+        "run?bad",
+        "run|pipe",
+        "run<tag>",
+        "a" * 65,  # Length > 64 chars
+    ]
+
+    for evil_id in traversal_ids:
+        assert RUN_ID_REGEX.match(evil_id) is None
+
+        # store_run must raise ValueError without touching disk
+        with pytest.raises(ValueError, match="Invalid run_id format"):
+            store.store_run(evil_id, {"attack": True}, persist=True)
+
+        # get_run must return None without raising or touching disk
+        assert store.get_run(evil_id) is None
+
+        # delete_run must return False or raise ValueError without deleting files outside runs_dir
+        try:
+            res = store.delete_run(evil_id)
+            assert res is False
+        except ValueError:
+            pass
+
+    # Sentinel file must remain untouched
+    assert sentinel_file.read_text(encoding="utf-8") == "CONFIDENTIAL"
+    assert list(runs_dir.iterdir()) == []
+
+
+def test_run_store_delete_run(tmp_path):
+    """Verify delete_run removes run from disk and memory and returns True/False."""
+    runs_dir = tmp_path / "runs"
+    store = RunStore(runs_dir=runs_dir)
+    run_id = "run-to-delete-001"
+
+    store.store_run(run_id, {"pack_title": "To Delete"}, persist=True)
+    run_file = runs_dir / f"{run_id}.json"
+    assert run_file.is_file()
+
+    # First deletion succeeds
+    assert store.delete_run(run_id) is True
+    assert not run_file.exists()
+    assert store.get_run(run_id) is None
+
+    # Second deletion returns False (idempotent / not found)
+    assert store.delete_run(run_id) is False
+
+    # Deleting non-existent returns False
+    assert store.delete_run("unknown-run-999") is False

@@ -25,6 +25,9 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    runs_dir = settings.runs_dir
+    await asyncio.to_thread(run_store.init_store, runs_dir)
+
     async def periodic_sweep():
         while True:
             try:
@@ -200,6 +203,7 @@ def health():
         "staging_dir": str(settings.staging_dir),
         "output_dir": str(settings.output_dir),
         "scratch_dir": str(settings.scratch_dir),
+        "runs_dir": str(settings.runs_dir),
         "file_time_policy": settings.file_time_policy,
         "file_time_ascending": settings.file_time_ascending,
         "contact_sheet_layout": settings.contact_sheet_layout,
@@ -281,7 +285,7 @@ _MAX_RUN_BODY_BYTES = 2 * 1024 * 1024
 
 
 @app.post("/api/run/{run_id}")
-async def post_run_result(run_id: str, request: Request):
+async def post_run_result(run_id: str, request: Request, persist: Optional[bool] = None):
     if not RUN_ID_REGEX.match(run_id):
         raise HTTPException(status_code=400, detail="Invalid run_id format")
 
@@ -309,8 +313,31 @@ async def post_run_result(run_id: str, request: Request):
     if "announce_url" in data and isinstance(data["announce_url"], str):
         data["announce_url"] = sanitize_announce_url(data["announce_url"])
 
-    run_store.store_run(run_id, data)
+    should_persist = persist
+    if should_persist is None:
+        if "persist" in data and isinstance(data["persist"], bool):
+            should_persist = data["persist"]
+        elif data.get("task") in ("ProbeFiles", "consolidate"):
+            should_persist = False
+        elif (
+            data.get("task") in ("build", "BuildMegapack", "BuildSingleScene")
+            or "torrent_path" in data
+            or "pack_title" in data
+        ):
+            should_persist = True
+        else:
+            should_persist = False
+
+    run_store.store_run(run_id, data, persist=should_persist)
     return {"status": "ok", "run_id": run_id}
+
+
+@app.get("/api/runs")
+def list_runs_endpoint(limit: int = 50):
+    if limit < 1:
+        raise HTTPException(status_code=400, detail="limit must be a positive integer")
+    limit = min(limit, 200)
+    return run_store.list_runs(limit=limit)
 
 
 @app.get("/api/run/{run_id}")
@@ -322,6 +349,17 @@ def get_run_result(run_id: str):
     if result is None:
         return {"found": False}
     return {"found": True, "result": result}
+
+
+@app.delete("/api/run/{run_id}")
+def delete_run_endpoint(run_id: str):
+    if not RUN_ID_REGEX.match(run_id):
+        raise HTTPException(status_code=400, detail="Invalid run_id format")
+
+    deleted = run_store.delete_run(run_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Run not found")
+    return {"status": "ok", "run_id": run_id}
 
 
 @app.post("/api/shutdown")

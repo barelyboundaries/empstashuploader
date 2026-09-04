@@ -8,6 +8,7 @@
 
   const PLUGIN_ID = "empornium-megapack";
   const BUTTON_ID = "empornium-megapack-btn";
+  const HISTORY_BUTTON_ID = "empornium-history-btn";
   const MODAL_ID = "empornium-megapack-modal";
 
   const INJECTED_STYLE_ID = "empornium-review-injected-style";
@@ -122,14 +123,18 @@
     container.className = "empornium-modal-container";
 
     const isSingle = resolvedMode === "single";
-    const modalTitle = isSingle ? "Empornium Single-Scene Uploader" : "Empornium Megapack Builder";
-    const badgeText = `${sceneIds.length} scene(s) selected`;
+    const modalTitle = resolvedMode === "history"
+      ? "Empornium Past Runs & History"
+      : (isSingle ? "Empornium Single-Scene Uploader" : "Empornium Megapack Builder");
+    const badgeText = resolvedMode === "history"
+      ? "History"
+      : `${sceneIds.length} scene(s) selected`;
 
     const header = document.createElement("div");
     header.className = "empornium-modal-header";
     header.innerHTML = `
       <div class="empornium-modal-title">
-        <span class="empornium-logo">${isSingle ? "🎬" : "📦"}</span>
+        <span class="empornium-logo">${resolvedMode === "history" ? "📚" : (isSingle ? "🎬" : "📦")}</span>
         <span>${modalTitle}</span>
         <span class="empornium-badge">${badgeText}</span>
       </div>
@@ -157,15 +162,24 @@
     const closeBtn = header.querySelector(".empornium-modal-close");
     closeBtn.addEventListener("click", closeMegapackModal);
 
+    function requestSafeClose() {
+      if (typeof window._emporniumCanClose === "function" && !window._emporniumCanClose()) {
+        if (!confirm("A task is running or a build result is open. Are you sure you want to close?")) {
+          return;
+        }
+      }
+      closeMegapackModal();
+    }
+
     overlay.addEventListener("click", (e) => {
       if (e.target === overlay) {
-        closeMegapackModal();
+        requestSafeClose();
       }
     });
 
     activeEscHandler = (e) => {
       if (e.key === "Escape") {
-        closeMegapackModal();
+        requestSafeClose();
       }
     };
     window.addEventListener("keydown", activeEscHandler);
@@ -196,10 +210,14 @@
 
     // Attempt token creation
     let token = null;
-    try {
-      token = await createToken(sceneIds);
-      window._emporniumToken = token;
-    } catch (err) {
+    if (resolvedMode !== "history" && sceneIds && sceneIds.length > 0) {
+      try {
+        token = await createToken(sceneIds);
+        window._emporniumToken = token;
+      } catch (err) {
+        window._emporniumToken = "";
+      }
+    } else {
       window._emporniumToken = "";
     }
 
@@ -276,9 +294,11 @@
     }
   }
 
-  function injectMegapackButton() {
-    if (document.getElementById(BUTTON_ID)) return;
+  async function openHistoryModal() {
+    await openMegapackModal([], "history");
+  }
 
+  function injectMegapackButton() {
     // Look for Stash bulk action bar or top nav menu
     const targetContainer = document.querySelector(
       ".btn-toolbar, .selection-actions, .filter-container, nav.navbar"
@@ -286,23 +306,39 @@
 
     if (!targetContainer) return;
 
-    const btn = document.createElement("button");
-    btn.id = BUTTON_ID;
-    btn.className = "btn btn-secondary empornium-trigger-btn";
-    btn.innerHTML = `<span class="mr-1">📦</span> Empornium Uploader`;
-    btn.title = "Build Empornium Megapack Builder from selected scenes";
+    if (!document.getElementById(BUTTON_ID)) {
+      const btn = document.createElement("button");
+      btn.id = BUTTON_ID;
+      btn.className = "btn btn-secondary empornium-trigger-btn";
+      btn.innerHTML = `<span class="mr-1">📦</span> Empornium Uploader`;
+      btn.title = "Build Empornium Megapack Builder from selected scenes";
 
-    btn.addEventListener("click", async () => {
-      const selectedIds = getSelectedSceneIds();
-      if (selectedIds.length === 0) {
-        alert("Please select at least one scene to build a megapack.");
-        return;
-      }
-      const inferredMode = selectedIds.length === 1 ? "single" : "megapack";
-      await openMegapackModal(selectedIds, inferredMode);
-    });
+      btn.addEventListener("click", async () => {
+        const selectedIds = getSelectedSceneIds();
+        if (selectedIds.length === 0) {
+          alert("Please select at least one scene to build a megapack.");
+          return;
+        }
+        const inferredMode = selectedIds.length === 1 ? "single" : "megapack";
+        await openMegapackModal(selectedIds, inferredMode);
+      });
 
-    targetContainer.appendChild(btn);
+      targetContainer.appendChild(btn);
+    }
+
+    if (!document.getElementById(HISTORY_BUTTON_ID)) {
+      const histBtn = document.createElement("button");
+      histBtn.id = HISTORY_BUTTON_ID;
+      histBtn.className = "btn btn-secondary empornium-trigger-btn";
+      histBtn.innerHTML = `<span class="mr-1">📚</span> Empornium History`;
+      histBtn.title = "View Empornium past build history";
+
+      histBtn.addEventListener("click", async () => {
+        await openHistoryModal();
+      });
+
+      targetContainer.appendChild(histBtn);
+    }
   }
 
   // Observer to inject button as UI updates
@@ -329,6 +365,7 @@
     }
   });
 
+  window.openHistoryModal = openHistoryModal;
   window.openMegapackModal = openMegapackModal;
   window.closeMegapackModal = closeMegapackModal;
 })();

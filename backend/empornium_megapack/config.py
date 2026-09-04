@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     staging_dir: Path = Field(default_factory=lambda: _runtime_default("staging"))
     output_dir: Path = Field(default_factory=lambda: _runtime_default("output"))
     scratch_dir: Path = Field(default_factory=lambda: _runtime_default("scratch"))
+    runs_dir: Path = Field(default_factory=lambda: _runtime_default("runs"))
     allow_origins: list[str] = ["http://localhost:9999"]
     file_time_policy: str = "creation"
     file_time_ascending: bool = True

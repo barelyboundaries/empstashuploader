@@ -3738,16 +3738,24 @@
     const resultContainer = document.getElementById("build-console-result");
     if (!resultContainer) return;
 
-    const isSingle = options.isSingle ?? (currentMode === "single" || payload?.task === "BuildSingleScene");
-    const packTitle = payload?.pack_title || document.getElementById("pack-title")?.value || "";
+    const buildConsole = document.getElementById("build-console");
+    if (buildConsole) buildConsole.hidden = false;
+    resultContainer.hidden = false;
+    resultContainer.style.display = "flex";
+
+    const isSingle = options.isSingle ?? (currentMode === "single" || payload?.task === "BuildSingleScene" || payload?.mode === "single" || payload?.mode === "single_scene");
+    const packTitle = payload?.pack_title || payload?.title || document.getElementById("pack-title")?.value || "";
     const torrentPath = typeof payload?.torrent_path === "string" && payload.torrent_path.trim() ? payload.torrent_path.trim() : null;
     const manifestPath = typeof payload?.manifest_path === "string" && payload.manifest_path.trim() ? payload.manifest_path.trim() : null;
     const submissionPath = typeof payload?.submission_path === "string" && payload.submission_path.trim() ? payload.submission_path.trim() : null;
     const bbcodePath = typeof payload?.bbcode_path === "string" && payload.bbcode_path.trim() ? payload.bbcode_path.trim() : null;
-    const coverUrl = currentCoverUrl || payload?.cover_url || payload?.cover_image_url || null;
+    const coverUrl = payload?.cover_url || payload?.cover_image_url || currentCoverUrl || null;
 
     let tagsList = payload?.tracker_tags;
     let unmappedList = payload?.unmapped_tags;
+    if ((!tagsList || !Array.isArray(tagsList)) && Array.isArray(payload?.tags)) {
+      tagsList = payload.tags;
+    }
     if (!tagsList || !Array.isArray(tagsList)) {
       const scenes = activeScenes();
       const sources = [];
@@ -3793,13 +3801,15 @@
       ? `${imageCount} image(s) (${imageCount} local file:/// preview(s))`
       : `${imageCount} image(s) (all remote on HamsterImg)`;
 
-    const isUnverified = !payload?.preflight || !Array.isArray(payload.preflight.checks);
-    const checks = isUnverified ? [] : payload.preflight.checks;
-    const isReady = isUnverified
-      ? false
-      : (payload.ready !== undefined
-        ? Boolean(payload.ready)
-        : (payload.preflight?.ready !== undefined ? Boolean(payload.preflight.ready) : false));
+    const isUnverified = (!payload?.preflight || !Array.isArray(payload.preflight.checks)) && !options.isHistorical;
+    const checks = (!payload?.preflight || !Array.isArray(payload.preflight.checks)) ? [] : payload.preflight.checks;
+    const isReady = options.isHistorical
+      ? (payload?.ready !== undefined ? Boolean(payload.ready) : (payload?.status === "success"))
+      : (isUnverified
+        ? false
+        : (payload.ready !== undefined
+          ? Boolean(payload.ready)
+          : (payload.preflight?.ready !== undefined ? Boolean(payload.preflight.ready) : false)));
 
     const headerHtml = isUnverified
       ? `<div id="handoff-status-header" style="font-weight: 600; color: var(--danger); font-size: 1.05rem;">⚠️ Build Result Unverified — no result received from the backend</div>`
@@ -3992,6 +4002,227 @@
   window.appendConsoleLog = appendConsoleLog;
   window.updateConsoleProgress = updateConsoleProgress;
   window.renderConsolePhases = renderConsolePhases;
+
+  // ---------------------------------------------------------------------------
+  // Milestone C2: Persistent Run History View & Modal Safety
+  // ---------------------------------------------------------------------------
+
+  async function fetchHistoryRuns(limit = 50) {
+    const endpoints = backendEndpoints(`/api/runs?limit=${limit}`);
+    let lastError = null;
+    for (const url of endpoints) {
+      try {
+        const resp = await fetch(url);
+        if (resp.ok) {
+          const data = await resp.json();
+          return Array.isArray(data) ? data : (data.runs || []);
+        } else {
+          lastError = new Error(`HTTP ${resp.status}`);
+        }
+      } catch (err) {
+        lastError = err;
+      }
+    }
+    throw lastError || new Error("Failed to fetch past runs from sidecar");
+  }
+
+  async function openHistoryView() {
+    const historyView = document.getElementById("history-view");
+    const historyLoading = document.getElementById("history-loading");
+    const historyEmpty = document.getElementById("history-empty");
+    const historyError = document.getElementById("history-error");
+    const historyRunsList = document.getElementById("history-runs-list");
+
+    if (!historyView) return;
+
+    historyView.hidden = false;
+    historyView.style.display = "flex";
+
+    if (historyLoading) historyLoading.style.display = "flex";
+    if (historyEmpty) historyEmpty.style.display = "none";
+    if (historyError) historyError.style.display = "none";
+    if (historyRunsList) historyRunsList.innerHTML = "";
+
+    try {
+      const runs = await fetchHistoryRuns(50);
+      if (historyLoading) historyLoading.style.display = "none";
+
+      if (!runs || runs.length === 0) {
+        if (historyEmpty) historyEmpty.style.display = "flex";
+        return;
+      }
+
+      renderHistoryRunsList(runs);
+    } catch (err) {
+      if (historyLoading) historyLoading.style.display = "none";
+      if (historyError) {
+        historyError.style.display = "flex";
+        const errMsg = document.getElementById("history-error-message");
+        if (errMsg) errMsg.innerText = `Failed to load past runs: ${err.message || String(err)}`;
+      }
+    }
+  }
+
+  function closeHistoryView() {
+    const historyView = document.getElementById("history-view");
+    if (historyView) {
+      historyView.hidden = true;
+      historyView.style.display = "none";
+    }
+  }
+
+  function renderHistoryRunsList(runs) {
+    const historyRunsList = document.getElementById("history-runs-list");
+    if (!historyRunsList) return;
+    historyRunsList.innerHTML = "";
+
+    runs.forEach((run) => {
+      const card = document.createElement("div");
+      card.className = "history-run-card";
+      card.dataset.runId = run.run_id;
+
+      const dateStr = run.created_at ? new Date(run.created_at * 1000).toLocaleString() : "Unknown date";
+      const isSingle = run.mode === "single" || run.mode === "single_scene" || run.task === "BuildSingleScene";
+      const modeText = isSingle ? "single" : "megapack";
+      const statusText = run.status || (run.torrent_path ? "success" : "unknown");
+      const statusClass = statusText === "success" ? "history-badge-success" : "history-badge-failed";
+      const sceneCount = typeof run.scene_count === "number" ? run.scene_count : (isSingle ? 1 : 0);
+      const titleText = run.title || run.pack_title || run.run_id;
+
+      card.innerHTML = `
+        <div class="history-run-info">
+          <div class="history-run-title-row">
+            <span class="history-badge ${statusClass}">${escapeHtml(statusText)}</span>
+            <span class="history-badge history-badge-mode">${escapeHtml(modeText)}</span>
+            <span class="history-run-title" title="${escapeHtml(titleText)}">${escapeHtml(titleText)}</span>
+          </div>
+          <div class="history-run-meta">
+            <span class="history-run-timestamp">🕒 ${escapeHtml(dateStr)}</span>
+            <span class="history-run-scenes">🎬 ${sceneCount} scene(s)</span>
+            <span style="font-family: monospace; font-size: 0.75rem; color: var(--text-muted);">[id: ${escapeHtml(run.run_id)}]</span>
+          </div>
+        </div>
+        <div class="history-run-actions">
+          <button type="button" id="btn-history-load" class="btn btn-primary btn-sm btn-history-load" data-run-id="${escapeHtml(run.run_id)}" title="View past run result">View result</button>
+          <button type="button" id="btn-history-delete" class="btn btn-danger btn-sm btn-history-delete" data-run-id="${escapeHtml(run.run_id)}" title="Delete past run">Delete</button>
+        </div>
+      `;
+
+      const loadBtn = card.querySelector(".btn-history-load");
+      if (loadBtn) {
+        loadBtn.addEventListener("click", () => {
+          loadHistoricalRun(run.run_id);
+        });
+      }
+
+      const deleteBtn = card.querySelector(".btn-history-delete");
+      if (deleteBtn) {
+        deleteBtn.addEventListener("click", () => {
+          deleteHistoricalRun(run.run_id);
+        });
+      }
+
+      historyRunsList.appendChild(card);
+    });
+  }
+
+  async function loadHistoricalRun(runId) {
+    try {
+      const endpoints = backendEndpoints(`/api/run/${encodeURIComponent(runId)}`);
+      let payload = null;
+      let lastError = null;
+      for (const url of endpoints) {
+        try {
+          const resp = await fetch(url);
+          if (resp.ok) {
+            payload = await resp.json();
+            break;
+          } else {
+            lastError = new Error(`HTTP ${resp.status}`);
+          }
+        } catch (err) {
+          lastError = err;
+        }
+      }
+
+      if (!payload) {
+        throw lastError || new Error(`Failed to fetch run ${runId}`);
+      }
+
+      const result = payload.result || payload;
+      closeHistoryView();
+
+      const buildConsole = document.getElementById("build-console");
+      if (buildConsole) buildConsole.hidden = false;
+
+      const consoleResult = document.getElementById("build-console-result");
+      if (consoleResult) {
+        consoleResult.hidden = false;
+        consoleResult.style.display = "flex";
+      }
+
+      renderBuildResult(result, { isHistorical: true });
+    } catch (err) {
+      alert(`Error loading run result: ${err.message || String(err)}`);
+    }
+  }
+
+  async function deleteHistoricalRun(runId) {
+    if (!confirm(`Are you sure you want to delete past run ${runId}?`)) {
+      return;
+    }
+
+    try {
+      const endpoints = backendEndpoints(`/api/run/${encodeURIComponent(runId)}`);
+      let deleted = false;
+      let lastError = null;
+      for (const url of endpoints) {
+        try {
+          const resp = await fetch(url, { method: "DELETE" });
+          if (resp.ok) {
+            deleted = true;
+            break;
+          } else {
+            lastError = new Error(`HTTP ${resp.status}`);
+          }
+        } catch (err) {
+          lastError = err;
+        }
+      }
+
+      if (!deleted) {
+        throw lastError || new Error(`Failed to delete run ${runId}`);
+      }
+
+      await openHistoryView();
+    } catch (err) {
+      alert(`Error deleting run: ${err.message || String(err)}`);
+    }
+  }
+
+  function emporniumCanClose() {
+    if (uiBusy === true) {
+      return false;
+    }
+    const consoleResult = document.getElementById("build-console-result");
+    const buildConsole = document.getElementById("build-console");
+    if (consoleResult && !consoleResult.hidden && consoleResult.style.display !== "none") {
+      if (buildConsole && !buildConsole.hidden && buildConsole.style.display !== "none") {
+        const hasResult = Boolean(
+          consoleResult.querySelector("#handoff-status-header") ||
+          consoleResult.querySelector("#result-bbcode") ||
+          consoleResult.children.length > 0
+        );
+        if (hasResult) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+  window._emporniumCanClose = emporniumCanClose;
+  window.openHistoryView = openHistoryView;
+  window.closeHistoryView = closeHistoryView;
 
   // 8. WebSocket Subscription and Polling Job Progress Tracker
   function trackJobProgress(jobId, taskType, payload = {}) {
@@ -5605,10 +5836,16 @@
     loadScenes(ids, token);
     prefillScratchDirFromHealth();
     refreshSidecarStatus();
+    if (mode === "history" || initialMode === "history") {
+      openHistoryView();
+    }
   }
 
   // Window exports for tests and integrations
   window.initEmporniumReview = initEmporniumReview;
+  window.openHistoryView = openHistoryView;
+  window.closeHistoryView = closeHistoryView;
+  window._emporniumCanClose = emporniumCanClose;
   window.startJobPolling = startJobPolling;
   window.onTaskComplete = onTaskComplete;
   window.loadScenes = loadScenes;
@@ -6166,6 +6403,30 @@
         } else if (window.parent && window.parent !== window) {
           window.parent.postMessage({ type: "EMPORNIUM_CLOSE_MODAL" }, "*");
         }
+      });
+    }
+
+    const btnHistory = document.getElementById("btn-history");
+    if (btnHistory && !btnHistory.dataset.bound) {
+      btnHistory.dataset.bound = "true";
+      btnHistory.addEventListener("click", () => {
+        openHistoryView();
+      });
+    }
+
+    const btnHistoryClose = document.getElementById("btn-history-close");
+    if (btnHistoryClose && !btnHistoryClose.dataset.bound) {
+      btnHistoryClose.dataset.bound = "true";
+      btnHistoryClose.addEventListener("click", () => {
+        closeHistoryView();
+      });
+    }
+
+    const btnHistoryRefresh = document.getElementById("btn-history-refresh");
+    if (btnHistoryRefresh && !btnHistoryRefresh.dataset.bound) {
+      btnHistoryRefresh.dataset.bound = "true";
+      btnHistoryRefresh.addEventListener("click", () => {
+        openHistoryView();
       });
     }
 
