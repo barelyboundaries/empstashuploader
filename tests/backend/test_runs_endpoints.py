@@ -246,3 +246,34 @@ def test_runs_endpoints_cors_headers(client):
         )
         assert res.status_code == 200
         assert res.headers.get("access-control-allow-origin") == "http://127.0.0.1:9999"
+
+
+def test_get_runs_excludes_transient_probe_and_consolidate(client):
+    """GET /api/runs lists only persisted build runs.
+
+    ProbeFiles/consolidate results are stored with persist=False and live in
+    memory under a 1h TTL. Listing them would put entries in the History view
+    that silently disappear an hour later, so the endpoint filters them out
+    even though RunStore.list_runs() can return them.
+    """
+    run_store.store_run(
+        "probe-transient", {"task": "ProbeFiles", "status": "success"}, persist=False
+    )
+    run_store.store_run(
+        "consolidate-transient", {"task": "consolidate", "status": "success"}, persist=False
+    )
+    run_store.store_run(
+        "build-persisted",
+        {"task": "build", "status": "success", "pack_title": "Kept Pack"},
+        persist=True,
+    )
+
+    response = client.get("/api/runs")
+    assert response.status_code == 200
+    runs = response.json()
+
+    assert [r["run_id"] for r in runs] == ["build-persisted"]
+
+    # The transient runs are still individually retrievable by id — only the
+    # listing is filtered, so an in-flight probe result is not lost.
+    assert client.get("/api/run/probe-transient").json()["found"] is True

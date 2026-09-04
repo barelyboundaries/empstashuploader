@@ -22,8 +22,8 @@ const __dirname = path.dirname(__filename);
 // mismatch — that is the signal to refresh ASSET_RECORD below in the same
 // commit, so unreviewed or truncated asset changes can never slip through.
 const ASSET_RECORD = {
-  // review.js: Change C2 — Persistent run history view, run deletion, modal lifecycle safety
-  'review.js': 'b0d0962845d4c818551941b49a9a402d364042f62dec37338de3116660b7f756',
+  // review.js: post-review cleanup — drop duplicated window export block
+  'review.js': 'e99f05a40a05732e528cc872490bfbd35a1d496023fe44a5bba3720cc35ea909',
   // review.html: Change C2 — #btn-history in header, #history-view panel with run list
   'review.html': 'ae1939bda1eb75870e2ec4bb8af871eb5ebe970ce9a800bfb7927dcebe3e9f88',
 };

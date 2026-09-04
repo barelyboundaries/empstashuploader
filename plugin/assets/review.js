@@ -4220,9 +4220,6 @@
     }
     return true;
   }
-  window._emporniumCanClose = emporniumCanClose;
-  window.openHistoryView = openHistoryView;
-  window.closeHistoryView = closeHistoryView;
 
   // 8. WebSocket Subscription and Polling Job Progress Tracker
   function trackJobProgress(jobId, taskType, payload = {}) {

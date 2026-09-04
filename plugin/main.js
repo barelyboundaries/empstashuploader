@@ -164,7 +164,9 @@
 
     function requestSafeClose() {
       if (typeof window._emporniumCanClose === "function" && !window._emporniumCanClose()) {
-        if (!confirm("A task is running or a build result is open. Are you sure you want to close?")) {
+        if (!confirm(
+          "The build keeps running in Stash and the result will be in History. Close anyway?"
+        )) {
           return;
         }
       }

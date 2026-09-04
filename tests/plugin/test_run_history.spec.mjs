@@ -552,7 +552,7 @@ test.describe("Milestone C2: Persistent Run History View & Modal Safety", () => 
     page.removeAllListeners("dialog");
     page.on("dialog", async (dialog) => {
       dialogPrompted = true;
-      expect(dialog.message()).toContain("running or a build result is open");
+      expect(dialog.message()).toContain("will be in History");
       if (dismissNext) {
         await dialog.dismiss();
       } else {

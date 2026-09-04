@@ -337,7 +337,10 @@ def list_runs_endpoint(limit: int = 50):
     if limit < 1:
         raise HTTPException(status_code=400, detail="limit must be a positive integer")
     limit = min(limit, 200)
-    return run_store.list_runs(limit=limit)
+    # History is a build-recovery surface: transient ProbeFiles/consolidate
+    # runs live in memory for an hour and would appear here, then silently
+    # vanish. Only persisted (build) runs are listable.
+    return run_store.list_runs(limit=limit, include_non_persisted=False)
 
 
 @app.get("/api/run/{run_id}")
