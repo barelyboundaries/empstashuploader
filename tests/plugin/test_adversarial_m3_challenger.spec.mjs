@@ -425,11 +425,11 @@ test.describe('Empornium Megapack Builder Challenger 1 M3 Adversarial Suite', ()
     const checklistItems = page.locator('#preflight-checklist li');
     expect(await checklistItems.count()).toBe(0);
 
-    // 4. Verify all Copy affordances are disabled
-    await expect(page.locator('#btn-copy-title')).toBeDisabled();
-    await expect(page.locator('#btn-copy-tags')).toBeDisabled();
-    await expect(page.locator('#btn-copy-bbcode')).toBeDisabled();
-    await expect(page.locator('#btn-copy-torrent-path')).toBeDisabled();
+    // 4. Verify un-gated copy affordances are enabled, and torrent path is enabled because path is present
+    await expect(page.locator('#btn-copy-title')).toBeEnabled();
+    await expect(page.locator('#btn-copy-tags')).toBeEnabled();
+    await expect(page.locator('#btn-copy-bbcode')).toBeEnabled();
+    await expect(page.locator('#btn-copy-torrent-path')).toBeEnabled();
 
     // 5. Verify upload link is inert with pointer-events: none and opacity reduced
     const uploadLink = page.locator('#btn-open-upload');

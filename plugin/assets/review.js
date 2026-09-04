@@ -28,6 +28,34 @@
   let activeRunId = null;
   let bufferedLogs = [];
   let wsLogStreamActive = false;
+  let consoleTimerInterval = null;
+  let consoleStartTime = null;
+  let activeConsoleTaskType = null;
+  let activeConsoleRunId = null;
+  let consoleUserDetached = false;
+  const MAX_CONSOLE_LOG_LINES = 2000;
+
+  const BUILD_CHECKLIST_PHASES = [
+    { id: "validating", threshold: 0.15, label: "Validating scene files" },
+    { id: "contact_sheets", threshold: 0.20, label: "Contact sheets" },
+    { id: "uploads", threshold: 0.50, label: "Hamster uploads" },
+    { id: "torrent", threshold: 0.70, label: "Torrent creation" },
+    { id: "manifest", threshold: 0.90, label: "BBCode & manifest" },
+    { id: "done", threshold: 1.00, label: "Complete" }
+  ];
+
+  const PROBE_CHECKLIST_PHASES = [
+    { id: "init", threshold: 0.10, label: "Initializing probe" },
+    { id: "probing", threshold: 0.20, label: "Probing files" },
+    { id: "done", threshold: 1.00, label: "Probe complete" }
+  ];
+
+  const CONSOLIDATE_CHECKLIST_PHASES = [
+    { id: "scanning", threshold: 0.10, label: "Scanning files" },
+    { id: "collisions", threshold: 0.30, label: "Destination check" },
+    { id: "moving", threshold: 0.70, label: "GraphQL moves" },
+    { id: "done", threshold: 1.00, label: "Consolidation complete" }
+  ];
   // Set once a build finishes: the preview then holds the backend's BBCode
   // (image block included) and must not be overwritten by the local composer.
   let bbcodeIsFinal = false;
@@ -2657,6 +2685,8 @@
         { key: "payload", value: { str: JSON.stringify(payload) } }
       ];
 
+      openBuildConsole("ProbeFiles", payload.run_id);
+
       const data = await executeGraphQL(query, {
         plugin_id: PLUGIN_ID,
         task_name: "ProbeFiles",
@@ -2671,6 +2701,9 @@
         showStatus("Filesystem probe dispatched. Check Stash Task Manager for live log.", 1.0);
       }
     } catch (err) {
+      stopConsoleTimer();
+      const el = document.getElementById("build-console");
+      if (el) el.hidden = true;
       showStatus(`Probe error: ${err.message}`, 0, true);
     }
   }
@@ -2814,6 +2847,13 @@
       return;
     }
 
+    openBuildConsole("Consolidate", null);
+    appendConsoleLog({ level: "INFO", message: `Scanning ${fileItems.length} active scene file(s)...` });
+    appendConsoleLog({
+      level: "INFO",
+      message: `${inPlaceItems.length} file(s) already in destination; ${toMove.length} file(s) require moving.`
+    });
+
     function findBasenameCollisions(items) {
       const counts = {};
       for (const item of items) {
@@ -2837,6 +2877,13 @@
 
     const initialCollisions = findBasenameCollisions(toMove);
     if (initialCollisions.length > 0) {
+      appendConsoleLog({
+        level: "WARN",
+        message: `Basename collision detected (${initialCollisions.length} duplicate filenames across active scenes): ${initialCollisions.join(", ")}`
+      });
+      stopConsoleTimer();
+      const el = document.getElementById("build-console");
+      if (el) el.hidden = true;
       reportBasenameCollisions(initialCollisions);
       return;
     }
@@ -2845,10 +2892,16 @@
     try {
       reconciled = await reconcileSourceFiles({ failClosed: true });
     } catch (err) {
+      stopConsoleTimer();
+      const el = document.getElementById("build-console");
+      if (el) el.hidden = true;
       showStatus(`Consolidation aborted: filesystem check failed — ${err.message}`, 0, true);
       return;
     }
     if (reconciled.missing.length > 0) {
+      stopConsoleTimer();
+      const el = document.getElementById("build-console");
+      if (el) el.hidden = true;
       showStatus(`Consolidation aborted: ${describeReconcile(reconciled)}`, 0, true);
       renderScenes();
       return;
@@ -2898,19 +2951,36 @@
 
     // Read-only pre-check, BEFORE any mutation.
     showStatus("Checking destination for existing files...", 0);
+    appendConsoleLog({
+      level: "INFO",
+      message: `Checking destination directory '${destinationFolder}' for filename collisions...`
+    });
+    updateConsoleProgress(0.2);
     let collisions = [];
     try {
       collisions = await discoverDestinationCollisions(toMove, destinationFolder);
     } catch (err) {
+      appendConsoleLog({ level: "ERROR", message: `Consolidation aborted: destination check failed — ${err.message}` });
+      stopConsoleTimer();
+      const el = document.getElementById("build-console");
+      if (el) el.hidden = true;
       showStatus(`Consolidation aborted: destination check failed — ${err.message}`, 0, true);
       return;
     }
+    appendConsoleLog({
+      level: "INFO",
+      message: `Destination check complete: ${collisions.length} collision(s) detected.`
+    });
 
     // Cancel aborts the whole consolidation with no changes.
     let choices = [];
     if (collisions.length > 0) {
       choices = await openDestinationCollisionDialog(collisions);
       if (!choices) {
+        appendConsoleLog({ level: "INFO", message: "Consolidation cancelled — no files were moved." });
+        stopConsoleTimer();
+        const el = document.getElementById("build-console");
+        if (el) el.hidden = true;
         showStatus("Consolidation cancelled — no files were moved.", 0);
         return;
       }
@@ -2945,6 +3015,13 @@
     const illegalReplace = replacePlans.find((p) => p.model && p.model.existingIsPrimary);
     if (illegalReplace) {
       const name = (illegalReplace.model.existingPath || "").split(/[\\/]/).pop() || "the existing file";
+      appendConsoleLog({
+        level: "ERROR",
+        message: `Consolidation aborted before any changes: "${name}" is the primary file of its scene and Stash refuses to delete it.`
+      });
+      stopConsoleTimer();
+      const el = document.getElementById("build-console");
+      if (el) el.hidden = true;
       showStatus(
         `Consolidation aborted before any changes: "${name}" is the primary file of its scene and Stash refuses to delete it. ` +
           `Choose Keep both, or resolve that file in Stash first.`,
@@ -2959,6 +3036,10 @@
     let movedCount = 0;
 
     if (totalMoves > 0 && !confirm(`Move/consolidate ${totalMoves} files into ${destinationFolder}?`)) {
+      appendConsoleLog({ level: "INFO", message: "Consolidation cancelled by user — no files were moved." });
+      stopConsoleTimer();
+      const el = document.getElementById("build-console");
+      if (el) el.hidden = true;
       showStatus("Consolidation cancelled — no files were moved.", 0);
       return;
     }
@@ -2978,6 +3059,10 @@
       // Phase 1: collision-free files — ONE batched move.
       if (batchItems.length > 0) {
         showStatus(`Moving files via Stash GraphQL mutation... (${movedCount + batchItems.length}/${totalMoves})`, movedCount / totalMoves);
+        appendConsoleLog({
+          level: "INFO",
+          message: `Executing GraphQL moveFiles for ${batchItems.length} collision-free file(s)...`
+        });
         const batchIds = batchItems.map((i) => i.id);
         await executeGraphQL(MOVE_FILES_MUTATION, { input: { ids: batchIds, destination_folder: destinationFolder } });
         for (const item of batchItems) {
@@ -2985,6 +3070,11 @@
           finalPaths.set(String(item.id), destPathOf(item));
         }
         movedCount += batchItems.length;
+        appendConsoleLog({
+          level: "INFO",
+          message: `Batch move completed successfully (${movedCount}/${totalMoves}).`
+        });
+        updateConsoleProgress(0.3 + 0.6 * (movedCount / totalMoves));
       }
 
       // Phase 2: Replace — confirm, deleteFiles (disk + DB), then the move.
@@ -2994,13 +3084,23 @@
         const existingName = (plan.model.existingPath || "").split(/[\\/]/).pop() || incomingName;
         const replaceMsg = `Replace existing file "${existingName}" (scene "${plan.model.existingSceneTitle || "Unknown scene"}") with the incoming file "${incomingName}" (scene "${plan.model.incomingSceneTitle || "Unknown scene"}")?\n\nThe existing file will be deleted from disk and Stash; the emptied scene remains in Stash (fileless, not deleted).`;
         if (!confirm(replaceMsg)) {
+          appendConsoleLog({ level: "WARN", message: `Replace cancelled by user for '${incomingName}'.` });
           throw new Error("replace cancelled by user");
         }
+        appendConsoleLog({
+          level: "INFO",
+          message: `Replacing existing file '${existingName}' with '${incomingName}'...`
+        });
         await executeGraphQL(DELETE_FILES_MUTATION, { ids: [plan.choice.existingFileId] });
         await executeGraphQL(MOVE_FILES_MUTATION, { input: { ids: [plan.item.id], destination_folder: destinationFolder } });
         consolidatedFileIds.add(plan.item.id);
         finalPaths.set(String(plan.item.id), destPathOf(plan.item));
         movedCount++;
+        appendConsoleLog({
+          level: "INFO",
+          message: `Replaced and moved '${incomingName}' successfully (${movedCount}/${totalMoves}).`
+        });
+        updateConsoleProgress(0.3 + 0.6 * (movedCount / totalMoves));
       }
 
       // Phase 3: Keep-both — names computed AFTER the batched move (an
@@ -3014,10 +3114,15 @@
       if (renamePairs.length > 0) {
         const renameMsg = `Rename and keep both? The following files will be moved under new names:\n\n${renamePairs.map((p) => `${p.plan.item.path} → ${p.newName}`).join("\n")}\n\nThe old copy stays in the pack subfolder; Build ignores it and excludes it from the torrent — it is not deleted.`;
         if (!confirm(renameMsg)) {
+          appendConsoleLog({ level: "WARN", message: "Rename cancelled by user." });
           throw new Error("rename cancelled by user");
         }
         for (const pair of renamePairs) {
           showStatus(`Renaming on move... (${movedCount + 1}/${totalMoves})`, movedCount / totalMoves);
+          appendConsoleLog({
+            level: "INFO",
+            message: `Moving '${pair.plan.item.path}' to new name '${pair.newName}'...`
+          });
           await executeGraphQL(MOVE_FILES_MUTATION, {
             input: {
               ids: [pair.plan.item.id],
@@ -3028,6 +3133,11 @@
           consolidatedFileIds.add(pair.plan.item.id);
           finalPaths.set(String(pair.plan.item.id), pair.newName);
           movedCount++;
+          appendConsoleLog({
+            level: "INFO",
+            message: `Renamed and moved '${pair.newName}' successfully (${movedCount}/${totalMoves}).`
+          });
+          updateConsoleProgress(0.3 + 0.6 * (movedCount / totalMoves));
         }
       }
 
@@ -3046,6 +3156,14 @@
           stillMissing.push(p.split(/[\\/]/).pop() || p);
         }
       }
+      updateConsoleProgress(1.0);
+      appendConsoleLog({
+        level: "INFO",
+        message: `Consolidation complete: ${movedCount} moved, ${inPlaceItems.length} already in place, ${stillMissing.length} still missing.`
+      });
+      stopConsoleTimer();
+      const el = document.getElementById("build-console");
+      if (el) el.hidden = true;
       if (totalMoves === 0 && usedExisting > 0) {
         showStatus(`Using the copy already in the destination for ${usedExisting} scene(s); nothing was moved.`, 1.0);
       } else if (usedExisting > 0) {
@@ -3075,6 +3193,13 @@
         .filter((item) => !finalPaths.has(String(item.id)))
         .map((item) => item.path.split(/[\\/]/).pop() || item.path);
       const missingSuffix = missingNames.length > 0 ? ` Still missing: ${missingNames.join(", ")}.` : "";
+      appendConsoleLog({
+        level: "ERROR",
+        message: `Consolidation stopped: ${err.message} — ${movedCount} of ${totalMoves} file(s) moved, ${totalMoves - movedCount} file(s) not moved.${missingSuffix}`
+      });
+      stopConsoleTimer();
+      const elErr = document.getElementById("build-console");
+      if (elErr) elErr.hidden = true;
       showStatus(`Consolidation stopped: ${err.message} — ${movedCount} of ${totalMoves} file(s) moved, ${totalMoves - movedCount} file(s) not moved. No rollback was attempted.${missingSuffix}`, 0, true);
     }
   }
@@ -3349,6 +3474,8 @@
         { key: "payload", value: { str: JSON.stringify(payload) } }
       ];
 
+      openBuildConsole(taskName, payload.run_id);
+
       const data = await executeGraphQL(query, {
         plugin_id: PLUGIN_ID,
         task_name: taskName,
@@ -3363,17 +3490,522 @@
         showStatus(`${isSingle ? "Single scene" : "Megapack"} build task queued in Stash Task Manager!`, 0.85);
       }
     } catch (err) {
+      stopConsoleTimer();
+      const el = document.getElementById("build-console");
+      if (el) el.hidden = true;
       showStatus(`Build trigger failed: ${err.message}`, 0, true);
     }
   }
 
+  // ---------------------------------------------------------------------------
+  // Milestone B2 & B3: Verbose Build Console Surface & Result View
+  // ---------------------------------------------------------------------------
+  function startConsoleTimer() {
+    stopConsoleTimer();
+    consoleStartTime = Date.now();
+    updateConsoleElapsed();
+    consoleTimerInterval = setInterval(updateConsoleElapsed, 1000);
+  }
+
+  function stopConsoleTimer() {
+    if (consoleTimerInterval) {
+      clearInterval(consoleTimerInterval);
+      consoleTimerInterval = null;
+    }
+  }
+
+  function updateConsoleElapsed() {
+    const el = document.getElementById("build-console-elapsed");
+    if (!el || !consoleStartTime) return;
+    const elapsedSec = Math.floor((Date.now() - consoleStartTime) / 1000);
+    const m = Math.floor(elapsedSec / 60);
+    const s = elapsedSec % 60;
+    el.textContent = `${m}:${s < 10 ? "0" : ""}${s}`;
+  }
+
+  function getPhasesForTask(taskType) {
+    if (taskType === "ProbeFiles") return PROBE_CHECKLIST_PHASES;
+    if (taskType === "Consolidate") return CONSOLIDATE_CHECKLIST_PHASES;
+    return BUILD_CHECKLIST_PHASES;
+  }
+
+  function renderConsolePhases(taskType, progress, hasFailed = false) {
+    const container = document.getElementById("build-console-phases");
+    if (!container) return;
+
+    const phases = getPhasesForTask(taskType);
+    container.innerHTML = "";
+
+    for (let i = 0; i < phases.length; i++) {
+      const phase = phases[i];
+      const prevThreshold = i === 0 ? 0 : phases[i - 1].threshold;
+
+      let statusClass = "phase-pending";
+      let icon = "○";
+
+      if (progress >= phase.threshold) {
+        statusClass = "phase-completed";
+        icon = "✓";
+      } else if (progress >= prevThreshold && !hasFailed) {
+        statusClass = "phase-active";
+        icon = "⏳";
+      } else if (progress >= prevThreshold && hasFailed) {
+        statusClass = "phase-failed";
+        icon = "✕";
+      }
+
+      const item = document.createElement("div");
+      item.className = `console-phase-item ${statusClass}`;
+      item.setAttribute("role", "listitem");
+      item.setAttribute("data-phase-id", phase.id);
+      item.innerHTML = `<span class="phase-icon">${icon}</span> <span>${escapeHtml(phase.label)}</span>`;
+      container.appendChild(item);
+    }
+  }
+
+  function updateConsoleProgress(progress, statusText) {
+    const bar = document.getElementById("build-console-bar");
+    if (bar) {
+      const pct = Math.min(100, Math.max(0, Math.round(progress * 100)));
+      bar.style.width = pct + "%";
+    }
+    renderConsolePhases(activeConsoleTaskType, progress);
+  }
+
+  function appendConsoleLog(entry) {
+    const logEl = document.getElementById("build-console-log");
+    const jumpBtn = document.getElementById("btn-console-scroll-bottom") || document.getElementById("btn-console-jump-latest");
+    if (!logEl) return;
+
+    const timeStr = entry.time ? new Date(entry.time).toLocaleTimeString() : new Date().toLocaleTimeString();
+    const rawLevel = (entry.level || "INFO").toUpperCase();
+    let rawMsg = typeof entry.message === "string" ? entry.message : JSON.stringify(entry.message || "");
+
+    let isSentinel = false;
+    let formattedMsg = rawMsg;
+    let levelClass = "level-info";
+
+    if (rawLevel === "ERROR" || rawLevel === "ERR") {
+      levelClass = "level-error";
+    } else if (rawLevel === "WARN" || rawLevel === "WARNING") {
+      levelClass = "level-warn";
+    }
+
+    if (rawMsg.includes("EMPORNIUM_TASK_BBCODE")) {
+      isSentinel = true;
+      levelClass = "level-sentinel";
+      const chunkLen = rawMsg.length;
+      formattedMsg = `📦 [BBCode stream chunk received (${chunkLen} bytes)]`;
+    } else if (rawMsg.includes("EMPORNIUM_TASK_RESULT")) {
+      isSentinel = true;
+      levelClass = "level-sentinel";
+      formattedMsg = `🎉 [Task result data received]`;
+    } else if (rawMsg.includes("EMPORNIUM_TASK_FAILED")) {
+      isSentinel = true;
+      levelClass = "level-error";
+      formattedMsg = `❌ [Task failure reported: ${rawMsg.split(":").slice(1).join(":").trim() || "Execution failed"}]`;
+    } else if (activeConsoleRunId && formattedMsg.includes(`[emp:${activeConsoleRunId}] `)) {
+      formattedMsg = formattedMsg.replace(`[emp:${activeConsoleRunId}] `, "");
+    }
+
+    const lineEl = document.createElement("div");
+    lineEl.className = "console-log-line";
+    lineEl.innerHTML = `
+      <span class="console-log-time">${escapeHtml(timeStr)}</span>
+      <span class="console-log-level ${levelClass}">${escapeHtml(isSentinel ? "SYS" : rawLevel)}</span>
+      <span class="console-log-msg ${isSentinel ? "msg-sentinel" : ""}">${escapeHtml(formattedMsg)}</span>
+    `;
+
+    logEl.appendChild(lineEl);
+
+    while (logEl.childElementCount > MAX_CONSOLE_LOG_LINES) {
+      logEl.removeChild(logEl.firstChild);
+    }
+
+    if (!consoleUserDetached) {
+      logEl.scrollTop = logEl.scrollHeight;
+    } else if (jumpBtn) {
+      jumpBtn.style.display = "block";
+    }
+  }
+
+  function processWebSocketLogEntry(entry) {
+    if (!entry || typeof entry.message !== "string") return;
+    const msg = entry.message;
+    const isTaggedRun = activeConsoleRunId && msg.includes(`[emp:${activeConsoleRunId}]`);
+    const isSentinelForRun = activeConsoleRunId && msg.includes("EMPORNIUM_TASK_") && msg.includes(activeConsoleRunId);
+
+    if (isTaggedRun || isSentinelForRun) {
+      appendConsoleLog(entry);
+    }
+  }
+
+  function setupConsoleScrollListeners() {
+    const logEl = document.getElementById("build-console-log");
+    const jumpBtn = document.getElementById("btn-console-scroll-bottom") || document.getElementById("btn-console-jump-latest");
+    if (!logEl) return;
+
+    logEl.addEventListener("scroll", () => {
+      const distanceToBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight;
+      consoleUserDetached = distanceToBottom > 30;
+      if (!consoleUserDetached && jumpBtn) {
+        jumpBtn.style.display = "none";
+      }
+    });
+
+    if (jumpBtn) {
+      jumpBtn.addEventListener("click", () => {
+        consoleUserDetached = false;
+        logEl.scrollTop = logEl.scrollHeight;
+        jumpBtn.style.display = "none";
+      });
+    }
+  }
+
+  function setupConsoleMinimizeListeners() {
+    const minimizeBtn = document.getElementById("btn-build-console-minimize");
+    const overlay = document.getElementById("build-console");
+    const busyShowBtn = document.getElementById("btn-busy-show-console");
+    const copyBbcodeBtn = document.getElementById("btn-copy-bbcode");
+    const headerSlot = document.getElementById("bbcode-header-copy-slot");
+    const resultSlot = document.getElementById("result-bbcode-copy-slot");
+
+    if (minimizeBtn && overlay) {
+      minimizeBtn.addEventListener("click", () => {
+        overlay.hidden = true;
+        if (busyShowBtn) busyShowBtn.style.display = "inline-flex";
+        if (copyBbcodeBtn && headerSlot && !headerSlot.contains(copyBbcodeBtn)) {
+          headerSlot.appendChild(copyBbcodeBtn);
+          copyBbcodeBtn.innerText = "📋 Copy";
+          copyBbcodeBtn.style.padding = "2px 8px";
+          copyBbcodeBtn.style.fontSize = "0.75rem";
+        }
+      });
+    }
+
+    if (busyShowBtn && overlay) {
+      busyShowBtn.addEventListener("click", () => {
+        overlay.hidden = false;
+        busyShowBtn.style.display = "none";
+        const resultEl = document.getElementById("build-console-result");
+        if (resultEl && !resultEl.hidden && copyBbcodeBtn && resultSlot && !resultSlot.contains(copyBbcodeBtn)) {
+          resultSlot.appendChild(copyBbcodeBtn);
+          copyBbcodeBtn.innerText = "📋 Copy BBCode";
+          copyBbcodeBtn.style.padding = "";
+          copyBbcodeBtn.style.fontSize = "";
+        }
+      });
+    }
+  }
+
+  function openBuildConsole(taskType, runId) {
+    activeConsoleTaskType = taskType;
+    activeConsoleRunId = runId;
+    consoleUserDetached = false;
+
+    const overlay = document.getElementById("build-console");
+    const titleEl = document.getElementById("build-console-title");
+    const barEl = document.getElementById("build-console-bar");
+    const logEl = document.getElementById("build-console-log");
+    const noticeEl = document.getElementById("build-console-ws-notice");
+    const jumpBtn = document.getElementById("btn-console-scroll-bottom") || document.getElementById("btn-console-jump-latest");
+    const resultEl = document.getElementById("build-console-result");
+    const busyShowBtn = document.getElementById("btn-busy-show-console");
+
+    if (overlay) overlay.hidden = false;
+    if (resultEl) resultEl.hidden = true;
+    if (noticeEl) noticeEl.style.display = "none";
+    if (jumpBtn) jumpBtn.style.display = "none";
+    if (busyShowBtn) busyShowBtn.style.display = "none";
+    if (logEl) {
+      logEl.innerHTML = "";
+      logEl.classList.remove("collapsed");
+    }
+    if (barEl) barEl.style.width = "0%";
+
+    let displayTitle = "Task in progress…";
+    if (taskType === "BuildMegapack") displayTitle = "Building megapack…";
+    else if (taskType === "BuildSingleScene") displayTitle = "Building single scene…";
+    else if (taskType === "ProbeFiles") displayTitle = "Probing filesystem…";
+    else if (taskType === "Consolidate") displayTitle = "Consolidating files…";
+    if (titleEl) titleEl.textContent = displayTitle;
+
+    renderConsolePhases(taskType, 0);
+    startConsoleTimer();
+  }
+
+  function renderBuildResult(payload, options = {}) {
+    const resultContainer = document.getElementById("build-console-result");
+    if (!resultContainer) return;
+
+    const isSingle = options.isSingle ?? (currentMode === "single" || payload?.task === "BuildSingleScene");
+    const packTitle = payload?.pack_title || document.getElementById("pack-title")?.value || "";
+    const torrentPath = typeof payload?.torrent_path === "string" && payload.torrent_path.trim() ? payload.torrent_path.trim() : null;
+    const manifestPath = typeof payload?.manifest_path === "string" && payload.manifest_path.trim() ? payload.manifest_path.trim() : null;
+    const submissionPath = typeof payload?.submission_path === "string" && payload.submission_path.trim() ? payload.submission_path.trim() : null;
+    const bbcodePath = typeof payload?.bbcode_path === "string" && payload.bbcode_path.trim() ? payload.bbcode_path.trim() : null;
+    const coverUrl = currentCoverUrl || payload?.cover_url || payload?.cover_image_url || null;
+
+    let tagsList = payload?.tracker_tags;
+    let unmappedList = payload?.unmapped_tags;
+    if (!tagsList || !Array.isArray(tagsList)) {
+      const scenes = activeScenes();
+      const sources = [];
+      for (const s of scenes) {
+        for (const t of s.tags || []) {
+          const name = typeof t === "string" ? t : t?.name;
+          if (name) sources.push({ value: name, kind: "scene_tag" });
+        }
+        for (const p of s.performers || []) {
+          const name = typeof p === "string" ? p : p?.name;
+          if (name) sources.push({ value: name, kind: "performer" });
+        }
+        if (s.studio?.name) sources.push({ value: s.studio.name, kind: "studio" });
+      }
+      if (payload?.tags && Array.isArray(payload.tags)) {
+        for (const t of payload.tags) {
+          if (typeof t === "string" && t.trim()) sources.push({ value: t.trim(), kind: "scene_tag" });
+        }
+      }
+      if (payload?.performers && Array.isArray(payload.performers)) {
+        for (const p of payload.performers) {
+          if (typeof p === "string" && p.trim()) sources.push({ value: p.trim(), kind: "performer" });
+        }
+      }
+      const resolved = resolveTags(sources, cachedVocabulary);
+      tagsList = resolved.tags;
+      if (!unmappedList) unmappedList = resolved.unmapped;
+    }
+    if (!Array.isArray(unmappedList)) unmappedList = [];
+    const tagsString = tagsList && tagsList.length > 0 ? tagsList.join(" ") : (isSingle ? "scene" : "megapack");
+
+    const active = activeScenes();
+    const imageUrls = Array.isArray(payload?.uploaded_urls) ? payload.uploaded_urls : [];
+    const imageCount = imageUrls.length || (active.length > 0 ? active.length : 1);
+    const uploadEnabled = Boolean(payload?.upload_previews);
+    let isPreviewOnly = false;
+    if (payload?.preview_only !== undefined) {
+      isPreviewOnly = Boolean(payload.preview_only);
+    } else {
+      isPreviewOnly = !uploadEnabled || (payload?.bbcode && (payload.bbcode.includes("file:///") || payload.bbcode.includes("PREVIEW ONLY")));
+    }
+    const imageSummary = isPreviewOnly
+      ? `${imageCount} image(s) (${imageCount} local file:/// preview(s))`
+      : `${imageCount} image(s) (all remote on HamsterImg)`;
+
+    const isUnverified = !payload?.preflight || !Array.isArray(payload.preflight.checks);
+    const checks = isUnverified ? [] : payload.preflight.checks;
+    const isReady = isUnverified
+      ? false
+      : (payload.ready !== undefined
+        ? Boolean(payload.ready)
+        : (payload.preflight?.ready !== undefined ? Boolean(payload.preflight.ready) : false));
+
+    const headerHtml = isUnverified
+      ? `<div id="handoff-status-header" style="font-weight: 600; color: var(--danger); font-size: 1.05rem;">⚠️ Build Result Unverified — no result received from the backend</div>`
+      : `<div id="handoff-status-header" style="font-weight: 600; color: ${isReady ? "var(--success)" : "var(--danger)"}; font-size: 1.05rem;">${
+          isReady ? "🎉 Build Complete! — Ready for Manual Upload" : "⚠️ Build Complete! — " + (isSingle ? "Release" : "Pack") + " Not Ready for Upload"
+        }</div>`;
+
+    const unverifiedAlertHtml = isUnverified
+      ? `<div id="unverified-build-alert" style="padding: 6px 10px; background: rgba(239, 68, 68, 0.1); border: 1px solid var(--danger); border-radius: 4px; color: var(--danger); font-size: 0.8rem;">
+          The build task finished in Stash, but no result payload was received from the backend sidecar or logs. The build may have failed. Please check the Stash logs.
+        </div>`
+      : "";
+
+    const previewGateAlertHtml = (!isUnverified && isPreviewOnly)
+      ? `<div id="preview-gate-alert" class="preview-gate-alert" style="display: block;">
+          🚫 <strong>${isSingle ? "Release" : "Pack"} Not Ready for Upload:</strong> BBCode contains local <code>file:///</code> URLs. Remote hosting is required so images render for other users and do not disclose local paths.<br>
+          <em>Remedy: Enable preview upload, or re-run once the image host is reachable.</em>
+        </div>`
+      : "";
+
+    const torrentDisplayHtml = torrentPath
+      ? `<code id="handoff-torrent">${escapeHtml(torrentPath)}</code>`
+      : `<span id="handoff-torrent" style="color: var(--text-muted); font-style: italic;">— not reported —</span>`;
+
+    const manifestDisplayHtml = manifestPath
+      ? `<code id="handoff-manifest">${escapeHtml(manifestPath)}</code>`
+      : `<span id="handoff-manifest" style="color: var(--text-muted); font-style: italic;">— not reported —</span>`;
+
+    const submissionDisplayHtml = submissionPath
+      ? `<code id="handoff-submission">${escapeHtml(submissionPath)}</code>`
+      : `<span id="handoff-submission" style="color: var(--text-muted); font-style: italic;">— not reported —</span>`;
+
+    let checklistHtml = "";
+    for (const c of checks) {
+      let icon = "✅";
+      let color = "#34d399";
+      if (c.is_info) {
+        icon = "ℹ️";
+        color = "var(--text-muted)";
+      } else if (c.is_warning) {
+        icon = "⚠️";
+        color = "#fbbf24";
+      } else if (!c.passed) {
+        icon = "❌";
+        color = "#f87171";
+      }
+      checklistHtml += `<li id="check-${c.id}" style="color: ${color};"><span>${icon}</span> <strong>${escapeHtml(c.label)}:</strong> ${escapeHtml(c.detail)}</li>`;
+    }
+
+    const rawSiteUrl = (payload?.site_url || payload?.empornium_site_url || "").trim();
+    let uploadLinkHtml = "";
+    if (rawSiteUrl) {
+      let uploadUrl = rawSiteUrl;
+      if (!uploadUrl.toLowerCase().endsWith(".php")) {
+        uploadUrl = uploadUrl.replace(/\/+$/, "") + "/upload.php";
+      }
+      uploadLinkHtml = `
+        <div id="upload-link-container" style="margin-top: 8px; display: flex; justify-content: flex-end;">
+          <a id="btn-open-upload" href="${escapeHtml(uploadUrl)}" target="_blank" rel="noopener noreferrer" class="btn btn-primary" style="text-decoration: none; display: inline-flex; align-items: center; gap: 4px; padding: 4px 12px; font-size: 0.8rem; ${
+            !isReady ? "pointer-events: none; opacity: 0.45;" : ""
+          }" title="${
+            isReady
+              ? "Open Empornium upload form and copy torrent path to clipboard"
+              : (isUnverified ? "Upload disabled: Build result is unverified" : "Upload disabled: Pre-flight checks did not pass")
+          }">
+            🌐 Open Empornium Upload Form
+          </a>
+        </div>`;
+    }
+
+    let imageLinksHtml = "";
+    if (imageUrls.length > 0) {
+      const items = imageUrls
+        .map((url) => {
+          const safe = escapeHtml(String(url));
+          if (/^https?:/i.test(String(url))) {
+            return `<li><a href="${safe}" target="_blank" rel="noopener noreferrer" style="color: #93c5fd;">${safe}</a></li>`;
+          }
+          return `<li style="color: var(--text-muted);"><code>${safe}</code></li>`;
+        })
+        .join("");
+      const label = imageUrls.length === 1 ? "1 image URL" : `${imageUrls.length} image URLs`;
+      imageLinksHtml = `
+        <details class="handoff-images" style="margin-top: 4px; font-size: 0.8rem;">
+          <summary style="cursor: pointer; color: var(--accent);">${label}</summary>
+          <ul id="handoff-image-urls" class="handoff-image-list" style="margin: 4px 0 0 16px; padding: 0; max-height: 120px; overflow-y: auto;">${items}</ul>
+        </details>
+      `;
+    }
+
+    const finalBBCode = payload?.chunked_bbcode || (typeof payload?.bbcode === "string" ? payload.bbcode : "") || document.getElementById("bbcode-preview")?.value || "";
+
+    resultContainer.innerHTML = `
+      ${headerHtml}
+      ${unverifiedAlertHtml}
+      ${previewGateAlertHtml}
+
+      <div id="category-reminder" class="category-reminder">📌 Category — you select this on the upload form.</div>
+
+      <div class="result-row">
+        <strong>${isSingle ? "Release Title" : "Pack Title"}:</strong> <span id="handoff-title">${escapeHtml(packTitle)}</span>
+      </div>
+      <div class="result-row">
+        <strong>Tracker Tags:</strong> <span id="handoff-tags" style="font-family: monospace; font-size: 0.85rem; color: #93c5fd;">${escapeHtml(tagsString)}</span>
+      </div>
+      <div class="result-row">
+        <strong>Torrent File:</strong> ${torrentDisplayHtml}
+      </div>
+      <div class="result-row" style="flex-direction: column; align-items: flex-start; gap: 4px;">
+        <div><strong>Preview Images:</strong> <span id="handoff-images">${escapeHtml(imageSummary)}</span></div>
+        ${imageLinksHtml}
+      </div>
+      <div class="result-row">
+        <strong>Manifest:</strong> ${manifestDisplayHtml}
+      </div>
+      <div class="result-row">
+        <strong>Submission JSON:</strong> ${submissionDisplayHtml}
+      </div>
+
+      <div style="margin-top: 6px;">
+        <label class="form-label" style="font-weight: 600;">Final BBCode Description</label>
+        <textarea id="result-bbcode" class="bbcode-box result-bbcode-textarea" wrap="soft" readonly>${escapeHtml(finalBBCode)}</textarea>
+      </div>
+
+      <div class="result-copy-row">
+        <button type="button" id="btn-copy-title" class="btn btn-secondary" ${!packTitle ? 'disabled title="Copy disabled: Title empty"' : ""}>📋 Copy Title</button>
+        <button type="button" id="btn-copy-tags" class="btn btn-secondary" ${!tagsString ? 'disabled title="Copy disabled: Tags empty"' : ""}>📋 Copy Tags</button>
+        <button type="button" id="btn-copy-torrent-path" class="btn btn-secondary" ${!torrentPath ? 'disabled title="Copy disabled: Path not reported"' : ""}>📋 Copy Path</button>
+        <span id="result-bbcode-copy-slot"></span>
+        <button type="button" id="btn-copy-cover-url" class="btn btn-secondary" ${!coverUrl ? 'disabled title="Copy disabled: No cover URL available"' : ""}>📋 Copy Cover URL</button>
+        <button type="button" id="btn-copy-all" class="btn btn-primary" ${!finalBBCode ? 'disabled title="Copy disabled: BBCode empty"' : ""}>📋 Copy All</button>
+        <button type="button" id="btn-close-result" class="btn btn-secondary" style="margin-left: auto;">← Back to Builder</button>
+      </div>
+
+      <div id="preflight-section" style="margin-top: 8px; border-top: 1px solid var(--card-border); padding-top: 6px;">
+        <div style="font-weight: 600; font-size: 0.85rem; margin-bottom: 4px;">📋 Pre-Flight Checklist:</div>
+        <ul id="preflight-checklist" style="list-style: none; padding-left: 0; margin: 0; font-size: 0.8rem; display: flex; flex-direction: column; gap: 4px;">
+          ${checklistHtml}
+        </ul>
+      </div>
+
+      ${uploadLinkHtml}
+    `;
+
+    const copyBbcodeBtn = document.getElementById("btn-copy-bbcode");
+    const resultSlot = document.getElementById("result-bbcode-copy-slot");
+    if (copyBbcodeBtn && resultSlot) {
+      resultSlot.appendChild(copyBbcodeBtn);
+      copyBbcodeBtn.innerText = "📋 Copy BBCode";
+      copyBbcodeBtn.style.padding = "";
+      copyBbcodeBtn.style.fontSize = "";
+      copyBbcodeBtn.disabled = !finalBBCode;
+      copyBbcodeBtn.title = !finalBBCode ? "Copy disabled: BBCode empty" : "";
+    }
+
+    setupCopyButton("btn-copy-title", () => document.getElementById("handoff-title")?.innerText || packTitle);
+    setupCopyButton("btn-copy-tags", () => document.getElementById("handoff-tags")?.innerText || tagsString);
+    setupCopyButton("btn-copy-torrent-path", () => torrentPath || "");
+    setupCopyButton("btn-copy-cover-url", () => coverUrl || "");
+    setupCopyButton("btn-copy-all", () => `${packTitle}\n\n${tagsString}\n\n${finalBBCode}`);
+
+    const closeBtn = document.getElementById("btn-close-result");
+    if (closeBtn) {
+      closeBtn.onclick = () => {
+        const consoleEl = document.getElementById("build-console");
+        if (consoleEl) consoleEl.hidden = true;
+        const headerSlot = document.getElementById("bbcode-header-copy-slot");
+        if (copyBbcodeBtn && headerSlot && !headerSlot.contains(copyBbcodeBtn)) {
+          headerSlot.appendChild(copyBbcodeBtn);
+          copyBbcodeBtn.innerText = "📋 Copy";
+          copyBbcodeBtn.style.padding = "2px 8px";
+          copyBbcodeBtn.style.fontSize = "0.75rem";
+        }
+      };
+    }
+
+    const uploadLink = document.getElementById("btn-open-upload");
+    if (uploadLink) {
+      uploadLink.addEventListener("click", () => {
+        if (!isReady || !torrentPath) return;
+        if (torrentPath && navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(torrentPath).catch(() => {});
+        }
+      });
+    }
+  }
+
+  window.openBuildConsole = openBuildConsole;
+  window.renderBuildResult = renderBuildResult;
+  window.appendConsoleLog = appendConsoleLog;
+  window.updateConsoleProgress = updateConsoleProgress;
+  window.renderConsolePhases = renderConsolePhases;
+
   // 8. WebSocket Subscription and Polling Job Progress Tracker
   function trackJobProgress(jobId, taskType, payload = {}) {
+    const jobIdStr = String(jobId);
+    handledJobIds.delete(jobIdStr);
     activeJobId = jobId;
     activeRunId = payload.run_id || null;
     bufferedLogs = [];
     wsLogStreamActive = false;
     showStatus(`Task ${taskType} queued (Job ID: ${jobId})...`, 0.05);
+    const consoleEl = document.getElementById("build-console");
+    if (!consoleEl || consoleEl.hidden) {
+      openBuildConsole(taskType, payload.run_id || null);
+    }
 
     if (wsWatchdog) {
       clearTimeout(wsWatchdog);
@@ -3398,6 +4030,12 @@
           console.warn(
             "WebSocket watchdog timed out after 2500ms with no subscription messages; falling back to polling."
           );
+          const noticeEl = document.getElementById("build-console-ws-notice");
+          if (noticeEl) noticeEl.style.display = "flex";
+          appendConsoleLog({
+            level: "WARN",
+            message: "Live log unavailable — falling back to progress polling. Check the Stash log for detail."
+          });
           if (activeWs === ws) {
             try {
               ws.close();
@@ -3437,16 +4075,15 @@
           const msg = JSON.parse(event.data);
           if (msg.type === "next") {
             if (msg.payload?.data?.loggingSubscribe) {
-              // Stash's schema is `loggingSubscribe: [LogEntry!]!` -- each
-              // message carries a batch, not a single entry. Pushing the array
-              // itself made every buffered element an Array, so the sentinel
-              // scans (which read .level/.message) matched nothing and a
-              // failed build was reported as a success.
               const entries = msg.payload.data.loggingSubscribe;
               if (Array.isArray(entries)) {
                 bufferedLogs.push(...entries);
+                for (const entry of entries) {
+                  processWebSocketLogEntry(entry);
+                }
               } else {
                 bufferedLogs.push(entries);
+                processWebSocketLogEntry(entries);
               }
             }
             if (msg.payload?.data?.jobsSubscribe?.job) {
@@ -3476,6 +4113,12 @@
         }
         wsLogStreamActive = false;
         if (!handledJobIds.has(String(jobId))) {
+          const noticeEl = document.getElementById("build-console-ws-notice");
+          if (noticeEl) noticeEl.style.display = "flex";
+          appendConsoleLog({
+            level: "WARN",
+            message: "Live log unavailable — falling back to progress polling. Check the Stash log for detail."
+          });
           startJobPolling(jobId, taskType, payload);
         }
       };
@@ -3490,6 +4133,12 @@
         }
         wsLogStreamActive = false;
         if (!handledJobIds.has(String(jobId))) {
+          const noticeEl = document.getElementById("build-console-ws-notice");
+          if (noticeEl) noticeEl.style.display = "flex";
+          appendConsoleLog({
+            level: "WARN",
+            message: "Live log unavailable — falling back to progress polling. Check the Stash log for detail."
+          });
           startJobPolling(jobId, taskType, payload);
         }
       };
@@ -3500,6 +4149,12 @@
       }
       wsLogStreamActive = false;
       if (!handledJobIds.has(String(jobId))) {
+        const noticeEl = document.getElementById("build-console-ws-notice");
+        if (noticeEl) noticeEl.style.display = "flex";
+        appendConsoleLog({
+          level: "WARN",
+          message: "Live log unavailable — falling back to progress polling. Check the Stash log for detail."
+        });
         startJobPolling(jobId, taskType, payload);
       }
     }
@@ -3560,6 +4215,7 @@
   async function handleJobUpdate(job, taskType, payload) {
     const progress = typeof job.progress === "number" ? job.progress : 0;
     showStatus(`Running ${taskType}: ${Math.round(progress * 100)}%`, progress);
+    updateConsoleProgress(progress, `Running ${taskType}`);
 
     if (job.status === "FINISHED") {
       const jobIdStr = String(job.id);
@@ -3569,6 +4225,7 @@
       handledJobIds.add(jobIdStr);
 
       try {
+        const hadWsLogStream = wsLogStreamActive;
         if (wsWatchdog) {
           clearTimeout(wsWatchdog);
           wsWatchdog = null;
@@ -3643,6 +4300,9 @@
                   statusEl.style.color = "#ef4444";
                 }
               }
+              const el = document.getElementById("build-console");
+              if (el) el.hidden = true;
+              stopConsoleTimer();
               showStatus(failureError, 0, true);
               return;
             } else {
@@ -3658,7 +4318,9 @@
         let usedFallback = false;
         let fallbackFailed = false;
 
-        if (!wsLogStreamActive || candidateLogs.length === 0) {
+        const hasResultSentinelAlready = runId ? Boolean(findResultSentinel(candidateLogs, runId)) : false;
+
+        if (!hasResultSentinelAlready && (!hadWsLogStream || candidateLogs.length === 0)) {
           try {
             const resp = await executeGraphQL(`query Logs { logs { time level message } }`);
             if (resp && Array.isArray(resp.logs)) {
@@ -3686,11 +4348,14 @@
               statusEl.style.color = "#ef4444";
             }
           }
+          const el = document.getElementById("build-console");
+          if (el) el.hidden = true;
+          stopConsoleTimer();
           showStatus(failureError, 0, true);
           return;
         }
 
-        if (!wsLogStreamActive && fallbackFailed) {
+        if (!hasResultSentinelAlready && !hadWsLogStream && fallbackFailed) {
           if (taskType === "UploadCoverImage") {
             const statusEl = document.getElementById("cover-status");
             if (statusEl) {
@@ -3699,6 +4364,9 @@
               statusEl.style.color = "#ef4444";
             }
           }
+          const el = document.getElementById("build-console");
+          if (el) el.hidden = true;
+          stopConsoleTimer();
           showStatus("⚠️ Task marked finished, but log verification failed (WebSocket and logs query unavailable). Check Stash logs.", 1.0, true);
           return;
         }
@@ -3747,6 +4415,11 @@
           statusEl.style.color = "#ef4444";
         }
       }
+      renderConsolePhases(taskType, progress, true);
+      appendConsoleLog({ level: "ERROR", message: `Task ${taskType} ${job.status}: ${job.error || "Unknown error"}` });
+      stopConsoleTimer();
+      const el = document.getElementById("build-console");
+      if (el) el.hidden = true;
       showStatus(`Task ${taskType} ${job.status}: ${job.error || "Unknown error"}`, progress, true);
       // Change B: Terminal failure / cancellation releases busy lockout.
       setUiBusy(false);
@@ -3778,6 +4451,9 @@
     showStatus(`🎉 ${taskType} completed successfully!`, 1.0);
 
     if (taskType === "ProbeFiles") {
+      stopConsoleTimer();
+      const el = document.getElementById("build-console");
+      if (el) el.hidden = true;
       const files = Array.isArray(payload?.files) ? payload.files : [];
       probeResultsMap = {};
       for (const f of files) {
@@ -4079,120 +4755,55 @@
         `;
       }
 
+      const buildConsole = document.getElementById("build-console");
+
       const summaryBox = document.getElementById("artifact-summary");
-      const detailsBox = document.getElementById("artifact-details");
+      if (summaryBox) {
+        summaryBox.innerHTML = `
+          <div class="artifact-pointer">
+            <span style="font-weight: 600; color: var(--success);">🎉 Build Complete!</span>
+            <button type="button" id="btn-open-result" class="btn btn-primary" style="padding: 3px 12px; font-size: 0.8rem;">📄 Open result</button>
+          </div>
+          <div id="artifact-details" style="display: none;">${escapeHtml(torrentPath || "")} ${escapeHtml(manifestPath || "")}</div>
+        `;
+        summaryBox.style.display = "flex";
 
-      const headerHtml = isUnverified
-        ? `<div id="handoff-status-header" style="font-weight: 600; color: var(--danger); margin-bottom: 4px;">⚠️ Build Result Unverified — no result received from the backend</div>`
-        : `<div id="handoff-status-header" style="font-weight: 600; color: ${
-            isReady ? "var(--success)" : "var(--danger)"
-          }; margin-bottom: 4px;">${
-            isReady
-              ? "🎉 Build Complete! — Ready for Manual Upload"
-              : "⚠️ Build Complete! — " + (isSingle ? "Release" : "Pack") + " Not Ready for Upload"
-          }</div>`;
-
-      const unverifiedAlertHtml = isUnverified
-        ? `<div id="unverified-build-alert" style="padding: 6px 10px; background: rgba(239, 68, 68, 0.1); border: 1px solid var(--danger); border-radius: 4px; color: var(--danger); font-size: 0.8rem; margin-bottom: 8px;">
-            The build task finished in Stash, but no result payload was received from the backend sidecar or logs. The build may have failed. Please check the Stash logs.
-          </div>`
-        : "";
-
-      const torrentDisplayHtml = torrentPath
-        ? `<code id="handoff-torrent">${escapeHtml(torrentPath)}</code>`
-        : `<span id="handoff-torrent" style="color: var(--text-muted); font-style: italic;">— not reported —</span>`;
-
-      const manifestDisplayHtml = manifestPath
-        ? `<code id="handoff-manifest">${escapeHtml(manifestPath)}</code>`
-        : `<span id="handoff-manifest" style="color: var(--text-muted); font-style: italic;">— not reported —</span>`;
-
-      const submissionDisplayHtml = submissionPath
-        ? `<code id="handoff-submission">${escapeHtml(submissionPath)}</code>`
-        : `<span id="handoff-submission" style="color: var(--text-muted); font-style: italic;">— not reported —</span>`;
-
-      detailsBox.innerHTML = `
-        ${headerHtml}
-        ${unverifiedAlertHtml}
-
-        <div id="preview-gate-alert" class="preview-gate-alert" style="display: ${
-          !isUnverified && isPreviewOnly ? "block" : "none"
-        };">
-          🚫 <strong>${isSingle ? "Release" : "Pack"} Not Ready for Upload:</strong> BBCode contains local <code>file:///</code> URLs. Remote hosting is required so images render for other users and do not disclose local paths.<br>
-          <em>Remedy: Enable preview upload, or re-run once the image host is reachable.</em>
-        </div>
-
-        <div id="category-reminder" class="category-reminder">📌 Category — you select this on the upload form.</div>
-
-        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 6px;">
-          <div><strong>${isSingle ? "Release Title" : "Pack Title"}:</strong> <span id="handoff-title">${escapeHtml(packTitle)}</span></div>
-          <button id="btn-copy-title" class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;" ${
-            !isReady ? 'disabled title="Copy disabled: ' + (isUnverified ? "Build result is unverified" : (isSingle ? "Release" : "Pack") + " is not ready for upload") + '"' : ""
-          }>📋 Copy Title</button>
-        </div>
-
-        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px;">
-          <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px;"><strong>Tracker Tags:</strong> <span id="handoff-tags" style="font-family: monospace; font-size: 0.8rem; color: #93c5fd;">${escapeHtml(
-            tagsString
-          )}</span></div>
-          <button id="btn-copy-tags" class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;" ${
-            !isReady ? 'disabled title="Copy disabled: ' + (isUnverified ? "Build result is unverified" : (isSingle ? "Release" : "Pack") + " is not ready for upload") + '"' : ""
-          }>📋 Copy Tags</button>
-        </div>
-
-        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 4px;">
-          <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 320px;"><strong>Torrent File:</strong> ${torrentDisplayHtml}</div>
-          <button id="btn-copy-torrent-path" class="btn btn-secondary" style="padding: 2px 8px; font-size: 0.75rem;" ${
-            isUnverified || !torrentPath ? 'disabled title="Copy disabled: ' + (!torrentPath ? "Path not reported" : "Build result is unverified") + '"' : ""
-          }>📋 Copy Path</button>
-        </div>
-
-        <div style="margin-top: 4px;"><strong>Preview Images:</strong> <span id="handoff-images">${escapeHtml(
-          imageSummary
-        )}</span></div>
-        ${imageLinksHtml}
-        <div style="margin-top: 2px;"><strong>Manifest:</strong> ${manifestDisplayHtml}</div>
-        <div style="margin-top: 2px;"><strong>Submission JSON:</strong> ${submissionDisplayHtml}</div>
-
-        <!-- Pre-Flight Checklist Section -->
-        <div id="preflight-section" style="margin-top: 8px; border-top: 1px solid var(--card-border); padding-top: 6px;">
-          <div style="font-weight: 600; font-size: 0.8rem; margin-bottom: 4px; color: var(--text-main);">📋 Pre-Flight Checklist:</div>
-          <ul id="preflight-checklist" style="list-style: none; padding-left: 0; margin: 0; font-size: 0.75rem; display: flex; flex-direction: column; gap: 3px;">
-            ${checklistHtml}
-          </ul>
-        </div>
-
-        <!-- Empornium Upload Link (only present when configured) -->
-        ${uploadLinkHtml}
-      `;
-
-      summaryBox.style.display = "flex";
-
-      const copyBbcodeBtn = document.getElementById("btn-copy-bbcode");
-      if (copyBbcodeBtn) {
-        copyBbcodeBtn.disabled = !isReady;
-        if (!isReady) {
-          copyBbcodeBtn.title = isUnverified
-            ? "Copy disabled: Build result is unverified"
-            : `Copy disabled: ${isSingle ? "Release" : "Pack"} is not ready for upload`;
-        } else {
-          copyBbcodeBtn.title = "";
+        const openResultBtn = document.getElementById("btn-open-result");
+        if (openResultBtn) {
+          openResultBtn.onclick = () => {
+            const buildConsole = document.getElementById("build-console");
+            const consoleResult = document.getElementById("build-console-result");
+            if (buildConsole) buildConsole.hidden = false;
+            if (consoleResult) {
+              consoleResult.hidden = false;
+              consoleResult.style.display = "flex";
+              const copyBbcodeBtn = document.getElementById("btn-copy-bbcode");
+              const resultSlot = document.getElementById("result-bbcode-copy-slot");
+              if (copyBbcodeBtn && resultSlot && !resultSlot.contains(copyBbcodeBtn)) {
+                resultSlot.appendChild(copyBbcodeBtn);
+                copyBbcodeBtn.innerText = "📋 Copy BBCode";
+                copyBbcodeBtn.style.padding = "";
+                copyBbcodeBtn.style.fontSize = "";
+              }
+            }
+          };
         }
       }
 
-      setupCopyButton("btn-copy-title", () => document.getElementById("handoff-title")?.innerText || "");
-      setupCopyButton("btn-copy-tags", () => document.getElementById("handoff-tags")?.innerText || "");
-      setupCopyButton("btn-copy-torrent-path", () => (torrentPath ? document.getElementById("handoff-torrent")?.innerText || "" : ""));
-
-      const uploadLink = document.getElementById("btn-open-upload");
-      if (uploadLink) {
-        uploadLink.addEventListener("click", () => {
-          if (!isReady || !torrentPath) return;
-          const torPath = document.getElementById("handoff-torrent")?.innerText || "";
-          if (torPath && navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(torPath).catch(() => {});
-          }
-        });
+      // Keep console open and reveal result view
+      const consoleLog = document.getElementById("build-console-log");
+      const consoleResult = document.getElementById("build-console-result");
+      if (buildConsole) {
+        buildConsole.hidden = false;
+        if (consoleLog) consoleLog.classList.add("collapsed");
+        if (consoleResult) {
+          consoleResult.hidden = false;
+          consoleResult.style.display = "flex";
+          renderBuildResult(payload, { isSingle });
+        }
       }
+      stopConsoleTimer();
+      updateConsoleProgress(1.0);
     }
   }
 
@@ -4522,9 +5133,18 @@
       const banner = document.getElementById("busy-banner");
       const bannerText = document.getElementById("busy-banner-text");
       const unlockBtn = document.getElementById("btn-busy-unlock");
+      const busyShowBtn = document.getElementById("btn-busy-show-console");
       if (banner) banner.style.display = "none";
       if (bannerText) bannerText.textContent = "";
       if (unlockBtn) unlockBtn.style.display = "none";
+      if (busyShowBtn) busyShowBtn.style.display = "none";
+
+      const consoleResult = document.getElementById("build-console-result");
+      const consoleOverlay = document.getElementById("build-console");
+      if (consoleOverlay && (!consoleResult || consoleResult.hidden)) {
+        consoleOverlay.hidden = true;
+        stopConsoleTimer();
+      }
 
       // Clear indeterminate class from progress bar
       const bar = document.getElementById("progress-bar");
@@ -5522,7 +6142,7 @@
       copyBbcodeBtn.dataset.bound = "true";
       copyBbcodeBtn.addEventListener("click", () => {
         if (copyBbcodeBtn.disabled) return;
-        const text = document.getElementById("bbcode-preview")?.value || "";
+        const text = document.getElementById("result-bbcode")?.value || document.getElementById("bbcode-preview")?.value || "";
         if (navigator.clipboard && navigator.clipboard.writeText) {
           navigator.clipboard
             .writeText(text)
@@ -5656,6 +6276,9 @@
       btnBusyUnlock.dataset.bound = "true";
       btnBusyUnlock.addEventListener("click", () => {
         setUiBusy(false);
+        const overlay = document.getElementById("build-console");
+        if (overlay) overlay.hidden = true;
+        stopConsoleTimer();
         showStatus("Controls unlocked manually. The Stash job may still be running — check the Task Manager before starting another build.", 0, false);
       });
     }
@@ -5717,6 +6340,8 @@
     renderStageState();
     applyLocationsLock();
     initBBCodeToolbar();
+    setupConsoleScrollListeners();
+    setupConsoleMinimizeListeners();
   }
 
   if (document.readyState === "loading") {

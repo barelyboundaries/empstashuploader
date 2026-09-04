@@ -44,7 +44,8 @@ export default defineConfig({
     'test_progress_placement.spec.mjs',
     'test_build_lockout.spec.mjs',
     'test_tag_vocabulary_parity.spec.mjs',
-    'test_locations_lock.spec.mjs'
+    'test_locations_lock.spec.mjs',
+    'test_build_console.spec.mjs'
   ],
   outputDir: path.join(evidenceDir, 'test-results'),
   fullyParallel: false,

@@ -189,15 +189,15 @@ test.describe("Stage 6 — Handoff Quality & Manual Upload Preparation", () => {
     await expect(catReminder).toBeVisible();
     await expect(catReminder).toContainText("Category — you select this on the upload form.");
 
-    // 3. Verify that Description BBCode, Title, and Tags copy buttons are HARD DISABLED (R3 / 6c)
+    // 3. Verify that Description BBCode, Title, and Tags copy buttons are UN-GATED (plain text copies remain enabled)
     const btnCopyBbcode = page.locator("#btn-copy-bbcode");
     const btnCopyTitle = page.locator("#btn-copy-title");
     const btnCopyTags = page.locator("#btn-copy-tags");
     const btnCopyTorrent = page.locator("#btn-copy-torrent-path");
 
-    await expect(btnCopyBbcode).toBeDisabled();
-    await expect(btnCopyTitle).toBeDisabled();
-    await expect(btnCopyTags).toBeDisabled();
+    await expect(btnCopyBbcode).toBeEnabled();
+    await expect(btnCopyTitle).toBeEnabled();
+    await expect(btnCopyTags).toBeEnabled();
     await expect(btnCopyTorrent).toBeEnabled();
 
     // 4. Verify rendered handoff details (R1 / 6a)
@@ -364,9 +364,9 @@ test.describe("Stage 6 — Handoff Quality & Manual Upload Preparation", () => {
     await expect(btnUpload).toHaveCSS("pointer-events", "none");
     await expect(btnUpload).toHaveCSS("opacity", "0.45");
 
-    // Copy buttons are disabled
-    await expect(page.locator("#btn-copy-bbcode")).toBeDisabled();
-    await expect(page.locator("#btn-copy-title")).toBeDisabled();
-    await expect(page.locator("#btn-copy-tags")).toBeDisabled();
+    // Plain text copy buttons remain enabled even on preflight failure
+    await expect(page.locator("#btn-copy-bbcode")).toBeEnabled();
+    await expect(page.locator("#btn-copy-title")).toBeEnabled();
+    await expect(page.locator("#btn-copy-tags")).toBeEnabled();
   });
 });

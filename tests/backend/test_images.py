@@ -646,3 +646,120 @@ def test_resolve_ffprobe_stash_fallback(monkeypatch, tmp_path):
     monkeypatch.setattr("empornium_megapack.images._COVE_FFMPEG", tmp_path / "missing.exe")
     monkeypatch.setattr("empornium_megapack.images.Path.home", classmethod(lambda cls: tmp_path))
     assert resolve_ffprobe(settings_with(tmp_path)) == str(ffprobe_exe)
+
+
+# ---------------------------------------------------------------------------
+# Milestone B1: upload_hamster log_callback and retry line tests
+# ---------------------------------------------------------------------------
+
+def test_upload_hamster_log_callback_on_5xx_retry(tmp_path, fake_upload, no_backoff):
+    """upload_hamster invokes log_callback with formatted attempt/retry details on 5xx errors."""
+    client = fake_upload([
+        (502, None, False),
+        (200, {"image": {"url": "https://img.example/recovered.jpg"}}, False),
+    ])
+    logs = []
+    img = tmp_path / "cs.jpg"
+    img.write_bytes(b"\xff\xd8preview")
+    settings = settings_with(tmp_path, contact_sheet_upload_backoff_base=1.0)
+
+    url = upload_hamster(img, settings, log_callback=logs.append)
+    assert url == "https://img.example/recovered.jpg"
+    assert len(logs) == 1
+    # Expected format: attempt 1/3 failed (HTTP 502), retrying in 1.0s
+    assert "attempt 1/3 failed" in logs[0]
+    assert "HTTP 502" in logs[0]
+    assert "retrying in" in logs[0]
+
+
+def test_upload_hamster_log_callback_on_429_retry_after(tmp_path, fake_upload, no_backoff):
+    """upload_hamster logs retry after delay when HTTP 429 rate limit is encountered."""
+    client = fake_upload([
+        (429, {"error": {"message": "rate limited"}}, False, {"Retry-After": "4"}),
+        (200, {"image": {"url": "https://img.example/success.jpg"}}, False),
+    ])
+    logs = []
+    img = tmp_path / "cs.jpg"
+    img.write_bytes(b"\xff\xd8preview")
+
+    url = upload_hamster(img, settings_with(tmp_path), log_callback=logs.append)
+    assert url == "https://img.example/success.jpg"
+    assert len(logs) == 1
+    assert "attempt 1/3 failed" in logs[0]
+    assert "HTTP 429" in logs[0]
+    assert "retrying in 4.0s" in logs[0]
+
+
+def test_upload_hamster_log_callback_on_network_error(tmp_path, no_backoff):
+    """upload_hamster logs network error details during retries."""
+    class NetworkErrorClient(FakeClient):
+        def post(self, url, **kwargs):
+            self.calls.append((url, kwargs))
+            if len(self.calls) == 1:
+                raise httpx.ConnectError("Connection timed out")
+            return FakeResponse(200, {"image": {"url": "https://img.example/ok.jpg"}})
+
+    monkeypatch = pytest.MonkeyPatch()
+    client = NetworkErrorClient()
+    monkeypatch.setattr("empornium_megapack.images.httpx.Client", lambda timeout: client)
+    try:
+        logs = []
+        img = tmp_path / "cs.jpg"
+        img.write_bytes(b"\xff\xd8preview")
+        url = upload_hamster(img, settings_with(tmp_path), log_callback=logs.append)
+        assert url == "https://img.example/ok.jpg"
+        assert len(logs) == 1
+        assert "attempt 1/3 failed" in logs[0]
+        assert "network error" in logs[0]
+        assert "Connection timed out" in logs[0]
+    finally:
+        monkeypatch.undo()
+
+
+def test_upload_hamster_log_callback_multiple_retries_before_exhaustion(tmp_path, fake_upload, no_backoff):
+    """upload_hamster logs every retry attempt before raising ContactSheetError."""
+    client = fake_upload([(500, None, False), (500, None, False), (500, None, False)])
+    logs = []
+    img = tmp_path / "cs.jpg"
+    img.write_bytes(b"\xff\xd8data")
+    settings = settings_with(tmp_path, contact_sheet_upload_retries=3)
+
+    with pytest.raises(ContactSheetError, match="after retries"):
+        upload_hamster(img, settings, log_callback=logs.append)
+
+    assert len(logs) == 2
+    assert "attempt 1/3 failed" in logs[0]
+    assert "attempt 2/3 failed" in logs[1]
+
+
+def test_upload_hamster_log_callback_optional_default_none(tmp_path, fake_upload):
+    """Calling upload_hamster without log_callback maintains backward compatibility."""
+    client = fake_upload()
+    img = tmp_path / "cs.jpg"
+    img.write_bytes(b"\xff\xd8data")
+    # Must succeed without TypeError when log_callback is omitted
+    url = upload_hamster(img, settings_with(tmp_path))
+    assert url == "https://img.example/x.jpg"
+
+
+def test_upload_hamster_log_callback_not_called_on_immediate_success(tmp_path, fake_upload):
+    """log_callback is not called on clean single-attempt upload success."""
+    client = fake_upload([(200, {"image": {"url": "https://img.example/fast.jpg"}}, False)])
+    logs = []
+    img = tmp_path / "cs.jpg"
+    img.write_bytes(b"\xff\xd8data")
+    url = upload_hamster(img, settings_with(tmp_path), log_callback=logs.append)
+    assert url == "https://img.example/fast.jpg"
+    assert logs == []
+
+
+def test_upload_hamster_log_callback_not_called_on_fatal_4xx(tmp_path, fake_upload):
+    """Non-retryable 4xx errors raise immediately without invoking retry log_callback."""
+    client = fake_upload([(403, {"error": {"message": "Invalid API key"}}, False)])
+    logs = []
+    img = tmp_path / "cs.jpg"
+    img.write_bytes(b"\xff\xd8data")
+    with pytest.raises(ContactSheetError, match="Invalid API key"):
+        upload_hamster(img, settings_with(tmp_path), log_callback=logs.append)
+    assert logs == []
+

@@ -17,6 +17,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Callable
 
 import httpx
 
@@ -267,7 +268,11 @@ def fetch_stash_image(
     return out
 
 
-def upload_hamster(image_path: str | Path, settings: Settings | None = None) -> str:
+def upload_hamster(
+    image_path: str | Path,
+    settings: Settings | None = None,
+    log_callback: Callable[[str], None] | None = None,
+) -> str:
     """Upload an image to HamsterImg. Returns the remote URL.
 
     Transient failures (network errors, 429, 5xx, malformed JSON, unexpected
@@ -293,6 +298,7 @@ def upload_hamster(image_path: str | Path, settings: Settings | None = None) -> 
     for attempt in range(retries):
         retry = False
         backoff: float | None = None
+        fail_reason = ""
         try:
             filename = Path(image_path).name or f"preview.{HAMSTER_IMAGE_EXT}"
             with Path(image_path).open("rb") as fh:
@@ -302,7 +308,8 @@ def upload_hamster(image_path: str | Path, settings: Settings | None = None) -> 
                         HAMSTER_UPLOAD_URL, files=files, data=data, headers=headers
                     )
         except httpx.RequestError as exc:
-            last_message = f"network error: {exc}"
+            fail_reason = f"network error: {exc}"
+            last_message = fail_reason
             retry = True
         if not retry:
             status = response.status_code
@@ -311,10 +318,12 @@ def upload_hamster(image_path: str | Path, settings: Settings | None = None) -> 
             except ValueError:
                 payload = None
             if status == 429:
-                last_message = f"server returned HTTP 429"
+                fail_reason = "HTTP 429"
+                last_message = "server returned HTTP 429"
                 retry = True
                 backoff = _retry_after_seconds(response)
             elif status >= 500:
+                fail_reason = f"HTTP {status}"
                 last_message = f"server returned HTTP {status}"
                 retry = True
             elif status >= 400:
@@ -333,10 +342,15 @@ def upload_hamster(image_path: str | Path, settings: Settings | None = None) -> 
                 try:
                     return str(payload["image"]["url"])
                 except (KeyError, TypeError):
-                    last_message = "unexpected response shape"
+                    fail_reason = "unexpected response shape"
+                    last_message = fail_reason
                     retry = True
         if retry and attempt < retries - 1:
             delay = backoff if backoff is not None else _retry_delay(attempt, settings)
+            if log_callback:
+                log_callback(
+                    f"attempt {attempt + 1}/{retries} failed ({fail_reason}), retrying in {delay:.1f}s"
+                )
             time.sleep(delay)
     raise ContactSheetError(f"HamsterImg upload failed after retries: {last_message}")
 
@@ -427,7 +441,11 @@ class ImageService:
         self.sheets: dict[str, Path] = {}
 
     def contact_sheet(
-        self, scene_id: str, video_path: str, layout: str | None = None
+        self,
+        scene_id: str,
+        video_path: str,
+        layout: str | None = None,
+        log_callback: Callable[[str], None] | None = None,
     ) -> tuple[str, str, Path]:
         """Generate, size-check, and upload one contact sheet.
 
@@ -450,7 +468,7 @@ class ImageService:
             if cached is not None and cached[0] == digest:
                 url = cached[1]
             else:
-                url = upload_hamster(final, self.settings)
+                url = upload_hamster(final, self.settings, log_callback=log_callback)
                 self._cache[scene_id] = (digest, url)
             self.sheets[scene_id] = final
             return url, digest, final

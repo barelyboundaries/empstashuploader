@@ -15,8 +15,10 @@ import traceback
 import re
 import subprocess
 import socket
+import threading
+import inspect
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Set, Tuple, Union
+from typing import Dict, Any, List, Optional, Set, Tuple, Union, Callable
 
 # Reconfigure standard streams to UTF-8 on Windows
 if hasattr(sys.stdin, "reconfigure"):
@@ -40,12 +42,116 @@ if str(CURRENT_DIR) not in sys.path:
 # has them; when no such interpreter exists, check_dependencies() prints an
 # actionable message and exits instead of dying with an import traceback.
 
+_stderr_lock = threading.Lock()
+_stderr_broken = False
+_active_run_id: Optional[str] = None
+_last_progress: float = 0.0
+
+
+def _stderr_write(text: str) -> bool:
+    """Write one log line to stderr with threading.Lock synchronization.
+
+    Stash consumes plugin stderr line by line; an over-long line makes it stop
+    reading and close the pipe, after which every further write raises OSError
+    (EINVAL -- "[Errno 22] Invalid argument" on Windows). Once that has happened
+    the buffered write is retried by every later call and keeps failing, so the
+    stream is latched off instead. A dead log stream must never fail an otherwise
+    finished build, so errors here are swallowed and reported via the return.
+    """
+    global _stderr_broken
+    with _stderr_lock:
+        if _stderr_broken:
+            return False
+        try:
+            sys.stderr.write(text)
+            sys.stderr.flush()
+            return True
+        except Exception:
+            _stderr_broken = True
+            return False
+
+
+def set_active_run_id(run_id: Optional[str]) -> None:
+    global _active_run_id
+    if run_id is not None:
+        val = str(run_id).strip()
+        _active_run_id = val if val else None
+    else:
+        _active_run_id = None
+
+
+def get_active_run_id() -> Optional[str]:
+    return _active_run_id
+
+
+def _run_id_prefix() -> str:
+    return f"[emp:{_active_run_id}] " if _active_run_id else ""
+
+
+_narration_prefix = _run_id_prefix
+
+
+class HeartbeatContext:
+    """Daemon thread emitting periodic progress updates every interval seconds."""
+
+    def __init__(
+        self,
+        status_getter: Union[str, Callable[[], Union[str, Tuple[float, str]]]],
+        interval: float = 10.0,
+    ):
+        self._getter = status_getter if callable(status_getter) else (lambda: status_getter)
+        self._interval = interval
+        self._stop_event = threading.Event()
+        self._thread: Optional[threading.Thread] = None
+        self._start_time: float = 0.0
+
+    def _run(self):
+        while not self._stop_event.wait(self._interval):
+            elapsed = int(time.monotonic() - self._start_time)
+            info = self._getter()
+            if isinstance(info, (tuple, list)) and len(info) == 2:
+                prog, text = info
+                try:
+                    val = float(prog)
+                    clamped = max(0.0, min(1.0, val))
+                    _stderr_write(f"\x01p\x02{clamped:.4f}\n")
+                except Exception:
+                    pass
+            else:
+                text = str(info)
+            prefix = _run_id_prefix()
+            _stderr_write(f"\x01i\x02{prefix}[Heartbeat] {text} still running ({elapsed}s elapsed)\n")
+
+    def start(self):
+        self._start_time = time.monotonic()
+        self._stop_event.clear()
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def stop(self):
+        if self._thread is not None:
+            self._stop_event.set()
+            self._thread.join(timeout=2.0)
+            self._thread = None
+
+    def __enter__(self):
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.stop()
+
+
+heartbeat = HeartbeatContext
+
+
 def emit_progress(progress: float, message: Optional[str] = None):
     """
     Emits progress to Stash native task manager via stderr protocol: \x01p\x02<float>
     Progress is clamped between 0.0 and 1.0.
     Human-readable messages are prefixed with \x01i\x02 for Info-level logging.
     """
+    global _last_progress
     try:
         val = float(progress)
         if math.isnan(val) or math.isinf(val):
@@ -55,10 +161,11 @@ def emit_progress(progress: float, message: Optional[str] = None):
     except (ValueError, TypeError):
         clamped = 0.0
 
-    sys.stderr.write(f"\x01p\x02{clamped:.4f}\n")
+    _last_progress = clamped
+    _stderr_write(f"\x01p\x02{clamped:.4f}\n")
     if message:
-        sys.stderr.write(f"\x01i\x02[{int(clamped * 100)}%] {message}\n")
-    sys.stderr.flush()
+        prefix = _run_id_prefix()
+        _stderr_write(f"\x01i\x02{prefix}[{int(clamped * 100)}%] {message}\n")
 
 
 def check_dependencies():
@@ -680,6 +787,25 @@ def build_single_scene_gallery(
     return gallery
 
 
+def _call_upload_hamster(
+    image_path: Union[str, Path],
+    settings: Any,
+    log_cb: Optional[Callable[[str], None]] = None,
+) -> str:
+    if _domain_images is None:
+        raise RuntimeError("backend images module not loaded")
+    fn = _domain_images.upload_hamster
+    try:
+        sig = inspect.signature(fn)
+        if "log_callback" in sig.parameters or any(
+            p.kind == inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()
+        ):
+            return fn(image_path, settings=settings, log_callback=log_cb)
+    except (ValueError, TypeError):
+        pass
+    return fn(image_path, settings=settings)
+
+
 def upload_previews(
     paths: List[str],
     config: Optional[Dict[str, Any]] = None,
@@ -707,13 +833,14 @@ def upload_previews(
     settings = _domain_config.get_settings()
     api_key = settings.hamster_api_key
 
+    prefix = _run_id_prefix()
+
     # Check key presence once up front and warn once (Amendment B5)
     if not api_key:
-        sys.stderr.write(
-            "\x01w\x02HamsterImg upload enabled but no API key configured. "
+        _stderr_write(
+            f"\x01w\x02{prefix}HamsterImg upload enabled but no API key configured. "
             "Falling back to local file:/// previews.\n"
         )
-        sys.stderr.flush()
         urls = []
         for p in paths:
             norm_path = str(p).replace(os.sep, "/")
@@ -732,30 +859,37 @@ def upload_previews(
             _domain_images.enforce_size_limit(p, settings.upload_image_max_bytes)
         except Exception as exc:
             file_sz = os.path.getsize(p) if os.path.exists(p) else 0
-            sys.stderr.write(
-                f"\x01w\x02Failed to enforce size limit for '{cs_name}' ({file_sz} bytes): {exc}. "
+            _stderr_write(
+                f"\x01w\x02{prefix}Failed to enforce size limit for '{cs_name}' ({file_sz} bytes): {exc}. "
                 f"Falling back to local preview URL.\n"
             )
-            sys.stderr.flush()
             urls.append(norm_fallback)
             continue
 
         try:
             file_sz = os.path.getsize(p) if os.path.exists(p) else 0
-            sys.stderr.write(
-                f"\x01i\x02[Upload] {cs_name}: {file_sz} bytes -> HamsterImg\n"
+            _stderr_write(
+                f"\x01i\x02{prefix}[Upload] Starting {cs_name} ({file_sz} bytes) -> HamsterImg\n"
             )
-            sys.stderr.flush()
-            remote_url = _domain_images.upload_hamster(p, settings=settings)
+            t0 = time.monotonic()
+
+            def _on_retry(retry_msg: str) -> None:
+                _stderr_write(f"\x01w\x02{prefix}[Upload] {cs_name}: {retry_msg}\n")
+
+            with HeartbeatContext(lambda: (_last_progress, f"Uploading preview {idx}/{total} to HamsterImg")):
+                remote_url = _call_upload_hamster(p, settings=settings, log_cb=_on_retry)
+            elapsed = time.monotonic() - t0
+            _stderr_write(
+                f"\x01i\x02{prefix}[Upload] {cs_name} uploaded in {elapsed:.1f}s -> {remote_url}\n"
+            )
             urls.append(remote_url)
         except Exception as exc:
             # Degrade-and-continue on failure: warn and fall back to file:/// URL
             file_sz = os.path.getsize(p) if os.path.exists(p) else 0
-            sys.stderr.write(
-                f"\x01w\x02Failed to upload contact sheet '{cs_name}' ({file_sz} bytes): {exc}. "
+            _stderr_write(
+                f"\x01w\x02{prefix}Failed to upload contact sheet '{cs_name}' ({file_sz} bytes): {exc}. "
                 f"Falling back to local preview URL.\n"
             )
-            sys.stderr.flush()
             urls.append(norm_fallback)
 
     return urls
@@ -962,6 +1096,8 @@ def run_probe_files(payload: Any) -> Dict[str, Any]:
     """
     Probes files for Win32 creation times, hardlink compatibility, existence, and collisions.
     """
+    if isinstance(payload, dict):
+        set_active_run_id(payload.get("run_id"))
     emit_progress(0.1, "Starting filesystem probe...")
     if not isinstance(payload, dict):
         payload = {}
@@ -1139,6 +1275,8 @@ def run_build_megapack(payload: Any, server_connection: Optional[Dict[str, Any]]
     """
     Builds megapack: creates contact sheets, uploads previews, generates .torrent and manifest.
     """
+    if isinstance(payload, dict):
+        set_active_run_id(payload.get("run_id"))
     emit_progress(0.05, "Initializing megapack build...")
     if not isinstance(payload, dict):
         payload = {}
@@ -1420,24 +1558,25 @@ def run_build_megapack(payload: Any, server_connection: Optional[Dict[str, Any]]
                 payload_source = file_paths[0]
 
         emit_progress(0.20, f"Found {total_files} valid files. Generating contact sheets...")
-        for idx, fp in enumerate(file_paths):
-            if total_files == 1:
-                cs_name = f"{safe_title}_preview.jpg"
-            else:
-                cs_name = f"{safe_title}_preview_{idx + 1}.jpg"
-            cs_path = os.path.join(artifact_dir, cs_name)
-            cs_res = generate_contact_sheet(
-                video_path=fp,
-                out_path=cs_path,
-                layout=layout,
-                timeout=timeout,
-                pack_title=pack_title,
-                scene_idx=idx,
-                total_scenes=total_files,
-            )
-            contact_sheet_paths.append(cs_res)
-            prog = 0.20 + 0.30 * ((idx + 1) / total_files)
-            emit_progress(prog, f"Generated contact sheet {idx + 1}/{total_files}")
+        with HeartbeatContext(lambda: (_last_progress, f"Generating contact sheets ({len(contact_sheet_paths)}/{total_files})")):
+            for idx, fp in enumerate(file_paths):
+                if total_files == 1:
+                    cs_name = f"{safe_title}_preview.jpg"
+                else:
+                    cs_name = f"{safe_title}_preview_{idx + 1}.jpg"
+                cs_path = os.path.join(artifact_dir, cs_name)
+                cs_res = generate_contact_sheet(
+                    video_path=fp,
+                    out_path=cs_path,
+                    layout=layout,
+                    timeout=timeout,
+                    pack_title=pack_title,
+                    scene_idx=idx,
+                    total_scenes=total_files,
+                )
+                contact_sheet_paths.append(cs_res)
+                prog = 0.20 + 0.30 * ((idx + 1) / total_files)
+                emit_progress(prog, f"Generated contact sheet {idx + 1}/{total_files}")
 
         # A single-scene release gets the richer gallery; a megapack already has
         # one contact sheet per scene and would balloon past any sane post size.
@@ -1446,18 +1585,19 @@ def run_build_megapack(payload: Any, server_connection: Optional[Dict[str, Any]]
 
         scene_gallery = {"cover": None, "screens": [], "performers": []}
         if single_scene:
-            scene_gallery = build_single_scene_gallery(
-                video_path=file_paths[0],
-                artifact_dir=artifact_dir,
-                safe_title=safe_title,
-                scene=scenes[0] if scenes else None,
-                performer_refs=_extract_performer_refs(
-                    (scenes[0].get("performers") if scenes and isinstance(scenes[0], dict) else None)
-                    or payload.get("performers")
-                ),
-                progress_callback=emit_progress,
-                fetch_cover=not bool(safe_override_cover_url),
-            )
+            with HeartbeatContext(lambda: (_last_progress, "Generating single-scene gallery imagery")):
+                scene_gallery = build_single_scene_gallery(
+                    video_path=file_paths[0],
+                    artifact_dir=artifact_dir,
+                    safe_title=safe_title,
+                    scene=scenes[0] if scenes else None,
+                    performer_refs=_extract_performer_refs(
+                        (scenes[0].get("performers") if scenes and isinstance(scenes[0], dict) else None)
+                        or payload.get("performers")
+                    ),
+                    progress_callback=emit_progress,
+                    fetch_cover=not bool(safe_override_cover_url),
+                )
 
         emit_progress(0.50, "Formatting preview image URLs...")
 
@@ -1621,7 +1761,8 @@ def run_build_megapack(payload: Any, server_connection: Optional[Dict[str, Any]]
         }
         if exclude_exact is not None:
             create_torrent_kwargs["exclude_exact"] = exclude_exact
-        create_torrent(**create_torrent_kwargs)
+        with HeartbeatContext(lambda: (_last_progress, "Hashing torrent pieces")):
+            create_torrent(**create_torrent_kwargs)
 
         if torrent_expected_relpaths is not None:
             _verify_torrent_exact_set(torrent_path, consolidation_dir, torrent_expected_relpaths)
@@ -2065,6 +2206,7 @@ def run_upload_cover(payload: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(payload, dict):
         raise ValueError("Payload must be a dictionary")
     run_id = payload.get("run_id") or f"cover_{int(time.time())}"
+    set_active_run_id(run_id)
     raw_b64 = payload.get("image_b64")
     if not raw_b64 or not isinstance(raw_b64, str):
         raise ValueError("No image data provided in payload (missing or invalid 'image_b64')")
@@ -2121,10 +2263,17 @@ def run_upload_cover(payload: Dict[str, Any]) -> Dict[str, Any]:
     _domain_images.enforce_size_limit(dest_path, settings.upload_image_max_bytes)
 
     file_sz = dest_path.stat().st_size
-    sys.stderr.write(f"\x01i\x02[Upload] {dest_path.name}: {file_sz} bytes -> HamsterImg\n")
-    sys.stderr.flush()
+    prefix = _run_id_prefix()
+    _stderr_write(f"\x01i\x02{prefix}[Upload] Starting {dest_path.name} ({file_sz} bytes) -> HamsterImg\n")
+    t0 = time.monotonic()
 
-    cover_url = _domain_images.upload_hamster(dest_path, settings=settings)
+    def _on_cover_retry(retry_msg: str) -> None:
+        _stderr_write(f"\x01w\x02{prefix}[Upload] {dest_path.name}: {retry_msg}\n")
+
+    with HeartbeatContext(lambda: (_last_progress, f"Uploading {dest_path.name} to HamsterImg")):
+        cover_url = _call_upload_hamster(dest_path, settings=settings, log_cb=_on_cover_retry)
+    elapsed = time.monotonic() - t0
+    _stderr_write(f"\x01i\x02{prefix}[Upload] {dest_path.name} uploaded in {elapsed:.1f}s -> {cover_url}\n")
 
     return {
         "status": "success",
@@ -2360,29 +2509,6 @@ def run_start_backend(payload: Dict[str, Any]) -> Dict[str, Any]:
     return {"status": "ok", "action": "started", "port": port}
 
 
-_stderr_broken = False
-
-
-def _stderr_write(text: str) -> bool:
-    """Write one log line to stderr, tolerating a stderr Stash stopped reading.
-
-    Stash consumes plugin stderr line by line; an over-long line makes it stop
-    reading and close the pipe, after which every further write raises OSError
-    (EINVAL -- "[Errno 22] Invalid argument" on Windows). Once that has happened
-    the buffered write is retried by every later call and keeps failing, so the
-    stream is latched off instead. A dead log stream must never fail an otherwise
-    finished build, so errors here are swallowed and reported via the return.
-    """
-    global _stderr_broken
-    if _stderr_broken:
-        return False
-    try:
-        sys.stderr.write(text)
-        sys.stderr.flush()
-        return True
-    except Exception:
-        _stderr_broken = True
-        return False
 
 
 def post_result_to_sidecar(payload: Any, result: Any) -> bool:
@@ -2550,6 +2676,8 @@ def main():
     try:
         check_dependencies()
         mode, payload, server_connection = parse_input_payload()
+        if isinstance(payload, dict):
+            set_active_run_id(payload.get("run_id"))
 
         if mode == "probe" or "probe" in str(mode).lower():
             result = run_probe_files(payload)

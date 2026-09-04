@@ -22,10 +22,10 @@ const __dirname = path.dirname(__filename);
 // mismatch — that is the signal to refresh ASSET_RECORD below in the same
 // commit, so unreviewed or truncated asset changes can never slip through.
 const ASSET_RECORD = {
-  // review.js: Change A — Stage 2 locations lockout and probeResultsMap wiring
-  'review.js': '5dd0acac849823975f092524c9053bdd0359a93b6b3bb8cbbb857541bc4515be',
-  // review.html: Change A — #locations-locked-notice and #btn-unlock-locations inside #stage-panel-2
-  'review.html': '0733b25f0ec5d80c78b22198bd84032218571254eec01370f0baf3af805c617a',
+  // review.js: Change B — Verbose build console surface and un-gated copy controls
+  'review.js': '1a01a4d2cac641a62615e6a84849c5c863b80e6375b9a48a6a436d45953d18b7',
+  // review.html: Change B — #build-console overlay, streaming log pane, #build-console-result
+  'review.html': '3fde3c03c3ff4011d22caef7dbf21328d1de80c513159e639149723228922b2d',
 };
 
 function sha256(filePath) {

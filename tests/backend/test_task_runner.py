@@ -597,3 +597,169 @@ def test_parse_input_payload_cli_args():
     with patch.object(sys, "argv", ["task.py", "build"]):
         mode, payload, conn = task.parse_input_payload()
         assert mode == "build"
+
+
+# ---------------------------------------------------------------------------
+# Milestone B1: Stderr thread locking, run-id prefixing, sentinels, heartbeat
+# ---------------------------------------------------------------------------
+import threading
+from empornium_megapack.config import Settings
+
+
+def test_stderr_write_module_level_lock_exists():
+    """Verify task module defines a threading.Lock instance guarding stderr."""
+    assert hasattr(task, "_stderr_lock"), "task.py must define module-level _stderr_lock"
+    # Duck-type check for lock acquire/release or LockType
+    assert hasattr(task._stderr_lock, "acquire") and hasattr(task._stderr_lock, "release")
+
+
+def test_stderr_write_thread_safe_no_interleaving(monkeypatch):
+    """Verify concurrent writes through _stderr_write never interleave lines."""
+    captured_lines = []
+    real_write = captured_lines.append
+
+    # Use custom buffer to record writes
+    monkeypatch.setattr(task.sys.stderr, "write", real_write)
+    monkeypatch.setattr(task.sys.stderr, "flush", lambda: None)
+
+    def worker(tid):
+        for i in range(20):
+            line = f"\x01i\x02[Thread-{tid}] message number {i}\n"
+            task._stderr_write(line)
+
+    threads = [threading.Thread(target=worker, args=(t,)) for t in range(5)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    # Every write should be a complete atomic line ending in newline
+    assert len(captured_lines) == 100
+    for line in captured_lines:
+        assert line.startswith("\x01i\x02[Thread-")
+        assert line.endswith("\n")
+
+
+def test_emit_progress_with_active_run_id(monkeypatch, capsys):
+    """emit_progress prefixes human-readable messages with [emp:<run_id>] while preserving numeric protocol."""
+    task._active_run_id = "run-test-prefix-123"
+    try:
+        task.emit_progress(0.42, "Extracting video frames")
+        err = capsys.readouterr().err
+        # Numeric progress line must remain strictly untouched
+        assert "\x01p\x020.4200\n" in err
+        # Info log message must have run-id prefix
+        assert "\x01i\x02[emp:run-test-prefix-123] [42%] Extracting video frames\n" in err
+    finally:
+        task._active_run_id = None
+
+
+def test_emit_progress_without_active_run_id(capsys):
+    """emit_progress without active run_id does not emit [emp: prefix."""
+    task._active_run_id = None
+    task.emit_progress(0.15, "Validating inputs")
+    err = capsys.readouterr().err
+    assert "\x01p\x020.1500\n" in err
+    assert "\x01i\x02[15%] Validating inputs\n" in err
+    assert "[emp:" not in err
+
+
+def test_sentinel_emitters_byte_identical_and_exclude_run_id_prefix(capsys):
+    """Sentinel lines (RESULT, BBCODE, FAILED) MUST NOT have [emp:<run_id>] prefix."""
+    run_id = "run-strict-sentinel-999"
+    task._active_run_id = run_id
+    try:
+        # 1. EMPORNIUM_TASK_RESULT
+        result_payload = {"run_id": run_id}
+        result_dict = {"status": "success", "bbcode": "test_bbcode"}
+        task.emit_result_sentinel(result_payload, result_dict)
+        err = capsys.readouterr().err
+        assert f"\x01i\x02EMPORNIUM_TASK_RESULT {run_id}: " in err
+        assert f"[emp:{run_id}] EMPORNIUM_TASK_RESULT" not in err
+        assert "[emp:" not in err
+
+        # 2. EMPORNIUM_TASK_BBCODE
+        task.emit_bbcode_sentinel(result_payload, result_dict)
+        err = capsys.readouterr().err
+        assert f"\x01i\x02EMPORNIUM_TASK_BBCODE {run_id} 1/1: " in err
+        assert f"[emp:{run_id}] EMPORNIUM_TASK_BBCODE" not in err
+        assert "[emp:" not in err
+
+        # 3. EMPORNIUM_TASK_FAILED
+        # Direct check of sentinel write in failure block
+        task._stderr_write(f"\x01e\x02EMPORNIUM_TASK_FAILED {run_id}: Missing video\n")
+        err = capsys.readouterr().err
+        assert f"\x01e\x02EMPORNIUM_TASK_FAILED {run_id}: Missing video\n" in err
+        assert f"[emp:{run_id}] EMPORNIUM_TASK_FAILED" not in err
+    finally:
+        task._active_run_id = None
+
+
+def test_upload_previews_narration_start_and_success(tmp_path, monkeypatch, capsys):
+    """upload_previews emits upload start with byte size, success with elapsed seconds, and threads log_callback."""
+    img = tmp_path / "sheet_01.jpg"
+    img.write_bytes(b"\xff\xd8" + b"X" * 1024)
+    run_id = "run-narration-preview-1"
+    task._active_run_id = run_id
+
+    def fake_upload(image_path, settings=None, log_callback=None):
+        if log_callback:
+            log_callback("attempt 1/3 failed (HTTP 500), retrying in 0.5s")
+        return "https://img.example/sheet_01.jpg"
+
+    monkeypatch.setattr(task._domain_images, "upload_hamster", fake_upload)
+    monkeypatch.setattr(task._domain_config, "get_settings", lambda: Settings(hamster_api_key="valid-key"))
+
+    try:
+        urls = task.upload_previews([str(img)], config={"upload_previews": True})
+        assert urls == ["https://img.example/sheet_01.jpg"]
+        err = capsys.readouterr().err
+
+        # Start narration line
+        assert f"\x01i\x02[emp:{run_id}] [Upload] Starting sheet_01.jpg (1026 bytes) -> HamsterImg\n" in err
+        # Threaded retry line from upload_hamster
+        assert f"\x01w\x02[emp:{run_id}] [Upload] sheet_01.jpg: attempt 1/3 failed (HTTP 500), retrying in 0.5s\n" in err
+        # Success narration line with elapsed time and URL
+        assert f"\x01i\x02[emp:{run_id}] [Upload] sheet_01.jpg uploaded in " in err
+        assert "-> https://img.example/sheet_01.jpg\n" in err
+    finally:
+        task._active_run_id = None
+
+
+def test_upload_previews_fallback_to_file_diagnostic(tmp_path, monkeypatch, capsys):
+    """upload_previews logs fallback-to-file diagnostics with [emp:<run_id>] prefix."""
+    img = tmp_path / "failing_sheet.jpg"
+    img.write_bytes(b"\xff\xd8" + b"Y" * 500)
+    run_id = "run-fallback-diag"
+    task._active_run_id = run_id
+
+    def failing_upload(image_path, settings=None, log_callback=None):
+        raise task._domain_images.ContactSheetError("HamsterImg service unavailable")
+
+    monkeypatch.setattr(task._domain_images, "upload_hamster", failing_upload)
+    monkeypatch.setattr(task._domain_config, "get_settings", lambda: Settings(hamster_api_key="valid-key"))
+
+    try:
+        urls = task.upload_previews([str(img)], config={"upload_previews": True})
+        assert len(urls) == 1
+        assert urls[0].startswith("file:///")
+        err = capsys.readouterr().err
+        assert f"\x01w\x02[emp:{run_id}] Failed to upload contact sheet 'failing_sheet.jpg'" in err
+        assert "HamsterImg service unavailable" in err
+        assert "Falling back to local preview URL" in err
+    finally:
+        task._active_run_id = None
+
+
+def test_daemon_heartbeat_thread_lifecycle(capsys):
+    """Heartbeat context emits status periodically via daemon thread and stops cleanly."""
+    run_id = "run-heartbeat-test"
+    task._active_run_id = run_id
+    try:
+        with task.heartbeat("Contact sheet rendering", interval=0.03):
+            time.sleep(0.08)  # Wait for ~2 ticks
+        err = capsys.readouterr().err
+        assert f"\x01i\x02[emp:{run_id}] [Heartbeat] Contact sheet rendering still running" in err
+    finally:
+        task._active_run_id = None
+
