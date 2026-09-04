@@ -245,15 +245,48 @@ try {
   writeFileSync(zipPath, zip);
   const sha256 = createHash("sha256").update(zip).digest("hex");
 
-  writeFileSync(indexPath, [
-    `id: empornium-megapack`,
-    `name: ${name}`,
-    `version: "${version}-${shortSha}"`,
-    `date: ${new Date().toISOString()}`,
-    `path: empornium-megapack.zip`,
-    `sha256: ${sha256}`,
+  const description = ymlField(yml, "description");
+  // Stash reads a plugin source index with yaml.Unmarshal(data, &[]RemotePackage)
+  // (pkg/pkg/repository_http.go), so the top level MUST be a SEQUENCE — every
+  // entry begins "- id:". A bare mapping fails with
+  //   cannot unmarshal !!map into []pkg.RemotePackage
+  // and Add Source shows an error instead of the plugin.
+  //
+  // pkg.Time.UnmarshalYAML accepts ONLY "2006-01-02 15:04:05" (or that plus
+  // " -0700"); it never parses ISO-8601. toISOString() emits
+  // "2026-09-02T04:12:43.272Z", which fails even once the sequence is right.
+  // Both defects shipped together and each one alone breaks installation.
+  //
+  // metadata.description is what Stash lists under the plugin name.
+  const pad = (n) => String(n).padStart(2, "0");
+  const now = new Date();
+  const indexDate =
+    `${now.getUTCFullYear()}-${pad(now.getUTCMonth() + 1)}-${pad(now.getUTCDate())} ` +
+    `${pad(now.getUTCHours())}:${pad(now.getUTCMinutes())}:${pad(now.getUTCSeconds())}`;
+
+  const indexYml = [
+    `- id: empornium-megapack`,
+    `  name: ${name}`,
+    `  metadata:`,
+    `    description: ${description}`,
+    `  version: "${version}-${shortSha}"`,
+    `  date: ${indexDate}`,
+    `  path: empornium-megapack.zip`,
+    `  sha256: ${sha256}`,
     "",
-  ].join("\n"));
+  ].join("\n");
+
+  // Shape guard: this file has already shipped an index Stash could not parse
+  // once. Builtins-only, so assert the two contracts directly rather than
+  // pulling in a YAML parser.
+  if (!indexYml.startsWith("- id: ")) {
+    throw new Error("index.yml must be a YAML sequence (entries begin '- id:')");
+  }
+  if (!/^ {2}date: \d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/m.test(indexYml)) {
+    throw new Error(`index.yml date must be "YYYY-MM-DD HH:MM:SS", got: ${indexDate}`);
+  }
+
+  writeFileSync(indexPath, indexYml);
 
   console.log(`zip: ${zipPath} (${zip.length} bytes, ${zipEntries.length} entries)`);
   console.log(`sha256: ${sha256}`);
