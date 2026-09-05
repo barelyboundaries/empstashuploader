@@ -17,7 +17,6 @@ from empornium_megapack.plugin_settings import (
 def _clean_cache_and_env(monkeypatch):
     clear_cache()
     monkeypatch.delenv("EMPORNIUM_EMPORNIUM_ANNOUNCE_URL", raising=False)
-    monkeypatch.delenv("EMPORNIUM_ANNOUNCE_URL", raising=False)
     monkeypatch.delenv("EMPORNIUM_HAMSTER_API_KEY", raising=False)
     yield
     clear_cache()
@@ -25,13 +24,9 @@ def _clean_cache_and_env(monkeypatch):
 
 def test_announce_url_precedence_env_beats_toml_beats_stash(monkeypatch):
     mock_client = MagicMock()
-    mock_client._post.return_value = {
-        "configuration": {
-            "plugins": {
-                "empornium-megapack": {
-                    "announceUrl": "http://tracker.stash.example:2710/stash/announce",
-                }
-            }
+    mock_client.plugin_configuration.return_value = {
+        "empornium-megapack": {
+            "announceUrl": "http://tracker.stash.example:2710/stash/announce",
         }
     }
 
@@ -59,7 +54,7 @@ def test_announce_url_precedence_env_beats_toml_beats_stash(monkeypatch):
     # 4. Nothing set anywhere returns empty and "not set"
     clear_cache()
     empty_client = MagicMock()
-    empty_client._post.return_value = {"configuration": {"plugins": {}}}
+    empty_client.plugin_configuration.return_value = {}
     val, source = resolve_announce_url(settings=empty_settings, stash_client=empty_client)
     assert val == ""
     assert source == "not set"
@@ -67,13 +62,9 @@ def test_announce_url_precedence_env_beats_toml_beats_stash(monkeypatch):
 
 def test_hamster_api_key_precedence_env_beats_toml_beats_stash(monkeypatch):
     mock_client = MagicMock()
-    mock_client._post.return_value = {
-        "configuration": {
-            "plugins": {
-                "empornium-megapack": {
-                    "hamsterApiKey": "stash_key_123",
-                }
-            }
+    mock_client.plugin_configuration.return_value = {
+        "empornium-megapack": {
+            "hamsterApiKey": "stash_key_123",
         }
     }
 
@@ -101,7 +92,7 @@ def test_hamster_api_key_precedence_env_beats_toml_beats_stash(monkeypatch):
     # 4. Nothing set anywhere returns empty and "not set"
     clear_cache()
     empty_client = MagicMock()
-    empty_client._post.return_value = {"configuration": {"plugins": {}}}
+    empty_client.plugin_configuration.return_value = {}
     val, source = resolve_hamster_api_key(settings=empty_settings, stash_client=empty_client)
     assert val == ""
     assert source == "not set"
@@ -109,7 +100,7 @@ def test_hamster_api_key_precedence_env_beats_toml_beats_stash(monkeypatch):
 
 def test_stash_unreachable_fails_soft():
     error_client = MagicMock()
-    error_client._post.side_effect = StashError("Connection refused")
+    error_client.plugin_configuration.side_effect = StashError("Connection refused")
 
     # get_plugin_settings must return {} and not raise
     res = get_plugin_settings(stash_client=error_client, force_refresh=True)
@@ -127,7 +118,7 @@ def test_stash_unreachable_fails_soft():
 
 def test_stash_malformed_response_fails_soft():
     malformed_client = MagicMock()
-    malformed_client._post.return_value = {"invalid": None}
+    malformed_client.plugin_configuration.return_value = None
 
     res = get_plugin_settings(stash_client=malformed_client, force_refresh=True)
     assert res == {}
@@ -140,48 +131,68 @@ def test_stash_malformed_response_fails_soft():
 
 def test_ttl_cache_and_refresh():
     mock_client = MagicMock()
-    mock_client._post.return_value = {
-        "configuration": {
-            "plugins": {
-                "empornium-megapack": {
-                    "announceUrl": "http://tracker.one.example/announce",
-                    "hamsterApiKey": "key_one",
-                }
-            }
+    mock_client.plugin_configuration.return_value = {
+        "empornium-megapack": {
+            "announceUrl": "http://tracker.one.example/announce",
+            "hamsterApiKey": "key_one",
         }
     }
 
     res1 = get_plugin_settings(stash_client=mock_client, force_refresh=True)
     assert res1["announceUrl"] == "http://tracker.one.example/announce"
-    assert mock_client._post.call_count == 1
+    assert mock_client.plugin_configuration.call_count == 1
 
     # Second call uses cache
     res2 = get_plugin_settings(stash_client=mock_client)
     assert res2 == res1
-    assert mock_client._post.call_count == 1
+    assert mock_client.plugin_configuration.call_count == 1
 
     # Update mock return
-    mock_client._post.return_value = {
-        "configuration": {
-            "plugins": {
-                "empornium-megapack": {
-                    "announceUrl": "http://tracker.two.example/announce",
-                    "hamsterApiKey": "key_two",
-                }
-            }
+    mock_client.plugin_configuration.return_value = {
+        "empornium-megapack": {
+            "announceUrl": "http://tracker.two.example/announce",
+            "hamsterApiKey": "key_two",
         }
     }
 
     # Explicit refresh clears cache and refetches
     res3 = refresh(stash_client=mock_client)
     assert res3["announceUrl"] == "http://tracker.two.example/announce"
-    assert mock_client._post.call_count == 2
+    assert mock_client.plugin_configuration.call_count == 2
 
 
-def test_announce_url_fallback_env_var(monkeypatch):
+def test_single_prefix_announce_env_var_is_not_honored(monkeypatch):
+    """Only EMPORNIUM_EMPORNIUM_ANNOUNCE_URL is read.
+
+    The doubled prefix is what pydantic's Settings binds to (env_prefix
+    EMPORNIUM_ + field empornium_announce_url). Honoring a single-prefix
+    EMPORNIUM_ANNOUNCE_URL here would make the resolver disagree with every
+    other reader of settings.empornium_announce_url.
+    """
     monkeypatch.delenv("EMPORNIUM_EMPORNIUM_ANNOUNCE_URL", raising=False)
     monkeypatch.setenv("EMPORNIUM_ANNOUNCE_URL", "http://tracker.fallback.example:2710/fallback/announce")
     empty_settings = Settings(empornium_announce_url="")
-    val, source = resolve_announce_url(settings=empty_settings)
-    assert val == "http://tracker.fallback.example:2710/fallback/announce"
-    assert source == "env"
+    empty_client = MagicMock()
+    empty_client.plugin_configuration.return_value = {}
+    val, source = resolve_announce_url(settings=empty_settings, stash_client=empty_client)
+    assert val == ""
+    assert source == "not set"
+
+
+def test_plugin_configuration_unwraps_and_tolerates_bad_envelopes(monkeypatch):
+    """StashClient.plugin_configuration owns the GraphQL envelope shape.
+
+    plugin_settings now consumes the unwrapped plugins map, so the envelope
+    handling has to be verified here rather than through the resolver.
+    """
+    from empornium_megapack.gql import StashClient
+
+    client = StashClient(settings=Settings())
+    plugins = {"empornium-megapack": {"announceUrl": "http://t.example/announce"}}
+
+    monkeypatch.setattr(client, "_post", lambda q, v: {"configuration": {"plugins": plugins}})
+    assert client.plugin_configuration() == plugins
+
+    for bad in ({}, {"configuration": None}, {"configuration": {}}, {"configuration": {"plugins": None}}):
+        monkeypatch.setattr(client, "_post", lambda q, v, b=bad: b)
+        assert client.plugin_configuration() == {}

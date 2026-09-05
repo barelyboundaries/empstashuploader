@@ -22,6 +22,7 @@ from typing import Callable
 import httpx
 
 from .config import CONFIG_LOCAL_NAME, Settings, get_settings
+from .plugin_settings import resolve_hamster_api_key
 
 HAMSTER_UPLOAD_URL = "https://hamsterimg.net/api/1/upload"
 HAMSTER_IMAGE_MIME = "image/jpeg"
@@ -282,13 +283,13 @@ def upload_hamster(
     A contact sheet that cannot be uploaded fails pack generation.
     """
     settings = settings or get_settings()
-    from .plugin_settings import resolve_hamster_api_key
-
     api_key, _ = resolve_hamster_api_key(settings)
     if not api_key:
         raise ContactSheetError(
-            "No HamsterImg API key configured; set EMPORNIUM_HAMSTER_API_KEY "
-            f"or hamster_api_key in {CONFIG_LOCAL_NAME}."
+            "No HamsterImg API key configured. Set it in Stash: Settings -> "
+            "Plugins -> Empornium Megapack Builder -> HamsterImg API Key. "
+            "It can also come from EMPORNIUM_HAMSTER_API_KEY or hamster_api_key "
+            f"in {CONFIG_LOCAL_NAME}, both of which take precedence."
         )
     data = {"type": "file", "action": "upload", "nsfw": "1", "format": "json"}
     headers = {"accept": "application/json", "X-API-Key": api_key}

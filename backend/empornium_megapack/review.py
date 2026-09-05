@@ -24,6 +24,7 @@ from .build import (
 )
 from .config import get_settings
 from .gql import StashClient
+from .plugin_settings import resolve_announce_url
 from .images import ContactSheetError, ImageService
 from .metadata import (
     bbcode_escape,
@@ -700,12 +701,14 @@ class PackService:
         exists only inside the private torrent: never in responses, logs,
         manifests, or the description.
         """
-        from .plugin_settings import resolve_announce_url
-
         announce, _ = resolve_announce_url(self.settings, stash_client=self.stash)
         if not announce:
             raise BuildError(
-                "No Empornium announce URL configured; set EMPORNIUM_EMPORNIUM_ANNOUNCE_URL."
+                "No Empornium announce URL configured. Set it in Stash: Settings -> "
+                "Plugins -> Empornium Megapack Builder -> Empornium Announce URL. "
+                "It can also come from EMPORNIUM_EMPORNIUM_ANNOUNCE_URL or "
+                "empornium_announce_url in the local config file, both of which "
+                "take precedence."
             )
         validate_announce_url(announce)
         policy = self._resolve_policy(request.file_time_policy, request.file_time_ascending)

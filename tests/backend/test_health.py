@@ -96,7 +96,6 @@ def test_health_and_config_refresh_sources(monkeypatch):
     clear_cache()
     # Ensure env vars not set initially
     monkeypatch.delenv("EMPORNIUM_EMPORNIUM_ANNOUNCE_URL", raising=False)
-    monkeypatch.delenv("EMPORNIUM_ANNOUNCE_URL", raising=False)
     monkeypatch.delenv("EMPORNIUM_HAMSTER_API_KEY", raising=False)
 
     res = client.get("/health")

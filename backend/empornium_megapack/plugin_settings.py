@@ -31,15 +31,6 @@ _cache: dict[str, str] | None = None
 _cache_time: float = 0.0
 _lock = threading.Lock()
 
-CONFIG_PLUGINS_QUERY = """
-query PluginConfiguration {
-  configuration {
-    plugins
-  }
-}
-"""
-
-
 def clear_cache() -> None:
     """Clear the cached plugin settings."""
     global _cache, _cache_time
@@ -72,13 +63,7 @@ def get_plugin_settings(
 
     try:
         client = stash_client or StashClient()
-        data = client._post(CONFIG_PLUGINS_QUERY, {})
-        if not isinstance(data, dict):
-            return {}
-        configuration = data.get("configuration")
-        if not isinstance(configuration, dict):
-            return {}
-        plugins = configuration.get("plugins")
+        plugins = client.plugin_configuration()
         if not isinstance(plugins, dict):
             return {}
         pkg_settings = plugins.get(PLUGIN_ID)
@@ -107,7 +92,9 @@ def resolve_announce_url(
 ) -> tuple[str, str]:
     """Resolve the Empornium announce URL following strict precedence:
 
-    1. env var: EMPORNIUM_EMPORNIUM_ANNOUNCE_URL (or EMPORNIUM_ANNOUNCE_URL)
+    1. env var: EMPORNIUM_EMPORNIUM_ANNOUNCE_URL (the doubled prefix is not a
+       typo: the field itself is named empornium_announce_url and Settings
+       applies the EMPORNIUM_ prefix on top of it)
     2. config file: settings.empornium_announce_url
     3. Stash plugin settings: announceUrl
     4. not set
@@ -115,7 +102,7 @@ def resolve_announce_url(
     Returns (value, source) where source is one of:
     "env", "config file", "Stash plugin settings", "not set".
     """
-    env_val = os.environ.get("EMPORNIUM_EMPORNIUM_ANNOUNCE_URL") or os.environ.get("EMPORNIUM_ANNOUNCE_URL")
+    env_val = os.environ.get("EMPORNIUM_EMPORNIUM_ANNOUNCE_URL")
     if env_val is not None and env_val.strip():
         return env_val.strip(), "env"
 

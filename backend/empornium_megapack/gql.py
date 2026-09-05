@@ -54,6 +54,15 @@ class StashError(Exception):
     pass
 
 
+PLUGIN_CONFIGURATION_QUERY = """
+query PluginConfiguration {
+  configuration {
+    plugins
+  }
+}
+"""
+
+
 class StashClient:
     def __init__(self, settings=None):
         self.settings = settings or get_settings()
@@ -77,6 +86,20 @@ class StashClient:
         if "errors" in data and data["errors"]:
             raise StashError(f"Stash GraphQL error: {data['errors'][0].get('message')}")
         return data.get("data", {})
+
+    def plugin_configuration(self) -> dict:
+        """Return the Stash `configuration { plugins }` map.
+
+        Keyed by plugin id; each value is that plugin's settings object. Raises
+        StashError like every other query here — callers that must not fail a
+        build on a down Stash are responsible for catching it.
+        """
+        data = self._post(PLUGIN_CONFIGURATION_QUERY, {})
+        configuration = data.get("configuration")
+        if not isinstance(configuration, dict):
+            return {}
+        plugins = configuration.get("plugins")
+        return plugins if isinstance(plugins, dict) else {}
 
     def find_scene(self, scene_id: str) -> dict | None:
         data = self._post(SCENE_QUERY, {"id": scene_id})
