@@ -917,7 +917,7 @@ class TestFeature15E2EOpaqueBoxSuite:
         """15.5 Generated BBCode contains clean formatted text with proper tag hierarchy."""
         res = run_build_megapack(sample_scenes_payload)
         bbcode = Path(res["bbcode_path"]).read_text(encoding="utf-8")
-        assert "[center][b][size=5]" in bbcode
+        assert "[color=#f5f8fa]Test Studio Megapack Vol 1[/color]" in bbcode
         assert "[b]Performers:[/b]" in bbcode
         assert "[b]Tags:[/b]" in bbcode
 

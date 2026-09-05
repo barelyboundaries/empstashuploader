@@ -258,6 +258,23 @@
       align-items: center;
     }
 
+    .config-warning-banner {
+      background-color: rgba(245, 158, 11, 0.12);
+      border: 1px solid var(--warning);
+      border-radius: 8px;
+      padding: 10px 16px;
+      margin: 8px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .config-warning-banner strong {
+      color: var(--warning);
+      font-size: 0.95rem;
+    }
+
     .scene-card--duplicate {
       border-left: 4px solid var(--danger) !important;
       background: rgba(239, 68, 68, 0.06);
@@ -1775,6 +1792,16 @@
       <button id="btn-header-close" class="btn btn-close-header" title="Close Review Modal">✕ Close</button>
     </div>
   </header>
+
+  <div id="config-warning-banner" class="config-warning-banner collision-banner" style="display: none;" role="alert">
+    <div class="collision-banner-text">
+      <strong id="config-warning-headline">⚠️ Configuration Required</strong>
+      <span id="config-warning-detail"></span>
+    </div>
+    <div class="collision-banner-actions">
+      <button type="button" id="btn-config-recheck" class="btn btn-secondary">Recheck</button>
+    </div>
+  </div>
 
   <!-- Wizard stage rail (todo 8): Setup -> Locations -> Scenes -> Actions.
        Navigation state lives in review.js (plain JS, no storage); the rail

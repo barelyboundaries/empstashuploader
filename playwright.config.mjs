@@ -46,7 +46,8 @@ export default defineConfig({
     'test_tag_vocabulary_parity.spec.mjs',
     'test_locations_lock.spec.mjs',
     'test_build_console.spec.mjs',
-    'test_run_history.spec.mjs'
+    'test_run_history.spec.mjs',
+    'test_config_gate.spec.mjs'
   ],
   outputDir: path.join(evidenceDir, 'test-results'),
   fullyParallel: false,

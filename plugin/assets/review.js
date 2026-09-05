@@ -2003,6 +2003,11 @@
         }
       }
 
+      if (configGateChecked && !configGateValid) {
+        buildDisabled = true;
+        buildReason = configGateReason;
+      }
+
       if (btnBuild) {
         btnBuild.disabled = buildDisabled;
         btnBuild.title = buildDisabled ? buildReason : "Build single-scene torrent, contact sheet, and BBCode";
@@ -2061,6 +2066,11 @@
       if (btnConsolidate) {
         btnConsolidate.disabled = consolidateDisabled;
         btnConsolidate.title = consolidateDisabled ? consolidateReason : "Consolidate files into destination directory via Stash GraphQL";
+      }
+
+      if (configGateChecked && !configGateValid) {
+        buildDisabled = true;
+        buildReason = configGateReason;
       }
 
       if (btnBuild) {
@@ -3341,6 +3351,10 @@
     updateBBCode();
 
     const active = activeScenes();
+    if (configGateChecked && !configGateValid) {
+      showStatus(`Build aborted: ${configGateReason}`, 0, true);
+      return;
+    }
     if (active.length === 0) {
       showStatus("Build aborted: No active scenes in selection.", 0, true);
       return;
@@ -5344,6 +5358,7 @@
 
       // Lock controls
       applyBusyLock();
+      updateActionAvailability();
     } else {
       busyOperation = null;
       busyLabel = null;
@@ -5914,6 +5929,11 @@
   window.handleUnlockLocations = handleUnlockLocations;
   window.getLocationsLocked = () => locationsLocked;
   window.getCommittedLocations = () => committedLocations;
+  window.checkConfigGate = checkConfigGate;
+  window.refreshConfigGate = refreshConfigGate;
+  window.getConfigGateValid = () => configGateValid;
+  window.getConfigGateReason = () => configGateReason;
+  window.getConfigGateChecked = () => configGateChecked;
 
   // Prefill the scratch dir from the backend /health payload (todo 8 added
   // the field there). Best-effort: a down sidecar, non-200, or missing field
@@ -5942,6 +5962,125 @@
     }
   }
 
+  let configGateChecked = false;
+  let configGateValid = false;
+  let configGateReason = "";
+
+  async function checkConfigGate() {
+    const banner = document.getElementById("config-warning-banner");
+    const headlineEl = document.getElementById("config-warning-headline");
+    const detailEl = document.getElementById("config-warning-detail");
+
+    const endpoints = backendEndpoints("/health");
+    let healthData = null;
+    let reached = false;
+
+    for (const url of endpoints) {
+      try {
+        const response = await fetch(url, { cache: "no-store" });
+        if (!response.ok) continue;
+        reached = true;
+        healthData = await response.json();
+        break;
+      } catch (err) {
+        // candidate failed
+      }
+    }
+
+    configGateChecked = true;
+
+    if (!reached || !healthData || typeof healthData !== "object") {
+      // FAIL CLOSED: /health unreachable
+      configGateValid = false;
+      configGateReason = "Backend configuration unknown (/health unreachable). Configure in Stash -> Settings -> Plugins -> Empornium Megapack Builder";
+      if (banner) {
+        if (headlineEl) headlineEl.textContent = "⚠️ Backend Configuration Unknown";
+        if (detailEl) detailEl.textContent = "Unable to reach backend /health to verify configuration. Check that the sidecar is running and configure in Stash -> Settings -> Plugins -> Empornium Megapack Builder.";
+        banner.style.display = "flex";
+      }
+      updateActionAvailability();
+      return;
+    }
+
+    const hasAnnounce = typeof healthData.announce_configured === "boolean";
+    const hasHamster = typeof healthData.hamster_configured === "boolean";
+
+    if (!hasAnnounce || !hasHamster) {
+      // FAIL CLOSED: fields absent entirely
+      configGateValid = false;
+      configGateReason = "Backend configuration unknown (missing configuration fields). Configure in Stash -> Settings -> Plugins -> Empornium Megapack Builder";
+      if (banner) {
+        if (headlineEl) headlineEl.textContent = "⚠️ Backend Configuration Unknown";
+        if (detailEl) detailEl.textContent = "Configuration fields are absent from backend /health. Configure settings in Stash -> Settings -> Plugins -> Empornium Megapack Builder.";
+        banner.style.display = "flex";
+      }
+      updateActionAvailability();
+      return;
+    }
+
+    const announceOk = healthData.announce_configured;
+    const hamsterOk = healthData.hamster_configured;
+
+    if (!announceOk || !hamsterOk) {
+      configGateValid = false;
+      let missingItems = [];
+      if (!announceOk) missingItems.push("Empornium announce URL");
+      if (!hamsterOk) missingItems.push("HamsterImg API key");
+
+      const missingText = missingItems.join(" and ");
+      configGateReason = `${missingText} not configured (set in Stash -> Settings -> Plugins -> Empornium Megapack Builder)`;
+
+      if (banner) {
+        if (headlineEl) {
+          headlineEl.textContent = missingItems.length > 1
+            ? "⚠️ Configuration Required"
+            : `⚠️ Missing ${missingItems[0]}`;
+        }
+        if (detailEl) {
+          if (missingItems.length > 1) {
+            detailEl.textContent = `${missingText} are not configured. Configure them in Stash -> Settings -> Plugins -> Empornium Megapack Builder.`;
+          } else {
+            detailEl.textContent = `${missingText} is not configured. Configure it in Stash -> Settings -> Plugins -> Empornium Megapack Builder.`;
+          }
+        }
+        banner.style.display = "flex";
+      }
+    } else {
+      configGateValid = true;
+      configGateReason = "";
+      if (banner) {
+        banner.style.display = "none";
+      }
+    }
+
+    updateActionAvailability();
+  }
+
+  async function refreshConfigGate() {
+    const recheckBtn = document.getElementById("btn-config-recheck");
+    if (recheckBtn) {
+      recheckBtn.disabled = true;
+      recheckBtn.textContent = "Rechecking…";
+    }
+    try {
+      const endpoints = backendEndpoints("/api/config/refresh");
+      for (const url of endpoints) {
+        try {
+          const response = await fetch(url, { method: "POST", cache: "no-store" });
+          if (response.ok) break;
+        } catch (err) {
+          // try next endpoint
+        }
+      }
+      await checkConfigGate();
+    } finally {
+      if (recheckBtn) {
+        recheckBtn.disabled = false;
+        recheckBtn.textContent = "Recheck";
+      }
+    }
+  }
+
   // Everything that becomes possible the moment the sidecar answers. Called
   // from BOTH recovery paths in _doRefreshSidecarStatus: the fast probe at the
   // top, and the post-StartBackend poll loop below it. The second is the common
@@ -5955,6 +6094,7 @@
     sidecarEverHealthy = true;
     prefillScratchDirFromHealth();
     if (!cachedVocabulary) fetchVocabulary();
+    checkConfigGate();
   }
 
   // Sidecar refresh state & candidate probe helper
@@ -6431,6 +6571,12 @@
     if (stopSidecarBtn && !stopSidecarBtn.dataset.bound) {
       stopSidecarBtn.dataset.bound = "true";
       stopSidecarBtn.addEventListener("click", stopSidecar);
+    }
+
+    const configRecheckBtn = document.getElementById("btn-config-recheck");
+    if (configRecheckBtn && !configRecheckBtn.dataset.bound) {
+      configRecheckBtn.dataset.bound = "true";
+      configRecheckBtn.addEventListener("click", refreshConfigGate);
     }
 
     const browseDirBtn = document.getElementById("btn-browse-dir");

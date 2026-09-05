@@ -176,7 +176,8 @@ async function bootHarness(page, {
         version: "0.2.0",
         output_dir: "C:\\Downloads\\Megapacks",
         scratch_dir: healthScratch,
-        hamster_configured: false
+        hamster_configured: true,
+        announce_configured: true
       })
     });
   });

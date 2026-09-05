@@ -94,7 +94,7 @@ async function bootHarness(page, { scenes = null, sceneCount = 6, viewport = { w
     return route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ status: "connected", version: "0.2.0", scratch_dir: "D:\\Scratch" })
+      body: JSON.stringify({ status: "connected", version: "0.2.0", scratch_dir: "D:\\Scratch", announce_configured: true, hamster_configured: true })
     });
   });
 

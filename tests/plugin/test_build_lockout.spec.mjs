@@ -68,7 +68,7 @@ function serveAssets(page) {
     return route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({ ok: true, status: 'connected', version: '0.2.0', scratch_dir: 'C:\\Scratch' }),
+      body: JSON.stringify({ ok: true, status: 'connected', version: '0.2.0', scratch_dir: 'C:\\Scratch', announce_configured: true, hamster_configured: true }),
     });
   });
 }

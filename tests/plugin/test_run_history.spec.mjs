@@ -45,7 +45,7 @@ function setupAssetRoutes(page) {
     return route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ ok: true, status: "connected", version: "0.2.0", scratch_dir: SCRATCH_DIR })
+      body: JSON.stringify({ ok: true, status: "connected", version: "0.2.0", scratch_dir: SCRATCH_DIR, announce_configured: true, hamster_configured: true })
     });
   });
 

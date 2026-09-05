@@ -176,3 +176,12 @@ def test_ttl_cache_and_refresh():
     res3 = refresh(stash_client=mock_client)
     assert res3["announceUrl"] == "http://tracker.two.example/announce"
     assert mock_client._post.call_count == 2
+
+
+def test_announce_url_fallback_env_var(monkeypatch):
+    monkeypatch.delenv("EMPORNIUM_EMPORNIUM_ANNOUNCE_URL", raising=False)
+    monkeypatch.setenv("EMPORNIUM_ANNOUNCE_URL", "http://tracker.fallback.example:2710/fallback/announce")
+    empty_settings = Settings(empornium_announce_url="")
+    val, source = resolve_announce_url(settings=empty_settings)
+    assert val == "http://tracker.fallback.example:2710/fallback/announce"
+    assert source == "env"
