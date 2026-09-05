@@ -17,10 +17,11 @@ import logging
 import os
 import threading
 import time
-from typing import Any
+from typing import Any, NamedTuple
 
 from .config import Settings, get_settings
 from .gql import StashClient
+from .torrents import TorrentError, validate_announce_url
 
 logger = logging.getLogger(__name__)
 
@@ -147,3 +148,52 @@ def resolve_hamster_api_key(
         return stash_val.strip(), "Stash plugin settings"
 
     return "", "not set"
+
+
+class AnnounceValidity(NamedTuple):
+    valid: bool
+    reason: str
+
+    @property
+    def is_valid(self) -> bool:
+        return self.valid
+
+
+def announce_validity(
+    settings: Settings | str | None = None,
+    plugin_settings: dict[str, str] | None = None,
+    stash_client: StashClient | None = None,
+    *,
+    announce_url: str | None = None,
+) -> AnnounceValidity:
+    """Resolve the Empornium announce URL and check its validity.
+
+    Returns an AnnounceValidity(valid, reason) tuple:
+    - If valid: (True, "")
+    - If unset: (False, "not configured")
+    - If configured but invalid: (False, <generic human-readable reason>)
+
+    The reason NEVER contains or interpolates the URL itself.
+    """
+    if isinstance(settings, str):
+        url = settings.strip()
+    elif announce_url is not None:
+        url = announce_url.strip()
+    else:
+        url, _ = resolve_announce_url(
+            settings=settings,
+            plugin_settings=plugin_settings,
+            stash_client=stash_client,
+        )
+
+    if not url:
+        return AnnounceValidity(False, "not configured")
+
+    try:
+        validate_announce_url(url)
+        return AnnounceValidity(True, "")
+    except TorrentError as err:
+        return AnnounceValidity(False, str(err))
+    except Exception:
+        return AnnounceValidity(False, "Invalid announce URL.")
+

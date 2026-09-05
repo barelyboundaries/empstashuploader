@@ -6171,6 +6171,20 @@
         }
         banner.style.display = "flex";
       }
+    } else if (typeof healthData.announce_valid === "boolean" && !healthData.announce_valid) {
+      configGateValid = false;
+      const invalidReason = healthData.announce_invalid_reason || "Invalid announce URL";
+      configGateReason = `Empornium announce URL is configured but not valid: ${invalidReason}`;
+
+      if (banner) {
+        if (headlineEl) {
+          headlineEl.textContent = "⚠️ Invalid Announce URL";
+        }
+        if (detailEl) {
+          detailEl.textContent = `Empornium announce URL is configured but not valid: ${invalidReason}. Update it in Plugin Settings.`;
+        }
+        banner.style.display = "flex";
+      }
     } else {
       configGateValid = true;
       configGateReason = "";
@@ -6224,6 +6238,36 @@
     }
   }
 
+  function showAnnounceFieldError(reason) {
+    let announceErr = document.getElementById("setting-announce-error");
+    if (!announceErr) {
+      announceErr = document.createElement("div");
+      announceErr.id = "setting-announce-error";
+      announceErr.className = "setting-field-error";
+      announceErr.style.fontSize = "0.82rem";
+      announceErr.style.color = "#ff6b6b";
+      announceErr.style.marginTop = "4px";
+      announceErr.style.lineHeight = "1.35";
+      const announceInput = document.getElementById("setting-announce-url");
+      const row = announceInput ? announceInput.closest(".plugin-settings-input-row") : null;
+      if (row && row.parentNode) {
+        row.parentNode.insertBefore(announceErr, row.nextSibling);
+      }
+    }
+    if (announceErr) {
+      announceErr.textContent = reason;
+      announceErr.style.display = "block";
+    }
+  }
+
+  function clearAnnounceFieldError() {
+    const announceErr = document.getElementById("setting-announce-error");
+    if (announceErr) {
+      announceErr.style.display = "none";
+      announceErr.textContent = "";
+    }
+  }
+
   function handlePluginSettingsKeydown(e) {
     if (e.key === "Escape") {
       closePluginSettingsDialog();
@@ -6241,6 +6285,7 @@
       errEl.style.display = "none";
       errEl.textContent = "";
     }
+    clearAnnounceFieldError();
 
     const announceInput = document.getElementById("setting-announce-url");
     const hamsterInput = document.getElementById("setting-hamster-key");
@@ -6318,6 +6363,8 @@
     }
     document.removeEventListener("keydown", handlePluginSettingsKeydown);
 
+    clearAnnounceFieldError();
+
     const announceInput = document.getElementById("setting-announce-url");
     const hamsterInput = document.getElementById("setting-hamster-key");
     if (announceInput) announceInput.type = "password";
@@ -6341,6 +6388,7 @@
       errEl.style.display = "none";
       errEl.textContent = "";
     }
+    clearAnnounceFieldError();
 
     const announceVal = announceInput ? announceInput.value : "";
     const hamsterVal = hamsterInput ? hamsterInput.value : "";
@@ -6351,6 +6399,9 @@
     }
 
     try {
+      // Note: The value is still written to Stash before validation — that is the accepted
+      // tradeoff for having exactly one copy of the rule in backend validate_announce_url.
+      // Do not add a client-side JS validator here.
       await executeGraphQL(CONFIGURE_PLUGIN_MUTATION, {
         plugin_id: "empornium-megapack",
         input: {
@@ -6359,12 +6410,28 @@
         }
       });
 
+      let refreshData = null;
       const endpoints = backendEndpoints("/api/config/refresh");
       for (const url of endpoints) {
         try {
           const resp = await fetch(url, { method: "POST", cache: "no-store" });
-          if (resp.ok) break;
+          if (resp.ok) {
+            refreshData = await resp.json();
+            break;
+          }
         } catch (_) {}
+      }
+
+      if (
+        refreshData &&
+        typeof refreshData.announce_valid === "boolean" &&
+        !refreshData.announce_valid &&
+        Boolean(refreshData.announce_configured)
+      ) {
+        const reason = refreshData.announce_invalid_reason || "Invalid announce URL";
+        showAnnounceFieldError(reason);
+        await checkConfigGate();
+        return;
       }
 
       await checkConfigGate();
@@ -6975,6 +7042,7 @@
       settingAnnounceInput.addEventListener("keydown", (e) => {
         if (e.key === "Enter") savePluginSettings();
       });
+      settingAnnounceInput.addEventListener("input", clearAnnounceFieldError);
     }
 
     const settingHamsterInput = document.getElementById("setting-hamster-key");

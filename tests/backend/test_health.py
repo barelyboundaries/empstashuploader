@@ -105,6 +105,8 @@ def test_health_and_config_refresh_sources(monkeypatch):
     assert "hamster_source" in data
     assert "announce_configured" in data
     assert "announce_source" in data
+    assert "announce_valid" in data
+    assert "announce_invalid_reason" in data
     # Secrets discipline: secret values must NEVER be in response
     assert "hamster_api_key" not in data
     assert "empornium_announce_url" not in data
@@ -118,7 +120,81 @@ def test_health_and_config_refresh_sources(monkeypatch):
     assert "hamster_source" in refresh_data
     assert "announce_configured" in refresh_data
     assert "announce_source" in refresh_data
+    assert "announce_valid" in refresh_data
+    assert "announce_invalid_reason" in refresh_data
     assert "hamster_api_key" not in refresh_data
     assert "empornium_announce_url" not in refresh_data
+
+
+def test_health_and_config_refresh_announce_validity(monkeypatch):
+    import json
+    from empornium_megapack.plugin_settings import clear_cache
+    import empornium_megapack.main as main_mod
+
+    # 1. Unset: announce_valid is False, announce_invalid_reason is empty
+    clear_cache()
+    monkeypatch.delenv("EMPORNIUM_EMPORNIUM_ANNOUNCE_URL", raising=False)
+    orig_url = main_mod.settings.empornium_announce_url
+    main_mod.settings.empornium_announce_url = ""
+    try:
+        res = client.get("/health")
+        assert res.status_code == 200
+        data = res.json()
+        assert data["announce_configured"] is False
+        assert data["announce_valid"] is False
+        assert data["announce_invalid_reason"] == ""
+
+        refresh_res = client.post("/api/config/refresh")
+        rdata = refresh_res.json()
+        assert rdata["announce_configured"] is False
+        assert rdata["announce_valid"] is False
+        assert rdata["announce_invalid_reason"] == ""
+
+        # 2. Configured but invalid (e.g. "test")
+        monkeypatch.setenv("EMPORNIUM_EMPORNIUM_ANNOUNCE_URL", "test")
+        clear_cache()
+        res = client.get("/health")
+        data = res.json()
+        assert data["announce_configured"] is True
+        assert data["announce_valid"] is False
+        assert data["announce_invalid_reason"] == "Announce URL must use http or https."
+        # Secret discipline: ensure input URL "test" is NEVER in response anywhere
+        raw_health_str = json.dumps(data)
+        assert '"test"' not in raw_health_str
+        assert ": \"test\"" not in raw_health_str
+
+        refresh_res = client.post("/api/config/refresh")
+        rdata = refresh_res.json()
+        assert rdata["announce_configured"] is True
+        assert rdata["announce_valid"] is False
+        assert rdata["announce_invalid_reason"] == "Announce URL must use http or https."
+        raw_refresh_str = json.dumps(rdata)
+        assert '"test"' not in raw_refresh_str
+        assert ": \"test\"" not in raw_refresh_str
+
+        # 3. Configured and valid
+        valid_url = "http://tracker.empornium.sx:2710/secret_token_abc/secret_token_xyz/announce"
+        monkeypatch.setenv("EMPORNIUM_EMPORNIUM_ANNOUNCE_URL", valid_url)
+        clear_cache()
+        res = client.get("/health")
+        data = res.json()
+        assert data["announce_configured"] is True
+        assert data["announce_valid"] is True
+        assert data["announce_invalid_reason"] == ""
+        # Secret discipline: valid announce URL must never appear in response
+        assert valid_url not in json.dumps(data)
+        assert "secret_token" not in json.dumps(data)
+
+        refresh_res = client.post("/api/config/refresh")
+        rdata = refresh_res.json()
+        assert rdata["announce_configured"] is True
+        assert rdata["announce_valid"] is True
+        assert rdata["announce_invalid_reason"] == ""
+        assert valid_url not in json.dumps(rdata)
+        assert "secret_token" not in json.dumps(rdata)
+    finally:
+        main_mod.settings.empornium_announce_url = orig_url
+        clear_cache()
+
 
 

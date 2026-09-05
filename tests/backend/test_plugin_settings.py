@@ -5,6 +5,7 @@ import pytest
 from empornium_megapack.config import Settings
 from empornium_megapack.gql import StashError
 from empornium_megapack.plugin_settings import (
+    announce_validity,
     clear_cache,
     get_plugin_settings,
     refresh,
@@ -196,3 +197,36 @@ def test_plugin_configuration_unwraps_and_tolerates_bad_envelopes(monkeypatch):
     for bad in ({}, {"configuration": None}, {"configuration": {}}, {"configuration": {"plugins": None}}):
         monkeypatch.setattr(client, "_post", lambda q, v, b=bad: b)
         assert client.plugin_configuration() == {}
+
+
+def test_announce_validity_real_url():
+    valid, reason = announce_validity("http://tracker.empornium.sx:2710/aaa/bbb/announce")
+    assert valid is True
+    assert reason == ""
+
+
+def test_announce_validity_invalid_inputs():
+    test_cases = [
+        ("test", "Announce URL must use http or https."),
+        ("http://", "Announce URL has no host."),
+        ("http://tracker.empornium.sx:2710/aaa/bbb", "Announce URL path does not look like an announce endpoint."),
+    ]
+    for inp, expected_reason in test_cases:
+        valid, reason = announce_validity(inp)
+        assert valid is False
+        assert reason == expected_reason
+        assert inp not in reason
+
+
+def test_announce_validity_unset(monkeypatch):
+    clear_cache()
+    monkeypatch.delenv("EMPORNIUM_EMPORNIUM_ANNOUNCE_URL", raising=False)
+    empty_settings = Settings(empornium_announce_url="")
+    empty_client = MagicMock()
+    empty_client.plugin_configuration.return_value = {}
+
+    valid, reason = announce_validity(settings=empty_settings, stash_client=empty_client)
+    # Distinct from configured-but-invalid state
+    assert valid is False
+    assert reason == "not configured"
+

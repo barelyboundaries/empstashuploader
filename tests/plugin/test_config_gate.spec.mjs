@@ -331,4 +331,51 @@ test.describe('Entry Gate — Announce URL and HamsterImg API Key Configuration 
     });
     await expect(btnBuild).toBeEnabled();
   });
+
+  test('gate blocks with distinct invalid message when announce is configured but invalid', async ({ page }) => {
+    await bootHarness(page, {
+      healthPayload: {
+        status: 'ok',
+        track: 'Empornium Megapack Builder',
+        version: '0.2.0',
+        scratch_dir: 'C:\\Scratch',
+        output_dir: 'C:\\Packs',
+        hamster_configured: true,
+        announce_configured: true,
+        announce_valid: false,
+        announce_invalid_reason: 'Announce URL must use http or https.',
+      }
+    });
+
+    const banner = page.locator('#config-warning-banner');
+    const headline = page.locator('#config-warning-headline');
+    const detail = page.locator('#config-warning-detail');
+    const btnBuild = page.locator('#btn-build');
+
+    await expect(banner).toBeVisible();
+    await expect(headline).toHaveText('⚠️ Invalid Announce URL');
+    await expect(detail).toContainText('Empornium announce URL is configured but not valid: Announce URL must use http or https.');
+    await expect(btnBuild).toBeDisabled();
+    await expect(btnBuild).toHaveAttribute('title', /Empornium announce URL is configured but not valid: Announce URL must use http or https\./);
+  });
+
+  test('gate behaves as today when the new fields are absent from payload (older sidecar)', async ({ page }) => {
+    await bootHarness(page, {
+      healthPayload: {
+        status: 'ok',
+        track: 'Empornium Megapack Builder',
+        version: '0.2.0',
+        scratch_dir: 'C:\\Scratch',
+        output_dir: 'C:\\Packs',
+        hamster_configured: true,
+        announce_configured: true,
+      }
+    });
+
+    const banner = page.locator('#config-warning-banner');
+    const btnBuild = page.locator('#btn-build');
+
+    await expect(banner).toBeHidden();
+    await expect(btnBuild).toBeEnabled();
+  });
 });

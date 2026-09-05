@@ -15,7 +15,12 @@ from .models import (
     TokenCreateResponse,
     TokenGetResponse,
 )
-from .plugin_settings import refresh, resolve_announce_url, resolve_hamster_api_key
+from .plugin_settings import (
+    announce_validity,
+    refresh,
+    resolve_announce_url,
+    resolve_hamster_api_key,
+)
 from .run_store import run_store, RUN_ID_REGEX
 from .tags import TagVocabularyError, load_vocabulary
 from .token_store import token_store
@@ -197,6 +202,7 @@ current_build_stamp()
 def health():
     hamster_val, hamster_source = resolve_hamster_api_key(settings)
     announce_val, announce_source = resolve_announce_url(settings)
+    ann_valid, ann_reason = announce_validity(settings)
     return {
         "status": "ok",
         "track": "Empornium Megapack Builder",
@@ -214,6 +220,8 @@ def health():
         "hamster_source": hamster_source,
         "announce_configured": bool(announce_val),
         "announce_source": announce_source,
+        "announce_valid": bool(ann_valid),
+        "announce_invalid_reason": ann_reason if bool(announce_val) and not ann_valid else "",
         "bundle_after_build": settings.bundle_after_build,
     }
 
@@ -223,12 +231,15 @@ def config_refresh():
     refresh()
     hamster_val, hamster_source = resolve_hamster_api_key(settings)
     announce_val, announce_source = resolve_announce_url(settings)
+    ann_valid, ann_reason = announce_validity(settings)
     return {
         "status": "ok",
         "hamster_configured": bool(hamster_val),
         "hamster_source": hamster_source,
         "announce_configured": bool(announce_val),
         "announce_source": announce_source,
+        "announce_valid": bool(ann_valid),
+        "announce_invalid_reason": ann_reason if bool(announce_val) and not ann_valid else "",
     }
 
 

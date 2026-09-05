@@ -119,6 +119,8 @@ async function bootSettingsHarness(page, {
         announce_configured: currentHealth.announce_configured,
         hamster_source: currentHealth.hamster_source,
         announce_source: currentHealth.announce_source,
+        announce_valid: currentHealth.announce_valid,
+        announce_invalid_reason: currentHealth.announce_invalid_reason,
       }),
     });
   });
@@ -453,5 +455,85 @@ test.describe('In-app Plugin Settings Dialog', () => {
     // Toggle back
     await toggleHamster.click();
     await expect(hamsterInput).toHaveAttribute('type', 'password');
+  });
+
+  test('saving an invalid URL in the dialog keeps it open and shows the inline reason; saving a valid one closes it and clears the banner', async ({ page }) => {
+    const harness = await bootSettingsHarness(page, {
+      healthPayload: {
+        status: 'ok',
+        track: 'Empornium Megapack Builder',
+        version: '0.2.0',
+        scratch_dir: 'C:\\Scratch',
+        output_dir: 'C:\\Packs',
+        hamster_configured: true,
+        announce_configured: false,
+      },
+      storedPlugins: {
+        'empornium-megapack': {
+          announceUrl: '',
+          hamsterApiKey: 'valid-hamster-key',
+        },
+      },
+    });
+
+    const banner = page.locator('#config-warning-banner');
+    const modal = page.locator('#plugin-settings-modal');
+    await expect(banner).toBeVisible();
+
+    // Open settings modal
+    await page.locator('#btn-settings').click();
+    await expect(modal).toBeVisible();
+
+    const announceInput = page.locator('#setting-announce-url');
+    const saveBtn = page.locator('#btn-save-plugin-settings');
+    const inlineErr = page.locator('#setting-announce-error');
+
+    // Type invalid announce URL 'test'
+    await announceInput.fill('test');
+
+    // Backend refresh mock verdict: configured but invalid
+    harness.setHealth({
+      announce_configured: true,
+      announce_valid: false,
+      announce_invalid_reason: 'Announce URL must use http or https.',
+    });
+
+    await saveBtn.click();
+
+    // Assert: Dialog KEEPS OPEN
+    await expect(modal).toBeVisible();
+    // Assert: Inline error on the announce field is visible and contains reason
+    await expect(inlineErr).toBeVisible();
+    await expect(inlineErr).toContainText('Announce URL must use http or https.');
+
+    // Assert: Secrets discipline — input value 'test' must not be in error message or attributes
+    const errText = await inlineErr.textContent();
+    expect(errText).not.toContain('test');
+    await expect(inlineErr).not.toHaveAttribute('data-value', /test/);
+
+    // Value was written to Stash before validation
+    const calls = harness.getConfigurePluginCalls();
+    expect(calls.length).toBe(1);
+    expect(calls[0].input.announceUrl).toBe('test');
+
+    // Now fix: type a valid URL
+    const validUrl = 'http://tracker.empornium.sx:2710/secret123/secret456/announce';
+    await announceInput.fill(validUrl);
+
+    // Inline error clears on input
+    await expect(inlineErr).toBeHidden();
+
+    // Backend refresh mock verdict: valid
+    harness.setHealth({
+      announce_configured: true,
+      announce_valid: true,
+      announce_invalid_reason: '',
+    });
+
+    await saveBtn.click();
+
+    // Assert: Dialog closes and banner is cleared
+    await expect(modal).toBeHidden();
+    await expect(banner).toBeHidden();
   });
 });
