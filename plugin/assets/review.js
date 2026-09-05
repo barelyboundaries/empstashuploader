@@ -6506,7 +6506,34 @@
     }
   }
 
+  function foldHeaderIntoSlot() {
+    const slot = document.getElementById("empornium-header-slot");
+    if (!slot) return;
+
+    const reviewHeader = document.getElementById("review-header");
+    if (reviewHeader) {
+      reviewHeader.hidden = true;
+      reviewHeader.style.display = "none";
+    }
+
+    const sidecarStatus = document.getElementById("sidecar-status");
+    const btnSidecarStop = document.getElementById("btn-sidecar-stop");
+    const btnHistory = document.getElementById("btn-history");
+
+    if (sidecarStatus && !slot.contains(sidecarStatus)) {
+      slot.appendChild(sidecarStatus);
+    }
+    if (btnSidecarStop && !slot.contains(btnSidecarStop)) {
+      slot.appendChild(btnSidecarStop);
+    }
+    if (btnHistory && !slot.contains(btnHistory)) {
+      slot.appendChild(btnHistory);
+    }
+  }
+
   function bindDomEvents() {
+    foldHeaderIntoSlot();
+
     const coverPasteZone = document.getElementById("cover-paste-zone");
     if (coverPasteZone && !coverPasteZone.dataset.bound) {
       coverPasteZone.dataset.bound = "true";

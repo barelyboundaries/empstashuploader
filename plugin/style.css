@@ -140,3 +140,24 @@
   margin-left: 6px;
   line-height: 1.2;
 }
+
+#empornium-header-slot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#empornium-header-slot .sidecar-status {
+  margin-left: 0;
+}
+
+#empornium-header-slot .btn-sidecar-stop {
+  margin-left: 0;
+}
+
+#empornium-header-slot #btn-history {
+  padding: 2px 8px;
+  font-size: 0.75rem;
+  line-height: 1.2;
+}
+

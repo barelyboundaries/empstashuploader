@@ -137,6 +137,7 @@
         <span class="empornium-logo">${resolvedMode === "history" ? "📚" : (isSingle ? "🎬" : "📦")}</span>
         <span>${modalTitle}</span>
         <span class="empornium-badge">${badgeText}</span>
+        <span id="empornium-header-slot"></span>
       </div>
       <button class="empornium-modal-close" title="Close (Esc)">&times;</button>
     `;

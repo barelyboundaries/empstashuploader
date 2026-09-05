@@ -65,6 +65,34 @@ async function mountModal(page, { viewport = { width: 1280, height: 720 } } = {}
   }, reviewJs);
 }
 
+async function mountStandalone(page, { viewport = { width: 1280, height: 720 } } = {}) {
+  await page.setViewportSize(viewport);
+  await page.route("**/host-page", (route) =>
+    route.fulfill({ status: 200, contentType: "text/html", body: HOST_PAGE })
+  );
+  await page.goto("http://localhost:9999/host-page");
+
+  const reviewHtml = readAsset("plugin/assets/review.html");
+  const reviewJs = readAsset("plugin/assets/review.js");
+
+  await page.evaluate(
+    ({ reviewHtml }) => {
+      const doc = new DOMParser().parseFromString(reviewHtml, "text/html");
+      const reviewStyle = document.createElement("style");
+      reviewStyle.textContent = doc.querySelector("style").textContent;
+      document.head.appendChild(reviewStyle);
+      document.body.innerHTML = doc.body.innerHTML;
+    },
+    { reviewHtml }
+  );
+
+  await page.evaluate((js) => {
+    const script = document.createElement("script");
+    script.textContent = js;
+    document.body.appendChild(script);
+  }, reviewJs);
+}
+
 test.describe("Fix 1: Build result panel scrolling & pointer-events", () => {
   test("build-console-result computes pointer-events: auto and wheel scrolls to copy row", async ({ page }) => {
     await mountModal(page, { viewport: { width: 1200, height: 700 } });
@@ -129,5 +157,77 @@ test.describe("Fix 1: Build result panel scrolling & pointer-events", () => {
     await expect(copyCoverBtn).toBeEnabled();
     await expect(copyAllBtn).toBeVisible();
     await expect(copyAllBtn).toBeEnabled();
+  });
+});
+
+test.describe("Fix 2: Fold duplicated header into single modal title bar", () => {
+  test("with #empornium-header-slot present: #sidecar-status, #btn-sidecar-stop and #btn-history end up in slot and #review-header is hidden", async ({ page }) => {
+    await mountModal(page);
+
+    const slot = page.locator("#empornium-header-slot");
+    const reviewHeader = page.locator("#review-header");
+
+    // Assert #review-header is hidden
+    await expect(reviewHeader).toBeHidden();
+
+    // Assert unique controls are relocated into #empornium-header-slot
+    await expect(slot.locator("#sidecar-status")).toBeAttached();
+    await expect(slot.locator("#btn-sidecar-stop")).toBeAttached();
+    await expect(slot.locator("#btn-history")).toBeAttached();
+
+    // Assert duplicates and modal close remain in #review-header
+    await expect(reviewHeader.locator("#header-logo")).toBeAttached();
+    await expect(reviewHeader.locator("#header-modal-title")).toBeAttached();
+    await expect(reviewHeader.locator("#btn-header-close")).toBeAttached();
+
+    // Assert duplicates are NOT in the slot
+    await expect(slot.locator("#header-logo")).toHaveCount(0);
+    await expect(slot.locator("#header-modal-title")).toHaveCount(0);
+    await expect(slot.locator("#btn-header-close")).toHaveCount(0);
+  });
+
+  test("with no slot present (standalone): #review-header is untouched and still holds them", async ({ page }) => {
+    await mountStandalone(page);
+
+    const reviewHeader = page.locator("#review-header");
+    await expect(reviewHeader).toBeVisible();
+
+    // Assert all controls remain inside #review-header
+    await expect(reviewHeader.locator("#sidecar-status")).toBeAttached();
+    await expect(reviewHeader.locator("#btn-sidecar-stop")).toBeAttached();
+    await expect(reviewHeader.locator("#btn-history")).toBeAttached();
+    await expect(reviewHeader.locator("#header-logo")).toBeAttached();
+    await expect(reviewHeader.locator("#header-modal-title")).toBeAttached();
+    await expect(reviewHeader.locator("#btn-header-close")).toBeAttached();
+
+    // No slot exists
+    await expect(page.locator("#empornium-header-slot")).toHaveCount(0);
+  });
+
+  test("fold is idempotent across two consecutive initEmporniumReview calls", async ({ page }) => {
+    await mountModal(page);
+
+    const slot = page.locator("#empornium-header-slot");
+    const reviewHeader = page.locator("#review-header");
+
+    // First call to initEmporniumReview
+    await page.evaluate(() => {
+      window.initEmporniumReview([1], "token-1", "single");
+    });
+
+    await expect(reviewHeader).toBeHidden();
+    await expect(slot.locator("#sidecar-status")).toHaveCount(1);
+    await expect(slot.locator("#btn-sidecar-stop")).toHaveCount(1);
+    await expect(slot.locator("#btn-history")).toHaveCount(1);
+
+    // Second consecutive call to initEmporniumReview
+    await page.evaluate(() => {
+      window.initEmporniumReview([1], "token-1", "single");
+    });
+
+    await expect(reviewHeader).toBeHidden();
+    await expect(slot.locator("#sidecar-status")).toHaveCount(1);
+    await expect(slot.locator("#btn-sidecar-stop")).toHaveCount(1);
+    await expect(slot.locator("#btn-history")).toHaveCount(1);
   });
 });

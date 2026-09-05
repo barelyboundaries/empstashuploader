@@ -381,9 +381,9 @@ test.describe("Empornium Megapack Builder Frontend - Adversarial Stress & Verifi
     await overlay.click({ position: { x: 5, y: 5 } });
     await expect(overlay).toHaveCount(0);
 
-    // 3. Re-open and verify cross-frame close from inside iframe via btn-header-close
+    // 3. Re-open and verify modal header close
     await triggerBtn.click();
-    const headerCloseBtn = overlay.locator("#btn-header-close");
+    const headerCloseBtn = overlay.locator(".empornium-modal-close, #btn-header-close").first();
     await expect(headerCloseBtn).toBeVisible({ timeout: 5000 });
     await headerCloseBtn.click();
 
