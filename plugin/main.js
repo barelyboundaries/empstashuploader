@@ -229,8 +229,25 @@
       if (!origin || origin === "null" || origin.startsWith("about:")) {
         origin = window.location.protocol && window.location.host ? `${window.location.protocol}//${window.location.host}` : "http://localhost:9999";
       }
-      const htmlUrl = `${origin.replace(/\/+$/, "")}/plugin/${PLUGIN_ID}/assets/review.html`;
-      const response = await fetch(htmlUrl);
+      const baseOrigin = origin.replace(/\/+$/, "");
+
+      let buildStamp = null;
+      try {
+        const versionUrl = `${baseOrigin}/plugin/${PLUGIN_ID}/version.json`;
+        const vResponse = await fetch(versionUrl, { cache: "no-store" });
+        if (vResponse.ok) {
+          const vData = await vResponse.json();
+          if (vData && typeof vData.buildStamp === "string" && vData.buildStamp.trim().length > 0) {
+            buildStamp = vData.buildStamp.trim();
+          }
+        }
+      } catch (_) {
+        // Fail soft: fall back to unversioned behavior if version.json is unreachable or unparseable
+      }
+
+      const versionQuery = buildStamp ? `?v=${encodeURIComponent(buildStamp)}` : "";
+      const htmlUrl = `${baseOrigin}/plugin/${PLUGIN_ID}/assets/review.html${versionQuery}`;
+      const response = await fetch(htmlUrl, { cache: "no-store" });
       if (!response.ok) {
         throw new Error(`HTTP ${response.status} loading ${htmlUrl}`);
       }
@@ -263,18 +280,34 @@
       }
 
       // 2. Initialize review logic
-      if (typeof window.initEmporniumReview === "function") {
+      const canReuse = buildStamp
+        ? typeof window.initEmporniumReview === "function" && window.__emporniumAssetVersion === buildStamp
+        : typeof window.initEmporniumReview === "function";
+
+      if (canReuse) {
         window.initEmporniumReview(window._emporniumSceneIds, token, resolvedMode);
       } else {
-        const scriptUrl = `${origin.replace(/\/+$/, "")}/plugin/${PLUGIN_ID}/assets/review.js`;
+        const scriptUrl = `${baseOrigin}/plugin/${PLUGIN_ID}/assets/review.js${versionQuery}`;
         const jsResponse = await fetch(scriptUrl);
         if (!jsResponse.ok) {
           throw new Error(`HTTP ${jsResponse.status} loading ${scriptUrl}`);
         }
         const jsText = await jsResponse.text();
+
+        const hadPreviousVersion = typeof window.initEmporniumReview === "function" || Boolean(window.__emporniumAssetVersion);
+        if (hadPreviousVersion && typeof window.__emporniumTeardown === "function") {
+          try {
+            window.__emporniumTeardown();
+          } catch (_) {}
+        }
+
         const scriptEl = document.createElement("script");
         scriptEl.textContent = jsText;
         document.body.appendChild(scriptEl);
+
+        if (buildStamp) {
+          window.__emporniumAssetVersion = buildStamp;
+        }
 
         if (typeof window.initEmporniumReview === "function") {
           window.initEmporniumReview(window._emporniumSceneIds, token, resolvedMode);

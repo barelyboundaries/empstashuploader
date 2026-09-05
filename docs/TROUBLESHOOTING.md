@@ -18,6 +18,7 @@
 | Plugin missing from `{ plugins { id } }` | The manifest failed to parse. Check `empornium-megapack.yml`. |
 | Registered under the ID `plugin` | The manifest was renamed to `plugin.yml`. The ID comes from the filename — keep it named `empornium-megapack.yml`. |
 | Modal opens blank, or the iframe 404s | The `ui.assets` mapping is missing, or `/plugins/` was used where `/plugin/` was required. |
+| Stale UI behavior after upgrading the plugin | A Stash tab open across upgrades may keep running the previous `review.js`. Automatic version checks now handle this on modal open, but upgrading from a build older than this fix requires one hard reload (`Ctrl+Shift+R`). |
 
 ## Running a build
 

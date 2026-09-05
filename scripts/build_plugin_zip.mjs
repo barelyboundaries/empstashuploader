@@ -211,11 +211,16 @@ try {
 
   writeFileSync(join(stage, "BUILD_STAMP"), `${buildStamp}\n`);
   writeFileSync(join(stage, "empornium_megapack", "BUILD_STAMP"), `${buildStamp}\n`);
+  mkdirSync(join(stage, "assets"), { recursive: true });
+  writeFileSync(
+    join(stage, "assets", "version.json"),
+    `${JSON.stringify({ buildStamp })}\n`,
+  );
 
   // Fail fast if the acceptance set ever loses a member.
   const required = [
     "empornium-megapack.yml", "main.js", "style.css", "task.py", "requirements.txt",
-    "assets/review.html", "assets/review.js", "empornium_megapack/main.py",
+    "assets/review.html", "assets/review.js", "assets/version.json", "empornium_megapack/main.py",
     "empornium_megapack/tags.py", "empornium_megapack/data/emp_tags.toml",
     "install.ps1", "install.sh", "start_backend.ps1", "start_backend.sh", "INSTALL.txt",
     "BUILD_STAMP",

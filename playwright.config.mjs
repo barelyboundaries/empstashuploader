@@ -47,7 +47,8 @@ export default defineConfig({
     'test_locations_lock.spec.mjs',
     'test_build_console.spec.mjs',
     'test_run_history.spec.mjs',
-    'test_config_gate.spec.mjs'
+    'test_config_gate.spec.mjs',
+    'test_stale_asset_cache_busting.spec.mjs'
   ],
   outputDir: path.join(evidenceDir, 'test-results'),
   fullyParallel: false,

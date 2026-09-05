@@ -22,8 +22,8 @@ const __dirname = path.dirname(__filename);
 // mismatch — that is the signal to refresh ASSET_RECORD below in the same
 // commit, so unreviewed or truncated asset changes can never slip through.
 const ASSET_RECORD = {
-  // review.js: surface disabled reasons inline near action buttons
-  'review.js': '76b6784e3aae613d3fa07c025646d9a29f52d7236c6e8dfd8a0b3972c8066767',
+  // review.js: expose window.__emporniumTeardown to clean up intervals and websocket before re-injection
+  'review.js': 'd7b2c984c4143107e56ca17544ff5f592469bf1c6df0ac169abaf36dbc68a003',
   // review.html: add #action-disabled-reason below action buttons
   'review.html': 'a5aae992eed92b6d86d0f02aa423f4bf7affe0722ad58cc704d5afeca5de784f',
 };

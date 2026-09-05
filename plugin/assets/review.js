@@ -5882,7 +5882,43 @@
     }
   }
 
+  function emporniumTeardown() {
+    try {
+      if (consoleTimerInterval) {
+        clearInterval(consoleTimerInterval);
+        consoleTimerInterval = null;
+      }
+    } catch (_) {}
+    try {
+      if (activePollInterval) {
+        clearInterval(activePollInterval);
+        activePollInterval = null;
+      }
+    } catch (_) {}
+    try {
+      if (busyEscapeTimer) {
+        clearInterval(busyEscapeTimer);
+        busyEscapeTimer = null;
+      }
+    } catch (_) {}
+    try {
+      if (wsWatchdog) {
+        clearTimeout(wsWatchdog);
+        wsWatchdog = null;
+      }
+    } catch (_) {}
+    try {
+      if (activeWs) {
+        if (typeof activeWs.close === "function") {
+          activeWs.close();
+        }
+        activeWs = null;
+      }
+    } catch (_) {}
+  }
+
   // Window exports for tests and integrations
+  window.__emporniumTeardown = emporniumTeardown;
   window.initEmporniumReview = initEmporniumReview;
   window.openHistoryView = openHistoryView;
   window.closeHistoryView = closeHistoryView;
