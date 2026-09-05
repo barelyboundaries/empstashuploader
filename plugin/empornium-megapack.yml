@@ -18,6 +18,15 @@ ui:
       - http://127.0.0.1:9941
       - http://localhost:9941
 
+settings:
+  announceUrl:
+    displayName: Empornium Announce URL
+    description: "From your Empornium upload page. Looks like http://tracker.empornium.sx:2710/<token>/<token>/announce. Stored in Stash's config in plaintext - anyone with Stash access can read it."
+    type: STRING
+  hamsterApiKey:
+    displayName: HamsterImg API Key
+    description: "Required to host contact sheets. Without it, builds fail. Stored in Stash's config in plaintext."
+    type: STRING
 
 tasks:
   - name: ProbeFiles
