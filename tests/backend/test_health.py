@@ -89,3 +89,37 @@ def test_get_build_stamp_from_file(monkeypatch, tmp_path):
     )
     assert get_build_stamp() == "0.2.0-filesha"
 
+
+def test_health_and_config_refresh_sources(monkeypatch):
+    from empornium_megapack.plugin_settings import clear_cache
+
+    clear_cache()
+    # Ensure env vars not set initially
+    monkeypatch.delenv("EMPORNIUM_EMPORNIUM_ANNOUNCE_URL", raising=False)
+    monkeypatch.delenv("EMPORNIUM_ANNOUNCE_URL", raising=False)
+    monkeypatch.delenv("EMPORNIUM_HAMSTER_API_KEY", raising=False)
+
+    res = client.get("/health")
+    assert res.status_code == 200
+    data = res.json()
+    assert "hamster_configured" in data
+    assert "hamster_source" in data
+    assert "announce_configured" in data
+    assert "announce_source" in data
+    # Secrets discipline: secret values must NEVER be in response
+    assert "hamster_api_key" not in data
+    assert "empornium_announce_url" not in data
+
+    # Test POST /api/config/refresh
+    refresh_res = client.post("/api/config/refresh")
+    assert refresh_res.status_code == 200
+    refresh_data = refresh_res.json()
+    assert refresh_data["status"] == "ok"
+    assert "hamster_configured" in refresh_data
+    assert "hamster_source" in refresh_data
+    assert "announce_configured" in refresh_data
+    assert "announce_source" in refresh_data
+    assert "hamster_api_key" not in refresh_data
+    assert "empornium_announce_url" not in refresh_data
+
+

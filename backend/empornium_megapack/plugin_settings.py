@@ -2,7 +2,7 @@
 
 Precedence order:
 1. Environment variables (EMPORNIUM_EMPORNIUM_ANNOUNCE_URL, EMPORNIUM_HAMSTER_API_KEY)
-2. Local config file (config.local.toml via Settings)
+2. Local config file via Settings
 3. Stash plugin configuration (configuration { plugins } under empornium-megapack)
 4. Not set
 
