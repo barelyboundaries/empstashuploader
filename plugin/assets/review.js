@@ -1942,7 +1942,7 @@
 
     const active = activeScenes();
     const collisionCount = duplicateGroups.length;
-    const rawAllFiles = active.flatMap((s) => (s.files || []).map((f) => (f.path || "").trim()).filter(Boolean));
+    const allFiles = active.map((s) => (getPrimaryFile(s).path || "").trim()).filter(Boolean);
 
     // 1. Update Mode Switcher Options
     if (radioSingle && labelSingle) {
@@ -1984,12 +1984,12 @@
       } else if (active.length > 1) {
         buildDisabled = true;
         buildReason = "Single Scene mode requires exactly 1 scene";
-      } else if (rawAllFiles.length === 0) {
+      } else if (allFiles.length === 0) {
         buildDisabled = true;
         buildReason = "Selected scene has no valid media file";
-      } else if (rawAllFiles.length > 1) {
+      } else if (allFiles.length > 1) {
         buildDisabled = true;
-        buildReason = `Single Scene mode requires exactly 1 media file (found ${rawAllFiles.length})`;
+        buildReason = `Single Scene mode requires exactly 1 media file (found ${allFiles.length})`;
       } else if (missingSourceSceneIds.has(String(active[0].id))) {
         buildDisabled = true;
         buildReason = "This scene's file was not found on disk under any known path. Restore the source or remove the scene.";
@@ -3362,15 +3362,14 @@
 
     const isSingle = currentMode === "single";
     const allFiles = active.map((s) => (getPrimaryFile(s).path || "").trim()).filter(Boolean);
-    const rawAllFiles = active.flatMap((s) => (s.files || []).map((f) => (f.path || "").trim()).filter(Boolean));
     const outputDir = (seedDir || "").trim();
 
     // Pre-flight client-side validation gate
     if (isSingle) {
-      if (active.length !== 1 || rawAllFiles.length !== 1) {
+      if (active.length !== 1 || allFiles.length !== 1) {
         const reason = active.length !== 1
           ? `Single Scene mode requires exactly 1 scene (found ${active.length}).`
-          : `Single Scene mode requires exactly 1 media file (found ${rawAllFiles.length}).`;
+          : `Single Scene mode requires exactly 1 media file (found ${allFiles.length}).`;
         showStatus(`Build aborted: ${reason}`, 0, true);
         return;
       }

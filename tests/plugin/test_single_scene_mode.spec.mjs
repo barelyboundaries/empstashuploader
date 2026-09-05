@@ -275,17 +275,14 @@ test.describe('Stage 7 Feature 2 — Single-Scene Mode Switch & Pre-Dispatch Val
     await page.evaluate(() => window.buildMegapack());
     await expect(page.locator('#status-text')).toContainText('Build aborted: Single Scene mode requires exactly 1 media file');
 
-    // 2. Multi-file scene (>1 files)
+    // 2. Multi-file scene (>1 files) with files under seed dir leaves Build ENABLED
     currentSceneFiles = [
-      { id: 1001, path: 'C:\\Media\\Part1.mp4' },
-      { id: 1002, path: 'C:\\Media\\Part2.mp4' }
+      { id: 1001, path: 'C:\\Packs\\Part1.mp4' },
+      { id: 1002, path: 'C:\\Packs\\Part2.mp4' }
     ];
     await page.evaluate(() => window.loadScenes([101]));
-    await expect(buildBtn).toBeDisabled();
-    await expect(buildBtn).toHaveAttribute('title', 'Single Scene mode requires exactly 1 media file (found 2)');
-
-    await page.evaluate(() => window.buildMegapack());
-    await expect(page.locator('#status-text')).toContainText('Build aborted: Single Scene mode requires exactly 1 media file (found 2)');
+    await expect(buildBtn).toBeEnabled();
+    await expect(buildBtn).toHaveAttribute('title', 'Build single-scene torrent, contact sheet, and BBCode');
 
     // 3. Exactly 1 valid media file -> enabled (file under the seed dir —
     // todo 7 of staged-wizard-inplace-seed gates single mode on containment)
@@ -843,6 +840,138 @@ test.describe('Stage 7 Feature 2 — Single-Scene Mode Switch & Pre-Dispatch Val
     const btnConsolidate = page.locator('#btn-consolidate');
     await expect(btnConsolidate).toBeDisabled();
     await expect(btnConsolidate).toHaveAttribute('title', 'Consolidation is not used in Single Scene mode');
+  });
+
+  test('16. Single-scene selection with 2 file records leaves Build ENABLED and payload carries chosen primary file', async ({ page }) => {
+    setupStaticMocks(page);
+
+    const multiFileScene = {
+      id: 4238,
+      title: 'Scene with Multiple Files',
+      files: [
+        { id: 42381, path: 'C:\\Packs\\Emma_v1.mp4', size: 500000, height: 1080, width: 1920, duration: 600, video_codec: 'h264' },
+        { id: 42382, path: 'C:\\Packs\\Emma_v2.mp4', size: 900000, height: 1080, width: 1920, duration: 600, video_codec: 'h264' }
+      ],
+      performers: [{ id: 1, name: 'Emma' }],
+      tags: []
+    };
+
+    let buildDispatchedPayload = null;
+
+    await page.route('**/api/fs/exists', async (route) => {
+      const postData = route.request().postDataJSON();
+      const results = {};
+      for (const p of postData.paths || []) results[p] = true;
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ results })
+      });
+    });
+
+    await page.route('**/graphql', async (route) => {
+      const postData = route.request().postDataJSON();
+      if (postData?.query?.includes('FindScenes')) {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ data: { findScenes: { scenes: [multiFileScene] } } })
+        });
+      }
+      if (postData?.query?.includes('RunBuild')) {
+        const payloadStr = postData.variables?.args?.find((a) => a.key === 'payload')?.value?.str;
+        buildDispatchedPayload = JSON.parse(payloadStr);
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ data: { runPluginTask: 'job-single-multi-file' } })
+        });
+      }
+      return route.fallback();
+    });
+
+    await page.goto('http://localhost:9999/plugins/empornium-megapack/review.html?scenes=4238&mode=single');
+    await page.locator('#output-dir').fill('C:\\Packs');
+
+    const buildBtn = page.locator('#btn-build');
+    await expect(buildBtn).toBeEnabled();
+
+    // Attached version dropdown is visible with 2 options
+    const fileSelect = page.locator('.scene-file-select');
+    await expect(fileSelect).toBeVisible();
+    await expect(fileSelect.locator('option')).toHaveCount(2);
+
+    // Initial primary (best file = larger, id 42382)
+    await buildBtn.click();
+    await expect.poll(() => buildDispatchedPayload).toBeTruthy();
+    expect(buildDispatchedPayload.scenes[0].path).toBe('C:\\Packs\\Emma_v2.mp4');
+    expect(buildDispatchedPayload.scenes).toHaveLength(1);
+    expect(JSON.stringify(buildDispatchedPayload)).not.toContain('Emma_v1.mp4');
+  });
+
+  test('17. Changing the Attached Version dropdown changes which path the single-scene payload carries', async ({ page }) => {
+    setupStaticMocks(page);
+
+    const multiFileScene = {
+      id: 4238,
+      title: 'Scene with Multiple Files',
+      files: [
+        { id: 42381, path: 'C:\\Packs\\Emma_v1.mp4', size: 500000, height: 1080, width: 1920, duration: 600, video_codec: 'h264' },
+        { id: 42382, path: 'C:\\Packs\\Emma_v2.mp4', size: 900000, height: 1080, width: 1920, duration: 600, video_codec: 'h264' }
+      ],
+      performers: [{ id: 1, name: 'Emma' }],
+      tags: []
+    };
+
+    let buildDispatchedPayload = null;
+
+    await page.route('**/api/fs/exists', async (route) => {
+      const postData = route.request().postDataJSON();
+      const results = {};
+      for (const p of postData.paths || []) results[p] = true;
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ results })
+      });
+    });
+
+    await page.route('**/graphql', async (route) => {
+      const postData = route.request().postDataJSON();
+      if (postData?.query?.includes('FindScenes')) {
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ data: { findScenes: { scenes: [multiFileScene] } } })
+        });
+      }
+      if (postData?.query?.includes('RunBuild')) {
+        const payloadStr = postData.variables?.args?.find((a) => a.key === 'payload')?.value?.str;
+        buildDispatchedPayload = JSON.parse(payloadStr);
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({ data: { runPluginTask: 'job-single-dropdown-switch' } })
+        });
+      }
+      return route.fallback();
+    });
+
+    await page.goto('http://localhost:9999/plugins/empornium-megapack/review.html?scenes=4238&mode=single');
+    await page.locator('#output-dir').fill('C:\\Packs');
+
+    const fileSelect = page.locator('.scene-file-select');
+    await expect(fileSelect).toBeVisible();
+
+    // Select the smaller file (id 42381)
+    await fileSelect.selectOption('42381');
+
+    const buildBtn = page.locator('#btn-build');
+    await expect(buildBtn).toBeEnabled();
+    await buildBtn.click();
+
+    await expect.poll(() => buildDispatchedPayload).toBeTruthy();
+    expect(buildDispatchedPayload.scenes[0].path).toBe('C:\\Packs\\Emma_v1.mp4');
   });
 
 });
