@@ -10,6 +10,11 @@ __pycache__/
 .venv/
 node_modules/
 
+# Browser/leveldb dumps pulled in while debugging the plugin UI. These can
+# carry session data and must never reach a public repo.
+*.ldb
+*.ldb.extracted.js
+
 # --- workspace tooling (dev-only, never ship) ---
 .agents/
 .codegraph/
