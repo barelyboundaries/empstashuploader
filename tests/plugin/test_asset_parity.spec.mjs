@@ -22,10 +22,10 @@ const __dirname = path.dirname(__filename);
 // mismatch — that is the signal to refresh ASSET_RECORD below in the same
 // commit, so unreviewed or truncated asset changes can never slip through.
 const ASSET_RECORD = {
-  // review.js: hook checkConfigGate into onSidecarHealthy, compose with busy lock
-  'review.js': 'e1b8eed89218a17b3e649e1cb265c3ce5cf828618c6a7ca900b28072bb35eaa7',
-  // review.html: add #config-warning-banner near #sidecar-status
-  'review.html': '38f6e714025015f59eb2134540634f2ddc44d90be4541e65c271c80a2b6ed02b',
+  // review.js: surface disabled reasons inline near action buttons
+  'review.js': '76b6784e3aae613d3fa07c025646d9a29f52d7236c6e8dfd8a0b3972c8066767',
+  // review.html: add #action-disabled-reason below action buttons
+  'review.html': 'a5aae992eed92b6d86d0f02aa423f4bf7affe0722ad58cc704d5afeca5de784f',
 };
 
 function sha256(filePath) {

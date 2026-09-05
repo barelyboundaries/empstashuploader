@@ -1924,11 +1924,18 @@
   }
 
   function updateActionAvailability() {
+    const actionReasonEl = document.getElementById("action-disabled-reason");
+
     if (uiBusy) {
       // Busy state is authoritative; skip gate derivation entirely.
+      const busyMsg = `${busyLabel} in progress — controls locked`;
       for (const id of ["btn-build", "btn-consolidate", "btn-probe"]) {
         const el = document.getElementById(id);
-        if (el) { el.disabled = true; el.title = `${busyLabel} in progress — controls locked`; }
+        if (el) { el.disabled = true; el.title = busyMsg; }
+      }
+      if (actionReasonEl) {
+        actionReasonEl.textContent = busyMsg;
+        actionReasonEl.style.display = "block";
       }
       return;
     }
@@ -2017,6 +2024,16 @@
         btnConsolidate.disabled = true;
         btnConsolidate.title = "Consolidation is not used in Single Scene mode";
       }
+
+      if (actionReasonEl) {
+        if (buildDisabled) {
+          actionReasonEl.textContent = buildReason;
+          actionReasonEl.style.display = "block";
+        } else {
+          actionReasonEl.textContent = "";
+          actionReasonEl.style.display = "none";
+        }
+      }
     } else {
       // Megapack Mode
       let consolidateDisabled = false;
@@ -2076,6 +2093,19 @@
       if (btnBuild) {
         btnBuild.disabled = buildDisabled;
         btnBuild.title = buildReason;
+      }
+
+      if (actionReasonEl) {
+        const blockingReason = buildDisabled
+          ? buildReason
+          : (consolidateDisabled ? consolidateReason : "");
+        if (blockingReason) {
+          actionReasonEl.textContent = blockingReason;
+          actionReasonEl.style.display = "block";
+        } else {
+          actionReasonEl.textContent = "";
+          actionReasonEl.style.display = "none";
+        }
       }
     }
   }

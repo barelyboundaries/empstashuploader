@@ -268,8 +268,11 @@ test.describe('Stage 7 Feature 2 — Single-Scene Mode Switch & Pre-Dispatch Val
     await page.locator("#output-dir").fill("C:\\Packs");
 
     const buildBtn = page.locator('#btn-build');
+    const reasonEl = page.locator('#action-disabled-reason');
     await expect(buildBtn).toBeDisabled();
     await expect(buildBtn).toHaveAttribute('title', 'Selected scene has no valid media file');
+    await expect(reasonEl).toBeVisible();
+    await expect(reasonEl).toHaveText('Selected scene has no valid media file');
 
     // Direct buildMegapack() execution aborts cleanly
     await page.evaluate(() => window.buildMegapack());
@@ -283,6 +286,7 @@ test.describe('Stage 7 Feature 2 — Single-Scene Mode Switch & Pre-Dispatch Val
     await page.evaluate(() => window.loadScenes([101]));
     await expect(buildBtn).toBeEnabled();
     await expect(buildBtn).toHaveAttribute('title', 'Build single-scene torrent, contact sheet, and BBCode');
+    await expect(reasonEl).toBeHidden();
 
     // 3. Exactly 1 valid media file -> enabled (file under the seed dir —
     // todo 7 of staged-wizard-inplace-seed gates single mode on containment)
@@ -290,6 +294,7 @@ test.describe('Stage 7 Feature 2 — Single-Scene Mode Switch & Pre-Dispatch Val
     await page.evaluate(() => window.loadScenes([101]));
     await expect(buildBtn).toBeEnabled();
     await expect(buildBtn).toHaveAttribute('title', 'Build single-scene torrent, contact sheet, and BBCode');
+    await expect(reasonEl).toBeHidden();
   });
 
   test('6. BuildSingleScene task dispatch payload formatting and type compliance', async ({ page }) => {
@@ -902,6 +907,7 @@ test.describe('Stage 7 Feature 2 — Single-Scene Mode Switch & Pre-Dispatch Val
     await expect(fileSelect.locator('option')).toHaveCount(2);
 
     // Initial primary (best file = larger, id 42382)
+    await expect(page.locator('#action-disabled-reason')).toBeHidden();
     await buildBtn.click();
     await expect.poll(() => buildDispatchedPayload).toBeTruthy();
     expect(buildDispatchedPayload.scenes[0].path).toBe('C:\\Packs\\Emma_v2.mp4');

@@ -1,4 +1,4 @@
-﻿import { test, expect } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -207,6 +207,58 @@ test.describe("updateActionAvailability — in-place build gating", () => {
       "1 filename collision must be resolved first"
     );
     expect(wire.builds).toHaveLength(0);
+  });
+
+  test("inline reason element shows the blocking reason when Build is disabled and is hidden when Build is enabled", async ({ page }) => {
+    const scenes = [
+      scene(10, 100, "D:\\Seed\\a.mp4", "Scene A"),
+      scene(20, 200, "E:\\Elsewhere\\b.mp4", "Scene B")
+    ];
+    await bootHarness(page, { scenes });
+
+    const buildBtn = page.locator("#btn-build");
+    const reasonEl = page.locator("#action-disabled-reason");
+
+    // Disabled initially because Scene B is outside seed dir
+    await expect(buildBtn).toBeDisabled();
+    await expect(reasonEl).toBeVisible();
+    const disabledTitle = await buildBtn.getAttribute("title");
+    await expect(reasonEl).toHaveText(disabledTitle);
+    await expect(reasonEl).toHaveAttribute("role", "status");
+    await expect(reasonEl).toHaveAttribute("aria-live", "polite");
+
+    // Removing Scene B leaves only Scene A (under seed dir) -> now only 1 scene, but in Megapack mode that requires 2 scenes
+    // Let's replace Scene B with a scene under seed dir by pointing output-dir to root or loading 2 scenes under seed dir
+    await page.locator("#output-dir").fill("D:\\");
+    await expect(buildBtn).toBeDisabled();
+    await expect(reasonEl).toBeVisible();
+
+    // Now set seed dir containing both files
+    await page.route("**/graphql", async (route) => {
+      const postData = JSON.parse(route.request().postData() || "{}");
+      if (postData.query?.includes("FindScenes")) {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            data: {
+              findScenes: {
+                scenes: [
+                  scene(10, 100, "D:\\Seed\\a.mp4", "Scene A"),
+                  scene(20, 200, "D:\\Seed\\b.mp4", "Scene B")
+                ]
+              }
+            }
+          })
+        });
+      }
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ data: {} }) });
+    });
+    await page.evaluate(() => window.loadScenes([10, 20]));
+    await page.locator("#output-dir").fill("D:\\Seed");
+
+    await expect(buildBtn).toBeEnabled();
+    await expect(reasonEl).toBeHidden();
   });
 });
 

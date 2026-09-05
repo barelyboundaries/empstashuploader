@@ -265,9 +265,12 @@ test.describe('Entry Gate — Announce URL and HamsterImg API Key Configuration 
     const banner = page.locator('#config-warning-banner');
     const btnBuild = page.locator('#btn-build');
     const btnRecheck = page.locator('#btn-config-recheck');
+    const reasonEl = page.locator('#action-disabled-reason');
 
     await expect(banner).toBeVisible();
     await expect(btnBuild).toBeDisabled();
+    await expect(reasonEl).toBeVisible();
+    await expect(reasonEl).toHaveText(await btnBuild.getAttribute('title'));
 
     // User updates settings in Stash, backend now returns true for both
     harness.setHealth({
@@ -282,6 +285,7 @@ test.describe('Entry Gate — Announce URL and HamsterImg API Key Configuration 
     expect(harness.refreshCalls.length).toBeGreaterThanOrEqual(1);
     await expect(banner).toBeHidden();
     await expect(btnBuild).toBeEnabled();
+    await expect(reasonEl).toBeHidden();
   });
 
   test('composition with busy lock: clean config recheck does not enable button while UI is busy', async ({ page }) => {

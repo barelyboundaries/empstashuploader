@@ -275,6 +275,19 @@
       font-size: 0.95rem;
     }
 
+    .action-disabled-reason {
+      display: none;
+      margin-top: 8px;
+      margin-bottom: 12px;
+      padding: 8px 12px;
+      border: 1px solid rgba(245, 158, 11, 0.35);
+      border-radius: 6px;
+      background-color: rgba(245, 158, 11, 0.1);
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      line-height: 1.35;
+    }
+
     .scene-card--duplicate {
       border-left: 4px solid var(--danger) !important;
       background: rgba(239, 68, 68, 0.06);
@@ -1967,6 +1980,8 @@
           <label class="form-label">Consolidate</label>
           <button id="btn-consolidate" class="btn btn-secondary" style="width: 100%;">📁 Consolidate Files via Stash GraphQL</button>
         </div>
+
+        <div id="action-disabled-reason" class="action-disabled-reason" role="status" aria-live="polite" style="display: none;"></div>
 
         <!-- Artifact Delivery Notification -->
         <div class="artifact-summary" id="artifact-summary">
