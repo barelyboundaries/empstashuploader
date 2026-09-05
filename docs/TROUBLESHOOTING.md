@@ -18,6 +18,7 @@
 | Plugin missing from `{ plugins { id } }` | The manifest failed to parse. Check `empornium-megapack.yml`. |
 | Registered under the ID `plugin` | The manifest was renamed to `plugin.yml`. The ID comes from the filename — keep it named `empornium-megapack.yml`. |
 | Modal opens blank, or the iframe 404s | The `ui.assets` mapping is missing, or `/plugins/` was used where `/plugin/` was required. |
+| Plugin settings missing from Settings → Plugins (no ▾ chevron on the row) | Stash caches plugin manifests and only re-reads them on **Reload plugins** (button at the top of Settings → Plugins) or a restart. Deploying a new `empornium-megapack.yml` is not enough — new settings and tasks stay invisible until you reload. Confirm with `{ plugins { id settings { name } } }`: an empty list means the manifest was never re-read. |
 | Stale UI behavior after upgrading the plugin | A Stash tab open across upgrades may keep running the previous `review.js`. Automatic version checks now handle this on modal open, but upgrading from a build older than this fix requires one hard reload (`Ctrl+Shift+R`). |
 
 ## Running a build
