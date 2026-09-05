@@ -282,7 +282,9 @@ def upload_hamster(
     A contact sheet that cannot be uploaded fails pack generation.
     """
     settings = settings or get_settings()
-    api_key = settings.hamster_api_key.strip()
+    from .plugin_settings import resolve_hamster_api_key
+
+    api_key, _ = resolve_hamster_api_key(settings)
     if not api_key:
         raise ContactSheetError(
             "No HamsterImg API key configured; set EMPORNIUM_HAMSTER_API_KEY "

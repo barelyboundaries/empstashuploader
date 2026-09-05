@@ -700,7 +700,9 @@ class PackService:
         exists only inside the private torrent: never in responses, logs,
         manifests, or the description.
         """
-        announce = (self.settings.empornium_announce_url or "").strip()
+        from .plugin_settings import resolve_announce_url
+
+        announce, _ = resolve_announce_url(self.settings, stash_client=self.stash)
         if not announce:
             raise BuildError(
                 "No Empornium announce URL configured; set EMPORNIUM_EMPORNIUM_ANNOUNCE_URL."

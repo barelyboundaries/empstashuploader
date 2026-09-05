@@ -45,6 +45,7 @@ if str(CURRENT_DIR) not in sys.path:
 _stderr_lock = threading.Lock()
 _stderr_broken = False
 _active_run_id: Optional[str] = None
+_active_server_connection: Dict[str, Any] = {}
 _last_progress: float = 0.0
 
 
@@ -82,6 +83,15 @@ def set_active_run_id(run_id: Optional[str]) -> None:
 
 def get_active_run_id() -> Optional[str]:
     return _active_run_id
+
+
+def set_active_server_connection(conn: Optional[Dict[str, Any]]) -> None:
+    global _active_server_connection
+    _active_server_connection = dict(conn) if isinstance(conn, dict) else {}
+
+
+def get_active_server_connection() -> Dict[str, Any]:
+    return _active_server_connection
 
 
 def _run_id_prefix() -> str:
@@ -356,6 +366,7 @@ try:
     from empornium_megapack import images as _domain_images
     from empornium_megapack import config as _domain_config
     from empornium_megapack import torrents as _domain_torrents
+    from empornium_megapack import plugin_settings as _domain_plugin_settings
     from empornium_megapack.torrents import (
         create_torrent,
         calculate_piece_size,
@@ -394,6 +405,7 @@ except ImportError:
     _domain_images = None
     _domain_config = None
     _domain_torrents = None
+    _domain_plugin_settings = None
     _domain_generate_contact_sheet = None
     _domain_extract_screens = None
     _domain_fetch_stash_image = None
@@ -424,6 +436,99 @@ except ImportError:
     sanitize_announce_url = None
     source_for_announce = None
     TorrentError = Exception
+
+_stash_plugin_settings_cache: Optional[Dict[str, str]] = None
+_stash_plugin_settings_cache_time: float = 0.0
+
+
+def fetch_stash_plugin_settings(
+    server_connection: Optional[Dict[str, Any]] = None,
+    force_refresh: bool = False,
+) -> Dict[str, str]:
+    """Query Stash directly for empornium-megapack plugin settings using server_connection or default settings."""
+    global _stash_plugin_settings_cache, _stash_plugin_settings_cache_time
+    now = time.time()
+    if not force_refresh and _stash_plugin_settings_cache is not None and (now - _stash_plugin_settings_cache_time) < 30.0:
+        return dict(_stash_plugin_settings_cache)
+
+    try:
+        conn = server_connection if isinstance(server_connection, dict) and server_connection else _active_server_connection
+        scheme = conn.get("Scheme") or conn.get("scheme") or "http"
+        host = conn.get("Host") or conn.get("host") or "localhost"
+        port = conn.get("Port") or conn.get("port") or 9999
+        api_key = conn.get("ApiKey") or conn.get("apiKey") or conn.get("api_key") or ""
+
+        if not conn and _domain_config is not None:
+            try:
+                s = _domain_config.get_settings()
+                url = f"{s.stash_url.rstrip('/')}/graphql"
+                if s.stash_api_key:
+                    api_key = s.stash_api_key
+            except Exception:
+                url = f"{scheme}://{host}:{port}/graphql"
+        else:
+            url = f"{scheme}://{host}:{port}/graphql"
+
+        query = {"query": "query Configuration { configuration { plugins } }"}
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(query).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        if api_key:
+            req.add_header("ApiKey", str(api_key))
+
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            if resp.status != 200:
+                return {}
+            data = json.loads(resp.read().decode("utf-8"))
+            if not isinstance(data, dict):
+                return {}
+            plugins = data.get("data", {}).get("configuration", {}).get("plugins", {})
+            if not isinstance(plugins, dict):
+                return {}
+            pkg = plugins.get("empornium-megapack", {})
+            if not isinstance(pkg, dict):
+                return {}
+            res = {
+                "announceUrl": str(pkg.get("announceUrl") or "").strip(),
+                "hamsterApiKey": str(pkg.get("hamsterApiKey") or "").strip(),
+            }
+            _stash_plugin_settings_cache = res
+            _stash_plugin_settings_cache_time = now
+            return dict(res)
+    except Exception:
+        return {}
+
+
+def _resolve_task_hamster_api_key(settings, server_connection: Optional[Dict[str, Any]] = None) -> Tuple[str, str]:
+    stash_plugins = fetch_stash_plugin_settings(server_connection)
+    if _domain_plugin_settings is not None:
+        return _domain_plugin_settings.resolve_hamster_api_key(settings, plugin_settings=stash_plugins)
+    env_val = os.environ.get("EMPORNIUM_HAMSTER_API_KEY")
+    if env_val is not None and env_val.strip():
+        return env_val.strip(), "env"
+    if settings and getattr(settings, "hamster_api_key", None) and settings.hamster_api_key.strip():
+        return settings.hamster_api_key.strip(), "config file"
+    if stash_plugins.get("hamsterApiKey"):
+        return stash_plugins["hamsterApiKey"].strip(), "Stash plugin settings"
+    return "", "not set"
+
+
+def _resolve_task_announce_url(settings, server_connection: Optional[Dict[str, Any]] = None) -> Tuple[str, str]:
+    stash_plugins = fetch_stash_plugin_settings(server_connection)
+    if _domain_plugin_settings is not None:
+        return _domain_plugin_settings.resolve_announce_url(settings, plugin_settings=stash_plugins)
+    env_val = os.environ.get("EMPORNIUM_EMPORNIUM_ANNOUNCE_URL") or os.environ.get("EMPORNIUM_ANNOUNCE_URL")
+    if env_val is not None and env_val.strip():
+        return env_val.strip(), "env"
+    if settings and getattr(settings, "empornium_announce_url", None) and settings.empornium_announce_url.strip():
+        return settings.empornium_announce_url.strip(), "config file"
+    if stash_plugins.get("announceUrl"):
+        return stash_plugins["announceUrl"].strip(), "Stash plugin settings"
+    return "", "not set"
+
 
 # Performer portraits sit inline beside their names, so they run narrower
 # than the screens grid.
@@ -915,7 +1020,8 @@ def upload_previews(
 
     # Remote upload branch (HamsterImg)
     settings = _domain_config.get_settings()
-    api_key = settings.hamster_api_key
+    server_conn = (config.get("server_connection") if isinstance(config, dict) else None) or _active_server_connection
+    api_key, _ = _resolve_task_hamster_api_key(settings, server_connection=server_conn)
 
     prefix = _run_id_prefix()
 
@@ -1361,6 +1467,8 @@ def run_build_megapack(payload: Any, server_connection: Optional[Dict[str, Any]]
     """
     if isinstance(payload, dict):
         set_active_run_id(payload.get("run_id"))
+    if isinstance(server_connection, dict) and server_connection:
+        set_active_server_connection(server_connection)
     emit_progress(0.05, "Initializing megapack build...")
     if not isinstance(payload, dict):
         payload = {}
@@ -1415,8 +1523,8 @@ def run_build_megapack(payload: Any, server_connection: Optional[Dict[str, Any]]
     notes = str(payload.get("notes") or "")
     timeout = float(payload.get("timeout") or payload.get("vcsi_timeout") or 60.0)
 
-    # Resolve announce URL: load from settings, ignore payload announce unless explicitly opted in (Amendment B7)
-    configured_announce = settings.empornium_announce_url
+    # Resolve announce URL: load from settings/Stash, ignore payload announce unless explicitly opted in (Amendment B7)
+    configured_announce, _ = _resolve_task_announce_url(settings, server_connection=server_connection)
 
     custom_trackers = None
     allow_custom_announce = bool(payload.get("allow_custom_announce") or payload.get("enable_custom_announce"))
@@ -2811,6 +2919,8 @@ def main():
     try:
         check_dependencies()
         mode, payload, server_connection = parse_input_payload()
+        if isinstance(server_connection, dict):
+            set_active_server_connection(server_connection)
         if isinstance(payload, dict):
             set_active_run_id(payload.get("run_id"))
 
