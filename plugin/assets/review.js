@@ -3935,6 +3935,11 @@
       ? `<code id="handoff-submission">${escapeHtml(submissionPath)}</code>`
       : `<span id="handoff-submission" style="color: var(--text-muted); font-style: italic;">— not reported —</span>`;
 
+    const trimmedCover = typeof coverUrl === "string" && coverUrl.trim() ? coverUrl.trim() : null;
+    const coverDisplayHtml = trimmedCover
+      ? `<a id="handoff-cover-url" href="${escapeHtml(trimmedCover)}" target="_blank" rel="noopener noreferrer" style="color: #93c5fd; word-break: break-all;">${escapeHtml(trimmedCover)}</a>`
+      : `<span id="handoff-cover-url" style="color: var(--text-muted); font-style: italic;">Not set</span>`;
+
     let checklistHtml = "";
     for (const c of checks) {
       let icon = "✅";
@@ -4010,6 +4015,9 @@
       </div>
       <div class="result-row">
         <strong>Torrent File:</strong> ${torrentDisplayHtml}
+      </div>
+      <div class="result-row">
+        <strong>Cover Image:</strong> ${coverDisplayHtml}
       </div>
       <div class="result-row" style="flex-direction: column; align-items: flex-start; gap: 4px;">
         <div><strong>Preview Images:</strong> <span id="handoff-images">${escapeHtml(imageSummary)}</span></div>

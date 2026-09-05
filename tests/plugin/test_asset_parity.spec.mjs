@@ -22,8 +22,8 @@ const __dirname = path.dirname(__filename);
 // mismatch — that is the signal to refresh ASSET_RECORD below in the same
 // commit, so unreviewed or truncated asset changes can never slip through.
 const ASSET_RECORD = {
-  // review.js: collapse build console log on completion with manual toggle
-  'review.js': 'b9b9692fad574d7f37fb076976ad4992287110d77c2d1ca892b322f9f0eee694',
+  // review.js: display cover image url in result rows
+  'review.js': '4bd4a1ac4758c2b5f04158008aab1ff43222edd02687db85d346cda12a811b2c',
   // review.html: add build console log toggle and collapsed styling
   'review.html': '77822216d851c62fdf94ad368ff7126cebe235d2fd7d28cea66101a17d0c3a4e',
 };

@@ -749,4 +749,76 @@ test.describe("Playwright Build Console Specifications (Change B)", () => {
     await expect(toggleBtn).toHaveText("▸ Show full log");
     await expect(toggleBtn).toHaveAttribute("aria-expanded", "false");
   });
+
+  // Specification 12: Cover image URL display in result rows
+  test("12. Cover URL renders as a visible anchor with target=_blank when present, and muted placeholder when absent", async ({ page, context }) => {
+    await context.grantPermissions(["clipboard-read", "clipboard-write"]);
+    const state = await bootReviewHarness(page);
+
+    // Case A: Cover URL is present
+    await page.locator("#btn-build").click();
+    await expect.poll(() => state.dispatchedRunId).not.toBeNull();
+    const runId1 = state.dispatchedRunId;
+
+    const COVER_URL = "https://hamsterimg.net/images/2026/test_cover.jpg";
+    await deliverWsLogs(page, [{
+      time: "2026-09-04T12:01:00Z",
+      level: "Info",
+      message: `EMPORNIUM_TASK_RESULT ${runId1}: ` + JSON.stringify({
+        status: "success",
+        pack_title: "Cover URL Pack",
+        bbcode: "[b]Pack[/b]",
+        tracker_tags: ["test.tag"],
+        torrent_path: "C:\\Packs\\test.torrent",
+        cover_url: COVER_URL,
+        ready: true,
+        preflight: { ready: true, checks: [] }
+      })
+    }]);
+    await deliverWsJobProgress(page, { status: "FINISHED", progress: 1.0 });
+
+    const resultView = page.locator("#build-console-result");
+    await expect(resultView).toBeVisible();
+
+    const coverLink = page.locator("#handoff-cover-url");
+    await expect(coverLink).toBeVisible();
+    await expect(coverLink).toHaveAttribute("href", COVER_URL);
+    await expect(coverLink).toHaveAttribute("target", "_blank");
+    await expect(coverLink).toHaveAttribute("rel", "noopener noreferrer");
+    await expect(coverLink).toHaveText(COVER_URL);
+
+    // Case B: Build with NO cover URL -> displays muted "Not set" placeholder
+    await page.locator("#btn-close-result").click();
+    await expect(resultView).toBeHidden();
+
+    await page.locator("#btn-build").click();
+    await expect.poll(() => state.dispatchedRunId).not.toBe(runId1);
+    const runId2 = state.dispatchedRunId;
+
+    await deliverWsLogs(page, [{
+      time: "2026-09-04T12:02:00Z",
+      level: "Info",
+      message: `EMPORNIUM_TASK_RESULT ${runId2}: ` + JSON.stringify({
+        status: "success",
+        pack_title: "No Cover Pack",
+        bbcode: "[b]Pack[/b]",
+        tracker_tags: ["test.tag"],
+        torrent_path: "C:\\Packs\\test.torrent",
+        cover_url: null,
+        ready: true,
+        preflight: { ready: true, checks: [] }
+      })
+    }]);
+    await deliverWsJobProgress(page, { status: "FINISHED", progress: 1.0 });
+    await expect(resultView).toBeVisible();
+
+    const coverPlaceholder = page.locator("#handoff-cover-url");
+    await expect(coverPlaceholder).toBeVisible();
+    await expect(coverPlaceholder).toHaveText("Not set");
+    await expect(coverPlaceholder).not.toHaveAttribute("href");
+
+    // Existing copy button remains disabled
+    const btnCopyCover = page.locator("#btn-copy-cover-url");
+    await expect(btnCopyCover).toBeDisabled();
+  });
 });
