@@ -168,8 +168,10 @@ def test_stage4a_banner_byte_identity(tmp_path):
         "scenes": [{"id": 10, "path": str(media_file)}],
     })
 
-    # line 0/1 are the local-file preview warning and its blank line
-    banner = result["bbcode"].split(chr(10))[2]
+    # Located by content, not index: the preview warning and the page-wrapper
+    # opener both sit above it and either can move.
+    lines = result["bbcode"].split(chr(10))
+    banner = next(ln for ln in lines if ln.startswith("[bg=#202b33]"))
     assert banner == (
         "[bg=#202b33][table=100%,nball,nopad][tr][td=16px][/td]"
         "[td=vab][size=1][color=#8a9ba8]STASH MEGAPACK[/color][/size]"

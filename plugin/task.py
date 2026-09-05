@@ -397,6 +397,7 @@ try:
         empify,
         render_banner,
         render_meta_panel,
+        wrap_presentation,
         normalize_banner_style,
         DEFAULT_BANNER_STYLE,
         THUMB_WIDTH,
@@ -427,6 +428,7 @@ except ImportError:
     empify = None
     render_banner = None
     render_meta_panel = None
+    wrap_presentation = None
     normalize_banner_style = None
     DEFAULT_BANNER_STYLE = "plate"
     THUMB_WIDTH = 150
@@ -2149,13 +2151,20 @@ def run_build_megapack(payload: Any, server_connection: Optional[Dict[str, Any]]
                     tracker_tags.append(emp)
             tracker_tags = sorted(set(tracker_tags))[:60]
 
+        # Everything appended from here on is body: the cover, performer row,
+        # screens and contact sheets. The header above stays full-bleed.
+        header_len = len(bbcode_lines)
+
+        preview_warning = ""
         has_local_file_urls = any(u.startswith("file:///") for u in uploaded_image_urls)
         if has_local_file_urls:
             sys.stderr.write(
                 "\x01w\x02BBCode contains local file:/// URLs (preview only; do not post to public trackers)\n"
             )
             sys.stderr.flush()
-            bbcode_lines.insert(0, "[color=red][b]PREVIEW ONLY: Contains local file:/// URLs[/b][/color]\n")
+            # Deliberately NOT inside the page wrapper: this warning must stay
+            # unmissable and unstyled, and must not shift the header split.
+            preview_warning = "[color=red][b]PREVIEW ONLY: Contains local file:/// URLs[/b][/color]\n"
 
         if single_scene:
             # Sectioned gallery: cover, performer row, screens grid, then the
@@ -2220,7 +2229,16 @@ def run_build_megapack(payload: Any, server_connection: Optional[Dict[str, Any]]
                 bbcode_lines.append("".join(sheets_markup))
                 bbcode_lines.append("[/spoiler]")
 
-        bbcode_content = "\n".join(bbcode_lines)
+        if wrap_presentation is not None:
+            bbcode_content = wrap_presentation(
+                "\n".join(bbcode_lines[:header_len]),
+                "\n".join(bbcode_lines[header_len:]),
+                banner_style,
+            )
+        else:
+            bbcode_content = "\n".join(bbcode_lines)
+        if preview_warning:
+            bbcode_content = f"{preview_warning}\n{bbcode_content}"
         bbcode_path = os.path.join(artifact_dir, f"{safe_title}_bbcode.txt")
         with open(bbcode_path, "w", encoding="utf-8") as bf:
             bf.write(bbcode_content)

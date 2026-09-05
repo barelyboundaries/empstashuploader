@@ -454,7 +454,8 @@ class TestBuildMegapackArtifacts:
         bbcode = res["bbcode"]
         assert "Adversarial Test Megapack" in bbcode
         assert "Alice Wonder & Bob Builder" in bbcode
-        assert "[quote]Special edition with &#91;tags&#93; and quotes![/quote]" in bbcode
+        # Notes render in the panel's own painted block, not the skin's [quote]
+        assert "[color=#f5f8fa]Special edition with &#91;tags&#93; and quotes![/color]" in bbcode
 
     def test_extract_names_heterogeneous_inputs(self):
         assert _extract_names(None) == []

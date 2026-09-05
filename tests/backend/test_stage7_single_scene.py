@@ -347,7 +347,7 @@ def test_single_scene_bbcode_formatting(tmp_path):
     assert "[b][color=#8a9ba8]Studio[/color][/b][color=#5c7080]: [/color][color=#f5f8fa]Star Studios[/color]" in bbcode
     assert "[b][color=#8a9ba8]Performers[/color][/b][color=#5c7080]: [/color][color=#f5f8fa]Stella Bright[/color]" in bbcode
     assert "[b][color=#8a9ba8]Tags[/color][/b][color=#5c7080]: [/color][color=#f5f8fa]1080p, Solo[/color]" in bbcode
-    assert "[quote]Exclusive 1080p single release.[/quote]" in bbcode
+    assert "[color=#f5f8fa]Exclusive 1080p single release.[/color]" in bbcode
 
     # Assert Megapack-specific lines are absent
     assert "Scenes Included:" not in bbcode

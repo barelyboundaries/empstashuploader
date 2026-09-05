@@ -153,9 +153,9 @@ class TestSingleSceneGalleryBBCode:
 
         assert "[color=#f5f8fa]Anji And Honey[/color]" in bbcode
         assert "STASH RELEASE · Baddies Galleryy" in bbcode
+        assert "[color=#f5f8fa]Volleyball court.[/color]" in bbcode
         assert "[b][color=#8a9ba8]Studio[/color][/b][color=#5c7080]: [/color][color=#f5f8fa]Baddies Galleryy[/color]" in bbcode
         assert "[b][color=#8a9ba8]Performers[/color][/b][color=#5c7080]: [/color][color=#f5f8fa]Auhneesh Nicole & Honey Dew[/color]" in bbcode
-        assert "[quote]Volleyball court.[/quote]" in bbcode
 
     def test_every_uploaded_url_is_reported_for_the_preflight_gate(self, media, tmp_path):
         """images_remote checks this list, so a missed URL would pass a local path."""
@@ -316,7 +316,8 @@ class TestMetaPanelStyleGating:
         assert "[b][color=#8a9ba8]Studio[/color][/b][color=#5c7080]: [/color][color=#f5f8fa]Baddies Galleryy[/color]" in bbcode
         assert "[b][color=#8a9ba8]Performers[/color][/b][color=#5c7080]: [/color][color=#f5f8fa]Auhneesh Nicole & Honey Dew[/color]" in bbcode
         assert "[b][color=#8a9ba8]Tags[/color][/b][color=#5c7080]: [/color][color=#f5f8fa]Big Ass, POV[/color]" in bbcode
-        assert "[quote]Volleyball court.[/quote]" in bbcode
+        assert "[color=#f5f8fa]Volleyball court.[/color]" in bbcode
+        assert "[quote]" not in bbcode
         assert "\n[b]Studio:[/b]" not in bbcode
         assert "\n[b]Performers:[/b]" not in bbcode
         assert "\n[b]Tags:[/b]" not in bbcode
@@ -381,7 +382,8 @@ class TestMetaPanelStyleGating:
         assert "[b][color=#8a9ba8]Studio[/color][/b][color=#5c7080]: [/color][color=#f5f8fa]PackStudio[/color]" in bbcode
         assert "[b][color=#8a9ba8]Performers[/color][/b][color=#5c7080]: [/color][color=#f5f8fa]Alice & Bob[/color]" in bbcode
         assert "[b][color=#8a9ba8]Tags[/color][/b][color=#5c7080]: [/color][color=#f5f8fa]TagA, TagB[/color]" in bbcode
-        assert "[quote]Pack notes.[/quote]" in bbcode
+        assert "[color=#f5f8fa]Pack notes.[/color]" in bbcode
+        assert "[quote]" not in bbcode
         assert "\n[b]Studio:[/b]" not in bbcode
         assert "\n[b]Performers:[/b]" not in bbcode
         assert "\n[b]Tags:[/b]" not in bbcode

@@ -142,6 +142,14 @@ path_mappings = []
 
   | `presentation_banner` | Header |
   |---|---|
+  `plate` and `rail` also carry that surface across the whole post: the page gets a
+  `#182026` ground (one step below the banner's own `#202b33`, so the header reads as a
+  raised masthead), light text, and a 16px gutter on the body so headings and thumbnails
+  line up with the banner's inner padding. `signature` and `off` leave the post on the
+  reader's own skin. One consequence: with a page ground in play, uploader notes render
+  in their own painted block rather than the skin's `[quote]` box, which stays light
+  while the inherited text colour has gone near-white.
+
   | `plate` (default) | Masthead carrying the release title, plus a spec strip: scenes, runtime, size, top resolution, codec. Replaces the old centred title line. |
   | `rail` | One slim credit bar above the post. The centred title line stays. |
   | `signature` | A muted one-line credit above a rule. The centred title line stays. |

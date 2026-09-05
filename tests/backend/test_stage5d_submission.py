@@ -185,7 +185,7 @@ def test_stage5d_b4_regression_criterion(tmp_path):
     assert "Actor B4" in bbcode
     assert "[b][color=#8a9ba8]Performers[/color][/b]" in bbcode
     assert "1. [b]B4 Scene[/b] (Actor B4) [1080p] [30:00]" in bbcode
-    assert "[quote]Stage 4 baseline test note[/quote]" in bbcode
+    assert "[color=#f5f8fa]Stage 4 baseline test note[/color]" in bbcode
 
     # Manifest field-wise check on Stage 4 keys
     manifest = json.loads(Path(res["manifest_path"]).read_text(encoding="utf-8"))

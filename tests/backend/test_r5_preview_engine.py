@@ -845,5 +845,5 @@ class TestManifestAndSummarySchema:
             "[b][color=#8a9ba8]Tags[/color][/b][color=#5c7080]: [/color]"
             "[color=#f5f8fa]4K, Feature[/color]"
         ) in bbcode
-        assert "[quote]Important pack notes.[/quote]" in bbcode
+        assert "[color=#f5f8fa]Important pack notes.[/color]" in bbcode
         assert "[img=200]file:///" in bbcode

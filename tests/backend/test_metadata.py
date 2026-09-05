@@ -14,6 +14,8 @@ from empornium_megapack.metadata import (
     pack_title_default,
     render_banner,
     render_meta_panel,
+    wrap_presentation,
+    PAGE_BG,
     normalize_banner_style,
     render_description,
     STASH_URL,
@@ -491,7 +493,11 @@ def test_meta_panel_omits_empty_fields_and_returns_empty_when_all_empty():
     assert "Studio" not in panel_notes
     assert "Performers" not in panel_notes
     assert "Tags" not in panel_notes
-    assert "[quote]Important pack notes.[/quote]" in panel_notes
+    # Not [quote]: the panel paints its own note surface so it stays readable
+    # inside the page wrapper, where the skin's quote box would not be.
+    assert "[quote]" not in panel_notes
+    assert "[color=#f5f8fa]Important pack notes.[/color]" in panel_notes
+    assert "[bg=#30404d]" in panel_notes
 
 
 def test_meta_panel_tags_are_balanced():
@@ -509,7 +515,44 @@ def test_meta_panel_tags_are_balanced():
         ("[td", "[/td]"),
         ("[b]", "[/b]"),
         ("[color=", "[/color]"),
-        ("[quote]", "[/quote]"),
     ):
         assert panel.count(open_tag) == panel.count(close_tag), open_tag
 
+
+# --- wrap_presentation ---------------------------------------------------------------
+
+
+def test_page_surround_only_applies_to_the_dark_styles():
+    """signature paints no chrome and off adds nothing, so neither gets a ground."""
+    for style in ("plate", "rail"):
+        out = wrap_presentation("HEAD", "BODY", style)
+        assert out.startswith(f"[bg={PAGE_BG}][color={BANNER_TEXT}][font="), style
+        assert out.rstrip().endswith("[/font][/color][/bg]"), style
+    for style in ("signature", "off"):
+        assert f"[bg={PAGE_BG}]" not in wrap_presentation("HEAD", "BODY", style), style
+
+
+def test_page_surround_keeps_the_header_full_bleed_and_gutters_the_body():
+    out = wrap_presentation("HEAD", "BODY", "plate")
+    head_at, gutter_at, body_at = out.index("HEAD"), out.index("[td=16px]"), out.index("BODY")
+    assert head_at < gutter_at < body_at
+    assert "[table=" not in out[:head_at]
+
+
+def test_page_surround_survives_an_empty_half():
+    assert "HEAD" in wrap_presentation("HEAD", "", "plate")
+    assert "BODY" in wrap_presentation("", "BODY", "plate")
+    assert wrap_presentation("", "", "plate") == ""
+    assert wrap_presentation("", "   ", "plate") == ""
+
+
+def test_page_surround_tags_are_balanced():
+    out = wrap_presentation(render_banner("plate", title="T", stats=[("Scenes", "3")]), "BODY", "plate")
+    for open_tag, close_tag in (("[bg=", "[/bg]"), ("[font=", "[/font]"), ("[table=", "[/table]")):
+        assert out.count(open_tag) == out.count(close_tag), open_tag
+
+
+def test_page_ground_sits_below_the_banner_chrome():
+    """Blueprint's ladder: the header reads as raised, not flat on an identical field."""
+    lum = lambda h: int(h[1:3], 16) + int(h[3:5], 16) + int(h[5:7], 16)
+    assert lum(PAGE_BG) < lum(BANNER_BG) < lum(BANNER_STRIP_BG)

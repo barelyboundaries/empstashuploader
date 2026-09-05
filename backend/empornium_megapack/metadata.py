@@ -228,8 +228,19 @@ STASH_URL = "https://stashapp.cc"
 UPLOADER_URL = "https://github.com/barelyboundaries/empstashuploader"
 UPLOADER_NAME = "Empornium Stash Uploader"
 
+# Blueprint's dark ladder continued downward: the page ground sits one step
+# below the banner chrome (DARK_GRAY2 under DARK_GRAY3) so the header reads as
+# a raised surface instead of a flat block on an identical field.
+PAGE_BG = "#182026"
+PAGE_FONT = "Helvetica"
+
 BANNER_STYLES = ("plate", "rail", "signature", "off")
 DEFAULT_BANNER_STYLE = "plate"
+
+# Only the two styles that already paint dark chrome carry that surface across
+# the whole post; "signature" exists precisely to add no background, and "off"
+# adds nothing at all.
+PAGE_WRAPPED_STYLES = ("plate", "rail")
 
 # A long megapack title at [size=6] wraps to three lines and swamps the strip
 # below it, so the display size steps down as the title grows.
@@ -397,13 +408,52 @@ def render_meta_panel(
             f"[color={BANNER_TEXT}]{clean_tags}[/color]"
         )
     if clean_notes:
-        rows.append(f"[quote]{clean_notes}[/quote]")
+        # Not [quote]: inside the page wrapper the skin's own quote box keeps
+        # its light background while the inherited text colour is now near
+        # white. This paints its own surface, so it reads on every skin.
+        rows.append(
+            f"[bg={BANNER_STRIP_BG}][table=100%,nball,nopad][tr]"
+            f"[td=3px,{BANNER_LINK}][/td][td=12px][/td]"
+            f"[td][color={BANNER_TEXT}]{clean_notes}[/color][/td]"
+            f"[td=12px][/td][/tr][/table][/bg]"
+        )
 
     if not rows:
         return ""
 
     body = "[br]".join(rows)
     return f"[bg={BANNER_BG}][table=100%,nball,nopad][tr][td=16px][/td][td]{body}[/td][td=16px][/td][/tr][/table][/bg]"
+
+
+def wrap_presentation(header: str, body: str, style: str = DEFAULT_BANNER_STYLE) -> str:
+    """Extend the banner's surface across the whole post.
+
+    The header (banner + metadata panel) stays full-bleed so it reads as a
+    masthead; the body gets a 16px gutter so headings and thumbnails line up
+    with the header's own inner padding instead of touching the edge.
+
+    Returns the parts unwrapped for any style that paints no chrome, so an
+    "off" or "signature" post is left exactly as the tracker's skin renders it.
+    """
+    resolved = normalize_banner_style(style)
+    parts = [p for p in (header, body) if p and p.strip()]
+    if resolved not in PAGE_WRAPPED_STYLES or not parts:
+        return "\n".join(parts)
+
+    guttered = body
+    if body and body.strip():
+        guttered = (
+            "[table=100%,nball,nopad][tr][td=16px][/td][td]\n"
+            f"{body}\n"
+            "[/td][td=16px][/td][/tr][/table]"
+        )
+
+    inner = "\n".join(p for p in (header, guttered) if p and p.strip())
+    return (
+        f"[bg={PAGE_BG}][color={BANNER_TEXT}][font={PAGE_FONT}]\n"
+        f"{inner}\n"
+        "[/font][/color][/bg]"
+    )
 
 
 THUMB_WIDTH = 200
