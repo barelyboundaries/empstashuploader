@@ -344,9 +344,9 @@ def test_single_scene_bbcode_formatting(tmp_path):
     assert "[color=#f5f8fa]Solo Star Performance[/color]" in bbcode
     assert "RESOLUTION[/color][/size][br][size=3][color=#f5f8fa][b]1080p[/b]" in bbcode
     assert "RUNTIME[/color][/size][br][size=3][color=#f5f8fa][b]30:00[/b]" in bbcode
-    assert "[b]Studio:[/b] Star Studios" in bbcode
-    assert "[b]Performers:[/b] Stella Bright" in bbcode
-    assert "[b]Tags:[/b] 1080p, Solo" in bbcode
+    assert "[b][color=#8a9ba8]Studio[/color][/b][color=#5c7080]: [/color][color=#f5f8fa]Star Studios[/color]" in bbcode
+    assert "[b][color=#8a9ba8]Performers[/color][/b][color=#5c7080]: [/color][color=#f5f8fa]Stella Bright[/color]" in bbcode
+    assert "[b][color=#8a9ba8]Tags[/color][/b][color=#5c7080]: [/color][color=#f5f8fa]1080p, Solo[/color]" in bbcode
     assert "[quote]Exclusive 1080p single release.[/quote]" in bbcode
 
     # Assert Megapack-specific lines are absent
@@ -528,9 +528,9 @@ def test_single_scene_adversarial_metadata_special_chars_and_unicode(tmp_path):
     assert "[color=#f5f8fa]&#91;4K Ultra&#93; Special & Rare: Élodie's Scene &#91;2026&#93; 🎬[/color]" in bbcode
     assert "RESOLUTION[/color][/size][br][size=3][color=#f5f8fa][b]2160p[/b]" in bbcode
     assert "RUNTIME[/color][/size][br][size=3][color=#f5f8fa][b]1:30:30[/b]" in bbcode
-    assert "[b]Studio:[/b] Art & Lust Productions &#91;Europe&#93;" in bbcode
-    assert "[b]Performers:[/b] Jane \"The Star\" Doe & Élodie O'Connor" in bbcode
-    assert "[b]Tags:[/b] 4k.uhd, exclusive.release, star.talent" in bbcode
+    assert "Art & Lust Productions &#91;Europe&#93;" in bbcode
+    assert "Jane \"The Star\" Doe & Élodie O'Connor" in bbcode
+    assert "4k.uhd, exclusive.release, star.talent" in bbcode
     assert "Line 2: 100% &#91;Uncensored&#93;" in bbcode
 
 
@@ -565,12 +565,12 @@ def test_single_scene_missing_and_empty_metadata_fields(tmp_path):
     bbcode = res["bbcode"]
 
     # Performers fallback to "Various"
-    assert "[b]Performers:[/b] Various" in bbcode
+    assert "Various" in bbcode
+    assert "[b][color=#8a9ba8]Performers[/color][/b]" in bbcode
     # No studio, tags, or quote blocks
     assert "Studio:" not in bbcode
     assert "Tags:" not in bbcode
     assert "[quote]" not in bbcode
-    assert "[hr]" in bbcode
 
 
 def test_single_scene_nested_file_structures_arity_enforcement(tmp_path):

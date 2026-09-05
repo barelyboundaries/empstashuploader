@@ -80,8 +80,8 @@ def test_stage4a_bbcode_escaping_evil_tags(tmp_path):
     #    banner masthead: its brackets are escaped, the banner's own are not.
     assert "[color=#f5f8fa]&#91;b&#93;evil" in bbcode_content
     assert "[bg=#202b33]" in bbcode_content
-    assert "[b]Performers:[/b]" in bbcode_content
-    assert "[b]Tags:[/b]" in bbcode_content
+    assert "[b][color=#8a9ba8]Performers[/color][/b]" in bbcode_content
+    assert "[b][color=#8a9ba8]Tags[/color][/b]" in bbcode_content
     assert "[b]Scenes Included:[/b] 1" in bbcode_content
     assert "[hr]" in bbcode_content
 

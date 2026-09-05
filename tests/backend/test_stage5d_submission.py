@@ -182,7 +182,8 @@ def test_stage5d_b4_regression_criterion(tmp_path):
     bbcode = Path(res["bbcode_path"]).read_text(encoding="utf-8")
     assert bbcode.startswith("[color=red][b]PREVIEW ONLY: Contains local file:/// URLs[/b][/color]\n")
     assert "[color=#f5f8fa]B4 Regression Pack[/color]" in bbcode
-    assert "[b]Performers:[/b] Actor B4" in bbcode
+    assert "Actor B4" in bbcode
+    assert "[b][color=#8a9ba8]Performers[/color][/b]" in bbcode
     assert "1. [b]B4 Scene[/b] (Actor B4) [1080p] [30:00]" in bbcode
     assert "[quote]Stage 4 baseline test note[/quote]" in bbcode
 

@@ -110,7 +110,8 @@ def test_stage4c_performer_union_overflow_cap(tmp_path):
     bbcode = Path(res["bbcode_path"]).read_text(encoding="utf-8")
 
     # Top 4 alphabetically: Alice, Bob, Charlie, Diana. Extra = 3 (+3 more)
-    assert "[b]Performers:[/b] Alice, Bob, Charlie & Diana +3 more" in bbcode
+    assert "Alice, Bob, Charlie & Diana +3 more" in bbcode
+    assert "[b][color=#8a9ba8]Performers[/color][/b]" in bbcode
 
 
 def test_stage4c_unified_studio_header(tmp_path):
@@ -139,7 +140,8 @@ def test_stage4c_unified_studio_header(tmp_path):
 
     res = task.run_build_megapack(payload)
     bbcode = Path(res["bbcode_path"]).read_text(encoding="utf-8")
-    assert "[b]Studio:[/b] Studio Alpha Exclusive" in bbcode
+    assert "Studio Alpha Exclusive" in bbcode
+    assert "[b][color=#8a9ba8]Studio[/color][/b]" in bbcode
 
 
 def test_stage4c_empify_tag_cleaning():

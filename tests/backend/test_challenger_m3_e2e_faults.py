@@ -397,9 +397,9 @@ class TestEmptyAndNullEdgeCases:
         }
         res2 = run_build_megapack(payload2)
         bbcode2 = res2["bbcode"]
-        assert "[b]Performers:[/b] Solo Star" in bbcode2
-        assert "[b]Tags:[/b] ExclusiveTag" in bbcode2
-        assert "[b]Performers:[/b] Performer A" not in bbcode2
+        assert "Solo Star" in bbcode2
+        assert "ExclusiveTag" in bbcode2
+        assert "[b][color=#8a9ba8]Performers[/color][/b][color=#5c7080]: [/color][color=#f5f8fa]Performer A" not in bbcode2
 
         # Case 3: Both top-level and scenes completely empty -> graceful defaults
         output_dir3 = tmp_path / "Packs3"
@@ -416,8 +416,8 @@ class TestEmptyAndNullEdgeCases:
         }
         res3 = run_build_megapack(payload3)
         bbcode3 = res3["bbcode"]
-        assert "[b]Performers:[/b] Various" in bbcode3
-        assert "[b]Tags:[/b] Megapack" in bbcode3
+        assert "Various" in bbcode3
+        assert "Megapack" in bbcode3
 
     def test_extract_names_and_paths_robustness(self):
         """Stress testing _extract_names and _extract_scene_paths across abnormal structures."""

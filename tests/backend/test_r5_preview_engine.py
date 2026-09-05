@@ -835,7 +835,15 @@ class TestManifestAndSummarySchema:
 
         # Check BBCode content
         bbcode = result["bbcode"]
-        assert "[b]Performers:[/b] Star A & Star B" in bbcode
-        assert "[b]Tags:[/b] 4K, Feature" in bbcode
+        # Panel form binds label to value; asserting the value alone would pass
+        # even if the label were dropped entirely.
+        assert (
+            "[b][color=#8a9ba8]Performers[/color][/b][color=#5c7080]: [/color]"
+            "[color=#f5f8fa]Star A & Star B[/color]"
+        ) in bbcode
+        assert (
+            "[b][color=#8a9ba8]Tags[/color][/b][color=#5c7080]: [/color]"
+            "[color=#f5f8fa]4K, Feature[/color]"
+        ) in bbcode
         assert "[quote]Important pack notes.[/quote]" in bbcode
         assert "[img=200]file:///" in bbcode

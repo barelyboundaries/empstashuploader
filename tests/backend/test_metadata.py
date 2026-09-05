@@ -1,3 +1,4 @@
+import re
 import tempfile
 import os
 from types import SimpleNamespace
@@ -12,10 +13,18 @@ from empornium_megapack.metadata import (
     normalize_meta_input,
     pack_title_default,
     render_banner,
+    render_meta_panel,
     normalize_banner_style,
     render_description,
     STASH_URL,
     UPLOADER_URL,
+    BANNER_BG,
+    BANNER_STRIP_BG,
+    BANNER_TEXT,
+    BANNER_MUTED,
+    BANNER_DIM,
+    BANNER_LINK,
+    BANNER_SIG,
     resolution_for,
     scene_title_default,
 )
@@ -389,3 +398,118 @@ def test_plate_without_a_title_still_renders_the_masthead():
     assert "[font=Trebuchet MS]" not in markup
     assert STASH_URL in markup
     assert "SCENES" in markup
+
+
+def test_meta_panel_is_one_physical_line():
+    """The tracker runs descriptions through nl2br: the entire panel markup must
+    be emitted on a single physical line with no embedded newlines."""
+    panel = render_meta_panel(
+        studio="Studio Alpha",
+        performers="Alice & Bob",
+        tags="4K, Feature",
+        notes="Official notes",
+    )
+    assert chr(10) not in panel
+    assert chr(13) not in panel
+    assert "\n" not in panel
+    assert "\r" not in panel
+
+
+def test_meta_panel_uses_banner_palette_and_no_other_hex_colors():
+    """Panel must only use banner palette constants and introduce no other hex colors."""
+    panel = render_meta_panel(
+        studio="Studio Alpha",
+        performers="Alice & Bob",
+        tags="4K, Feature",
+    )
+    hex_colors = set(re.findall(r"#[0-9a-fA-F]{6}", panel))
+    banner_palette = {
+        BANNER_BG.lower(),
+        BANNER_STRIP_BG.lower(),
+        BANNER_TEXT.lower(),
+        BANNER_MUTED.lower(),
+        BANNER_DIM.lower(),
+        BANNER_LINK.lower(),
+        BANNER_SIG.lower(),
+    }
+    assert hex_colors.issubset(banner_palette)
+    assert BANNER_BG.lower() in hex_colors
+    assert BANNER_MUTED.lower() in hex_colors
+    assert BANNER_DIM.lower() in hex_colors
+    assert BANNER_TEXT.lower() in hex_colors
+
+
+def test_meta_panel_escapes_arguments_against_bbcode_injection():
+    """Metacharacters in raw text cannot inject BBCode markup."""
+    panel = render_meta_panel(
+        studio="Studio [b]Evil[/b]",
+        performers="Performer [VIP] <Star>",
+        tags="Tag [4K] & [Exclusive]",
+        notes="Notes with [b]bold[/b] and [url=http://x]link[/url]",
+    )
+    assert "[b]Evil[/b]" not in panel
+    assert "&#91;b&#93;Evil&#91;/b&#93;" in panel
+    assert "Performer [VIP]" not in panel
+    assert "Performer &#91;VIP&#93; <Star>" in panel
+    assert "Tag [4K]" not in panel
+    assert "&#91;4K&#93;" in panel
+    # Panel's own markup must remain raw and unescaped
+    assert f"[bg={BANNER_BG}]" in panel
+    assert "[table=100%,nball,nopad]" in panel
+    assert "[b][color=" in panel
+    assert "&#91;bg=" not in panel
+    assert "&#91;table=" not in panel
+
+
+def test_meta_panel_omits_empty_fields_and_returns_empty_when_all_empty():
+    """Empty fields are omitted rather than rendering empty rows, and empty input returns ''."""
+    assert render_meta_panel() == ""
+    assert render_meta_panel(studio="", performers=None, tags="", notes="") == ""
+    assert render_meta_panel(studio="   ") == ""
+
+    # Only studio present
+    panel_studio = render_meta_panel(studio="Solo Studio")
+    assert "Studio" in panel_studio
+    assert "Performers" not in panel_studio
+    assert "Tags" not in panel_studio
+    assert "[quote]" not in panel_studio
+
+    # Only performers present
+    panel_perfs = render_meta_panel(performers="Solo Star")
+    assert "Studio" not in panel_perfs
+    assert "Performers" in panel_perfs
+    assert "Tags" not in panel_perfs
+
+    # Only tags present
+    panel_tags = render_meta_panel(tags="Megapack")
+    assert "Studio" not in panel_tags
+    assert "Performers" not in panel_tags
+    assert "Tags" in panel_tags
+
+    # Only notes present
+    panel_notes = render_meta_panel(notes="Important pack notes.")
+    assert "Studio" not in panel_notes
+    assert "Performers" not in panel_notes
+    assert "Tags" not in panel_notes
+    assert "[quote]Important pack notes.[/quote]" in panel_notes
+
+
+def test_meta_panel_tags_are_balanced():
+    """All BBCode tags in the panel must be balanced."""
+    panel = render_meta_panel(
+        studio="Studio Alpha",
+        performers="Alice & Bob",
+        tags="4K, Feature",
+        notes="Important notes",
+    )
+    for open_tag, close_tag in (
+        ("[bg=", "[/bg]"),
+        ("[table=", "[/table]"),
+        ("[tr]", "[/tr]"),
+        ("[td", "[/td]"),
+        ("[b]", "[/b]"),
+        ("[color=", "[/color]"),
+        ("[quote]", "[/quote]"),
+    ):
+        assert panel.count(open_tag) == panel.count(close_tag), open_tag
+

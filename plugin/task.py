@@ -396,6 +396,7 @@ try:
         merge_tags_detailed,
         empify,
         render_banner,
+        render_meta_panel,
         normalize_banner_style,
         DEFAULT_BANNER_STYLE,
         THUMB_WIDTH,
@@ -425,6 +426,7 @@ except ImportError:
     merge_tags_detailed = None
     empify = None
     render_banner = None
+    render_meta_panel = None
     normalize_banner_style = None
     DEFAULT_BANNER_STYLE = "plate"
     THUMB_WIDTH = 150
@@ -2047,14 +2049,24 @@ def run_build_megapack(payload: Any, server_connection: Optional[Dict[str, Any]]
                 bbcode_lines.append(
                     f"[center][b][size=5]{esc_title}{meta_suffix}[/size][/b][/center]"
                 )
-            if studio:
-                bbcode_lines.append(f"\n[b]Studio:[/b] {bbcode_escape(studio)}")
-            bbcode_lines.append(f"\n[b]Performers:[/b] {joined_performers}")
-            if esc_tags:
-                bbcode_lines.append(f"\n[b]Tags:[/b] {', '.join(esc_tags)}")
-            bbcode_lines.append("\n[hr]")
-            if esc_notes:
-                bbcode_lines.append(f"\n[quote]{esc_notes}[/quote]\n")
+            if banner_style in ("plate", "rail") and render_meta_panel is not None:
+                panel = render_meta_panel(
+                    studio=studio,
+                    performers=joined_performers,
+                    tags=", ".join(esc_tags) if esc_tags else "",
+                    notes=esc_notes,
+                )
+                if panel:
+                    bbcode_lines.append(panel)
+            else:
+                if studio:
+                    bbcode_lines.append(f"\n[b]Studio:[/b] {bbcode_escape(studio)}")
+                bbcode_lines.append(f"\n[b]Performers:[/b] {joined_performers}")
+                if esc_tags:
+                    bbcode_lines.append(f"\n[b]Tags:[/b] {', '.join(esc_tags)}")
+                bbcode_lines.append("\n[hr]")
+                if esc_notes:
+                    bbcode_lines.append(f"\n[quote]{esc_notes}[/quote]\n")
         else:
             banner = render_banner(
                 banner_style,
@@ -2073,13 +2085,25 @@ def run_build_megapack(payload: Any, server_connection: Optional[Dict[str, Any]]
             bbcode_lines = [banner] if banner else []
             if banner_style != "plate":
                 bbcode_lines.append(f"[center][b][size=5]{esc_title}[/size][/b][/center]")
-            if studio:
-                bbcode_lines.append(f"\n[b]Studio:[/b] {bbcode_escape(studio)}")
-            bbcode_lines.extend([
-                f"\n[b]Performers:[/b] {joined_performers}",
-                f"\n[b]Tags:[/b] {', '.join(esc_tags) if esc_tags else 'Megapack'}",
-                f"\n[b]Scenes Included:[/b] {len(scenes)}",
-            ])
+
+            if banner_style in ("plate", "rail") and render_meta_panel is not None:
+                panel = render_meta_panel(
+                    studio=studio,
+                    performers=joined_performers,
+                    tags=", ".join(esc_tags) if esc_tags else "Megapack",
+                    notes=esc_notes,
+                )
+                if panel:
+                    bbcode_lines.append(panel)
+                bbcode_lines.append(f"\n[b]Scenes Included:[/b] {len(scenes)}")
+            else:
+                if studio:
+                    bbcode_lines.append(f"\n[b]Studio:[/b] {bbcode_escape(studio)}")
+                bbcode_lines.extend([
+                    f"\n[b]Performers:[/b] {joined_performers}",
+                    f"\n[b]Tags:[/b] {', '.join(esc_tags) if esc_tags else 'Megapack'}",
+                    f"\n[b]Scenes Included:[/b] {len(scenes)}",
+                ])
 
             # 4. Detailed scene breakdown with resolution and duration badges
             if scenes:
@@ -2104,7 +2128,7 @@ def run_build_megapack(payload: Any, server_connection: Optional[Dict[str, Any]]
                     bbcode_lines.append(f"{idx}. [b]{s_title}[/b]{s_ptext}{meta_suffix}")
 
             bbcode_lines.append("\n[hr]")
-            if esc_notes:
+            if not (banner_style in ("plate", "rail") and render_meta_panel is not None) and esc_notes:
                 bbcode_lines.append(f"\n[quote]{esc_notes}[/quote]\n")
 
         # Compute tracker tags via domain merge_tags engine (for Stage 5 upload/tracker submission)

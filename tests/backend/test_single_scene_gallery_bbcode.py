@@ -153,8 +153,8 @@ class TestSingleSceneGalleryBBCode:
 
         assert "[color=#f5f8fa]Anji And Honey[/color]" in bbcode
         assert "STASH RELEASE · Baddies Galleryy" in bbcode
-        assert "[b]Studio:[/b] Baddies Galleryy" in bbcode
-        assert "[b]Performers:[/b] Auhneesh Nicole & Honey Dew" in bbcode
+        assert "[b][color=#8a9ba8]Studio[/color][/b][color=#5c7080]: [/color][color=#f5f8fa]Baddies Galleryy[/color]" in bbcode
+        assert "[b][color=#8a9ba8]Performers[/color][/b][color=#5c7080]: [/color][color=#f5f8fa]Auhneesh Nicole & Honey Dew[/color]" in bbcode
         assert "[quote]Volleyball court.[/quote]" in bbcode
 
     def test_every_uploaded_url_is_reported_for_the_preflight_gate(self, media, tmp_path):
@@ -298,3 +298,201 @@ class TestContactSheetSpoiler:
         assert task._contact_sheet_spoiler_label(1) == "Show contact sheet"
         assert task._contact_sheet_spoiler_label(2) == "Show 2 contact sheets"
         assert task._contact_sheet_spoiler_label(130) == "Show 130 contact sheets"
+
+
+class TestMetaPanelStyleGating:
+    """Verifies render_meta_panel is emitted for plate/rail, falls back to flat lines for signature/off,
+    and handles tag defaults correctly across single-scene and megapack builds.
+    """
+
+    @pytest.mark.parametrize("style", ["plate", "rail"])
+    def test_single_scene_emits_panel_for_plate_and_rail(self, media, tmp_path, style):
+        media_dir, media_file = media
+        p = _payload(media_dir, media_file, single_scene=True)
+        p["banner"] = style
+        bbcode = _run(p, _full_gallery(tmp_path))["bbcode"]
+
+        assert "[bg=#202b33][table=100%,nball,nopad]" in bbcode
+        assert "[b][color=#8a9ba8]Studio[/color][/b][color=#5c7080]: [/color][color=#f5f8fa]Baddies Galleryy[/color]" in bbcode
+        assert "[b][color=#8a9ba8]Performers[/color][/b][color=#5c7080]: [/color][color=#f5f8fa]Auhneesh Nicole & Honey Dew[/color]" in bbcode
+        assert "[b][color=#8a9ba8]Tags[/color][/b][color=#5c7080]: [/color][color=#f5f8fa]Big Ass, POV[/color]" in bbcode
+        assert "[quote]Volleyball court.[/quote]" in bbcode
+        assert "\n[b]Studio:[/b]" not in bbcode
+        assert "\n[b]Performers:[/b]" not in bbcode
+        assert "\n[b]Tags:[/b]" not in bbcode
+
+    @pytest.mark.parametrize("style", ["signature", "off"])
+    def test_single_scene_emits_flat_lines_for_signature_and_off(self, media, tmp_path, style):
+        media_dir, media_file = media
+        p = _payload(media_dir, media_file, single_scene=True)
+        p["banner"] = style
+        bbcode = _run(p, _full_gallery(tmp_path))["bbcode"]
+
+        assert "[table=100%,nball,nopad]" not in bbcode
+        assert "\n[b]Studio:[/b] Baddies Galleryy" in bbcode
+        assert "\n[b]Performers:[/b] Auhneesh Nicole & Honey Dew" in bbcode
+        assert "\n[b]Tags:[/b] Big Ass, POV" in bbcode
+        assert "[quote]Volleyball court.[/quote]" in bbcode
+
+    def test_single_scene_has_no_fallback_for_missing_tags(self, media, tmp_path):
+        media_dir, media_file = media
+        # plate (panel)
+        p_plate = _payload(media_dir, media_file, single_scene=True)
+        p_plate["banner"] = "plate"
+        p_plate["scenes"][0]["tags"] = []
+        bbcode_plate = _run(p_plate, _full_gallery(tmp_path))["bbcode"]
+        assert "[b][color=#8a9ba8]Tags[/color][/b]" not in bbcode_plate
+        assert "Megapack" not in bbcode_plate
+
+        # off (flat)
+        p_off = _payload(media_dir, media_file, single_scene=True)
+        p_off["banner"] = "off"
+        p_off["scenes"][0]["tags"] = []
+        bbcode_off = _run(p_off, _full_gallery(tmp_path))["bbcode"]
+        assert "[b]Tags:[/b]" not in bbcode_off
+        assert "Megapack" not in bbcode_off
+
+    @pytest.mark.parametrize("style", ["plate", "rail"])
+    def test_megapack_emits_panel_for_plate_and_rail(self, tmp_path, style):
+        media_dir = tmp_path / f"pack_{style}"
+        media_dir.mkdir(parents=True)
+        files = []
+        for name in ("one.mp4", "two.mp4"):
+            f = media_dir / name
+            f.write_bytes(b"MEDIA" * 4096)
+            files.append(f)
+
+        payload = {
+            "single_scene": False,
+            "pack_title": f"pack_{style}",
+            "output_dir": str(media_dir),
+            "banner": style,
+            "scenes": [
+                {"id": 1, "title": "Scene 1", "path": str(files[0]), "studio": "PackStudio", "performers": ["Alice"], "tags": ["TagA"], "height": 1080, "duration": 600},
+                {"id": 2, "title": "Scene 2", "path": str(files[1]), "studio": "PackStudio", "performers": ["Bob"], "tags": ["TagB"], "height": 1080, "duration": 600},
+            ],
+            "notes": "Pack notes.",
+        }
+
+        with mock.patch.object(task, "upload_previews", return_value=[f"{HOST}/cs1.jpg", f"{HOST}/cs2.jpg"]):
+            bbcode = task.run_build_megapack(payload)["bbcode"]
+
+        assert "[bg=#202b33][table=100%,nball,nopad]" in bbcode
+        assert "[b][color=#8a9ba8]Studio[/color][/b][color=#5c7080]: [/color][color=#f5f8fa]PackStudio[/color]" in bbcode
+        assert "[b][color=#8a9ba8]Performers[/color][/b][color=#5c7080]: [/color][color=#f5f8fa]Alice & Bob[/color]" in bbcode
+        assert "[b][color=#8a9ba8]Tags[/color][/b][color=#5c7080]: [/color][color=#f5f8fa]TagA, TagB[/color]" in bbcode
+        assert "[quote]Pack notes.[/quote]" in bbcode
+        assert "\n[b]Studio:[/b]" not in bbcode
+        assert "\n[b]Performers:[/b]" not in bbcode
+        assert "\n[b]Tags:[/b]" not in bbcode
+        assert "\n[b]Scenes Included:[/b] 2" in bbcode
+
+    @pytest.mark.parametrize("style", ["signature", "off"])
+    def test_megapack_emits_flat_lines_for_signature_and_off(self, tmp_path, style):
+        media_dir = tmp_path / f"pack_{style}"
+        media_dir.mkdir(parents=True)
+        files = []
+        for name in ("one.mp4", "two.mp4"):
+            f = media_dir / name
+            f.write_bytes(b"MEDIA" * 4096)
+            files.append(f)
+
+        payload = {
+            "single_scene": False,
+            "pack_title": f"pack_{style}",
+            "output_dir": str(media_dir),
+            "banner": style,
+            "scenes": [
+                {"id": 1, "title": "Scene 1", "path": str(files[0]), "studio": "PackStudio", "performers": ["Alice"], "tags": ["TagA"], "height": 1080, "duration": 600},
+                {"id": 2, "title": "Scene 2", "path": str(files[1]), "studio": "PackStudio", "performers": ["Bob"], "tags": ["TagB"], "height": 1080, "duration": 600},
+            ],
+            "notes": "Pack notes.",
+        }
+
+        with mock.patch.object(task, "upload_previews", return_value=[f"{HOST}/cs1.jpg", f"{HOST}/cs2.jpg"]):
+            bbcode = task.run_build_megapack(payload)["bbcode"]
+
+        assert "[table=100%,nball,nopad]" not in bbcode
+        assert "\n[b]Studio:[/b] PackStudio" in bbcode
+        assert "\n[b]Performers:[/b] Alice & Bob" in bbcode
+        assert "\n[b]Tags:[/b] TagA, TagB" in bbcode
+        assert "\n[b]Scenes Included:[/b] 2" in bbcode
+        assert "[quote]Pack notes.[/quote]" in bbcode
+
+    def test_megapack_no_tags_fallback_appears_in_panel_and_flat_lines(self, tmp_path):
+        media_dir = tmp_path / "pack_notags"
+        media_dir.mkdir(parents=True)
+        files = []
+        for name in ("one.mp4", "two.mp4"):
+            f = media_dir / name
+            f.write_bytes(b"MEDIA" * 4096)
+            files.append(f)
+
+        base_payload = {
+            "single_scene": False,
+            "pack_title": "pack_notags",
+            "output_dir": str(media_dir),
+            "scenes": [
+                {"id": 1, "title": "Scene 1", "path": str(files[0]), "studio": "PackStudio", "performers": ["Alice"], "tags": [], "height": 1080, "duration": 600},
+                {"id": 2, "title": "Scene 2", "path": str(files[1]), "studio": "PackStudio", "performers": ["Bob"], "tags": [], "height": 1080, "duration": 600},
+            ],
+        }
+
+        # Panel path (plate)
+        payload_plate = dict(base_payload, banner="plate")
+        with mock.patch.object(task, "upload_previews", return_value=[f"{HOST}/cs1.jpg", f"{HOST}/cs2.jpg"]):
+            bbcode_plate = task.run_build_megapack(payload_plate)["bbcode"]
+        assert "[b][color=#8a9ba8]Tags[/color][/b][color=#5c7080]: [/color][color=#f5f8fa]Megapack[/color]" in bbcode_plate
+
+        # Flat lines path (off)
+        payload_off = dict(base_payload, banner="off")
+        with mock.patch.object(task, "upload_previews", return_value=[f"{HOST}/cs1.jpg", f"{HOST}/cs2.jpg"]):
+            bbcode_off = task.run_build_megapack(payload_off)["bbcode"]
+        assert "\n[b]Tags:[/b] Megapack" in bbcode_off
+
+    def test_fallback_to_flat_lines_when_render_meta_panel_is_none(self, media, tmp_path):
+        media_dir, media_file = media
+        p = _payload(media_dir, media_file, single_scene=True)
+        p["banner"] = "plate"
+        with mock.patch.object(task, "render_meta_panel", None):
+            bbcode = _run(p, _full_gallery(tmp_path))["bbcode"]
+        assert "\n[b]Studio:[/b] Baddies Galleryy" in bbcode
+        assert "\n[b]Performers:[/b] Auhneesh Nicole & Honey Dew" in bbcode
+        assert "\n[b]Tags:[/b] Big Ass, POV" in bbcode
+        assert "[b][color=#8a9ba8]Studio[/color][/b]" not in bbcode
+
+    def test_megapack_fallback_to_flat_lines_when_render_meta_panel_is_none(self, tmp_path):
+        media_dir = tmp_path / "pack_fallback"
+        media_dir.mkdir(parents=True)
+        files = []
+        for name in ("one.mp4", "two.mp4"):
+            f = media_dir / name
+            f.write_bytes(b"MEDIA" * 4096)
+            files.append(f)
+
+        payload = {
+            "single_scene": False,
+            "pack_title": "pack_fallback",
+            "output_dir": str(media_dir),
+            "banner": "plate",
+            "scenes": [
+                {"id": 1, "title": "Scene 1", "path": str(files[0]), "studio": "PackStudio", "performers": ["Alice"], "tags": ["TagA"], "height": 1080, "duration": 600},
+                {"id": 2, "title": "Scene 2", "path": str(files[1]), "studio": "PackStudio", "performers": ["Bob"], "tags": ["TagB"], "height": 1080, "duration": 600},
+            ],
+            "notes": "Pack notes.",
+        }
+
+        with mock.patch.object(task, "render_meta_panel", None), \
+             mock.patch.object(task, "upload_previews", return_value=[f"{HOST}/cs1.jpg", f"{HOST}/cs2.jpg"]):
+            bbcode = task.run_build_megapack(payload)["bbcode"]
+
+        assert "\n[b]Studio:[/b] PackStudio" in bbcode
+        assert "\n[b]Performers:[/b] Alice & Bob" in bbcode
+        assert "\n[b]Tags:[/b] TagA, TagB" in bbcode
+        assert "\n[b]Scenes Included:[/b] 2" in bbcode
+        assert "[quote]Pack notes.[/quote]" in bbcode
+        assert "[b][color=#8a9ba8]Studio[/color][/b]" not in bbcode
+
+
+
+

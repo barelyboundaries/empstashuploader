@@ -918,8 +918,8 @@ class TestFeature15E2EOpaqueBoxSuite:
         res = run_build_megapack(sample_scenes_payload)
         bbcode = Path(res["bbcode_path"]).read_text(encoding="utf-8")
         assert "[color=#f5f8fa]Test Studio Megapack Vol 1[/color]" in bbcode
-        assert "[b]Performers:[/b]" in bbcode
-        assert "[b]Tags:[/b]" in bbcode
+        assert "[b][color=#8a9ba8]Performers[/color][/b]" in bbcode
+        assert "[b][color=#8a9ba8]Tags[/color][/b]" in bbcode
 
 
 # ============================================================================

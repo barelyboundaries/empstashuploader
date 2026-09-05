@@ -355,6 +355,57 @@ def render_banner(
     return "".join(lines)
 
 
+def render_meta_panel(
+    studio: str | None = None,
+    performers: str | None = None,
+    tags: str | None = None,
+    notes: str | None = None,
+) -> str:
+    """Render the metadata block following the banner as a surface panel.
+
+    Cohesive with the banner palette: uses BANNER_BG for the panel surface,
+    BANNER_MUTED for field labels, BANNER_DIM for separators, and BANNER_TEXT
+    for values. Emitted on a single physical line to comply with the tracker's
+    nl2br processing (no stray blank bands between table rows).
+
+    Callers may pass raw text or pre-escaped display values; escaping is handled
+    via bbcode_escape (which is idempotent), while the panel's own markup is
+    never escaped. Returns an empty string if there is nothing to render.
+    """
+    clean_studio = bbcode_escape(str(studio)).strip() if studio else ""
+    clean_performers = bbcode_escape(str(performers)).strip() if performers else ""
+    clean_tags = bbcode_escape(str(tags)).strip() if tags else ""
+    clean_notes = bbcode_escape(str(notes), keep_newlines=True).strip() if notes else ""
+
+    rows: list[str] = []
+    if clean_studio:
+        rows.append(
+            f"[b][color={BANNER_MUTED}]Studio[/color][/b]"
+            f"[color={BANNER_DIM}]: [/color]"
+            f"[color={BANNER_TEXT}]{clean_studio}[/color]"
+        )
+    if clean_performers:
+        rows.append(
+            f"[b][color={BANNER_MUTED}]Performers[/color][/b]"
+            f"[color={BANNER_DIM}]: [/color]"
+            f"[color={BANNER_TEXT}]{clean_performers}[/color]"
+        )
+    if clean_tags:
+        rows.append(
+            f"[b][color={BANNER_MUTED}]Tags[/color][/b]"
+            f"[color={BANNER_DIM}]: [/color]"
+            f"[color={BANNER_TEXT}]{clean_tags}[/color]"
+        )
+    if clean_notes:
+        rows.append(f"[quote]{clean_notes}[/quote]")
+
+    if not rows:
+        return ""
+
+    body = "[br]".join(rows)
+    return f"[bg={BANNER_BG}][table=100%,nball,nopad][tr][td=16px][/td][td]{body}[/td][td=16px][/td][/tr][/table][/bg]"
+
+
 THUMB_WIDTH = 200
 # Thumbnails are generated at 2x the display width so they stay crisp on
 # high-DPI screens while costing a fraction of the full-size image.
