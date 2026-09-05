@@ -233,7 +233,10 @@
 
       let buildStamp = null;
       try {
-        const versionUrl = `${baseOrigin}/plugin/${PLUGIN_ID}/version.json`;
+        // Stash serves the ui.assets mapping under /assets/ -- same prefix as
+        // review.html below. A bare /plugin/<id>/version.json is a 404, which
+        // the fail-soft path would swallow, silently disabling the check.
+        const versionUrl = `${baseOrigin}/plugin/${PLUGIN_ID}/assets/version.json`;
         const vResponse = await fetch(versionUrl, { cache: "no-store" });
         if (vResponse.ok) {
           const vData = await vResponse.json();

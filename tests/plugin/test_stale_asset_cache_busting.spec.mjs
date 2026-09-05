@@ -39,7 +39,7 @@ test.describe("Stale-Asset Cache Busting & Versioned Lifecycle", () => {
     const jsRequests = [];
     const htmlRequests = [];
 
-    await page.route("**/plugin*/**/version.json*", async (route) => {
+    await page.route("**/plugin/*/assets/version.json*", async (route) => {
       return route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -134,7 +134,7 @@ test.describe("Stale-Asset Cache Busting & Versioned Lifecycle", () => {
     const fixedStamp = "1.0.0-staticStamp";
     const jsRequests = [];
 
-    await page.route("**/plugin*/**/version.json*", async (route) => {
+    await page.route("**/plugin/*/assets/version.json*", async (route) => {
       return route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -208,7 +208,7 @@ test.describe("Stale-Asset Cache Busting & Versioned Lifecycle", () => {
     const jsRequests = [];
     const htmlRequests = [];
 
-    await page.route("**/plugin*/**/version.json*", async (route) => {
+    await page.route("**/plugin/*/assets/version.json*", async (route) => {
       return route.fulfill({
         status: 404,
         contentType: "application/json",
@@ -286,7 +286,7 @@ test.describe("Stale-Asset Cache Busting & Versioned Lifecycle", () => {
   test("4. window.__emporniumTeardown is invoked before a re-injection", async ({ page }) => {
     let currentStamp = "1.0.0-release1";
 
-    await page.route("**/plugin*/**/version.json*", async (route) => {
+    await page.route("**/plugin/*/assets/version.json*", async (route) => {
       return route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -374,7 +374,7 @@ test.describe("Stale-Asset Cache Busting & Versioned Lifecycle", () => {
   });
 
   test("5. window.__emporniumTeardown defensive execution does not throw", async ({ page }) => {
-    await page.route("**/plugin*/**/version.json*", async (route) => {
+    await page.route("**/plugin/*/assets/version.json*", async (route) => {
       return route.fulfill({
         status: 200,
         contentType: "application/json",
