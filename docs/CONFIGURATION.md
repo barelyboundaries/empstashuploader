@@ -2,6 +2,28 @@
 
 [← Back to the README](../README.md)
 
+## Recommended: Stash plugin settings
+
+The easiest and recommended path for configuring the two required secrets (`hamsterApiKey` and `announceUrl`) is directly inside Stash:
+
+**Settings -> Plugins -> Empornium Megapack Builder**
+
+Setting them here avoids manually managing config files or environment variables on disk.
+
+### Precedence order
+
+The backend resolves secrets following a strict precedence order:
+
+1. **Environment variables** (`EMPORNIUM_EMPORNIUM_ANNOUNCE_URL` / `EMPORNIUM_ANNOUNCE_URL`, `EMPORNIUM_HAMSTER_API_KEY`)
+2. **Config file** (`config.local.toml`)
+3. **Stash plugin settings** (from Stash's plugin configuration)
+4. *Not set*
+
+### Security caveat (plaintext storage)
+
+> [!WARNING]
+> Stash stores plugin settings in its configuration in plaintext. Because Stash has no masked setting type, anyone with access to your Stash instance can read these values under Settings -> Plugins. If your Stash instance is shared or accessible to untrusted users, supply them through environment variables instead.
+
 ## Where the config file goes
 
 The backend reads `config.local.toml`, looking in this order:
@@ -89,8 +111,8 @@ path_mappings = []
 
 | Setting | Why |
 |---|---|
-| `hamster_api_key` | Required for remote image hosting. Without it, the BBCode keeps local `file:///` URLs and the pre-flight check fails the release. |
-| `empornium_announce_url` | Embedded in the built torrent. Never logged, never shown in the UI. |
+| `hamster_api_key` | Required for remote image hosting. Without it, the BBCode keeps local `file:///` URLs and the pre-flight check fails the release. Now settable in the Stash UI under Settings -> Plugins. |
+| `empornium_announce_url` | Embedded in the built torrent. Never logged, never shown in the UI. Now settable in the Stash UI under Settings -> Plugins. |
 | `stash_api_key` | Needed if your Stash requires authentication. |
 | `output_dir` / `scratch_dir` | Prefill the wizard's stage 2 fields so you don't retype them each run. |
 | `contact_sheet_layout` | Contact sheet grid, `3x6` by default. |
