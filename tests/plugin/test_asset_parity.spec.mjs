@@ -22,10 +22,10 @@ const __dirname = path.dirname(__filename);
 // mismatch — that is the signal to refresh ASSET_RECORD below in the same
 // commit, so unreviewed or truncated asset changes can never slip through.
 const ASSET_RECORD = {
-  // review.js: relocate header controls into empornium-header-slot
-  'review.js': '4db8c53bb3f91881c9e4aa65a30b71093faff55a8e602771df7901d000f4c0e8',
-  // review.html: add build console result to pointer-events allowlist and review-header[hidden]
-  'review.html': 'a8ad9cd4d30b0b59aa2f20eeddd2b6e97eab3f91aac53d15c7cc87c284d8230b',
+  // review.js: add in-app plugin settings dialog logic
+  'review.js': '8dfa608407cab3561647d5162355681ab8b2dc89b282f52e581e552706959a4d',
+  // review.html: add plugin settings modal dialog and entry points
+  'review.html': 'd3c7fea113c60e90a3b316d594c6b7ee1c15ea5b60c5eaebcc9398dea78971ec',
 };
 
 function sha256(filePath) {

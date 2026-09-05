@@ -1124,6 +1124,93 @@
       accent-color: var(--accent);
     }
 
+    /* Plugin Settings Modal Dialog */
+    .plugin-settings-container {
+      max-width: 580px;
+      height: auto;
+      max-height: 85vh;
+    }
+
+    .plugin-settings-body {
+      padding: 16px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      background-color: var(--bg-dark);
+    }
+
+    .plugin-settings-note {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      background-color: rgba(234, 179, 8, 0.1);
+      border: 1px solid rgba(234, 179, 8, 0.25);
+      border-radius: 6px;
+      padding: 10px 12px;
+      line-height: 1.4;
+    }
+
+    .plugin-settings-error {
+      font-size: 0.85rem;
+      color: #ff6b6b;
+      background-color: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 6px;
+      padding: 10px 12px;
+      line-height: 1.4;
+    }
+
+    .plugin-settings-field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .plugin-settings-label {
+      font-weight: 600;
+      font-size: 0.88rem;
+      color: var(--text-main);
+    }
+
+    .plugin-settings-input-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .plugin-settings-input-row .form-input {
+      flex: 1;
+      font-family: monospace;
+      font-size: 0.85rem;
+      padding: 8px 10px;
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 4px;
+      color: var(--text-main);
+    }
+
+    .plugin-settings-input-row .btn-toggle-reveal {
+      padding: 6px 10px;
+      font-size: 1rem;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .setting-source-warning {
+      font-size: 0.8rem;
+      color: #f59e0b;
+      background-color: rgba(245, 158, 11, 0.1);
+      border: 1px solid rgba(245, 158, 11, 0.25);
+      border-radius: 4px;
+      padding: 6px 10px;
+      line-height: 1.35;
+    }
+
+    .setting-help-text {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
     /* Wizard stage rail (todo 8): Setup -> Locations -> Scenes -> Actions.
        Soft-focus stages: every stage's content stays rendered and
        interactable; the current stage is emphasized and the others are
@@ -1813,6 +1900,7 @@
       <button id="btn-sidecar-stop" class="btn btn-secondary btn-sidecar-stop" style="display: none;" title="Stop Sidecar Backend">Stop sidecar</button>
     </div>
     <div style="display: flex; gap: 8px; align-items: center;">
+      <button type="button" id="btn-settings" class="btn btn-secondary btn-sm" title="Plugin Settings">⚙ Settings</button>
       <button type="button" id="btn-history" class="btn btn-secondary btn-sm" title="View Past Runs">📚 History</button>
       <button id="btn-header-close" class="btn btn-close-header" title="Close Review Modal">✕ Close</button>
     </div>
@@ -1824,6 +1912,7 @@
       <span id="config-warning-detail"></span>
     </div>
     <div class="collision-banner-actions">
+      <button type="button" id="btn-config-settings" class="btn btn-primary">Enter details</button>
       <button type="button" id="btn-config-recheck" class="btn btn-secondary">Recheck</button>
     </div>
   </div>
@@ -2207,6 +2296,49 @@
         <div style="display: flex; gap: 8px;">
           <button type="button" id="btn-cancel-dest-collision" class="btn btn-secondary">Cancel</button>
           <button type="button" id="btn-confirm-dest-collision" class="btn btn-primary">Confirm Choices</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Plugin Settings Modal Dialog -->
+  <div id="plugin-settings-modal" class="dir-modal-overlay" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="plugin-settings-title">
+    <div class="dir-modal-container plugin-settings-container" role="dialog" aria-modal="true" aria-labelledby="plugin-settings-title">
+      <div class="dir-modal-header">
+        <div class="dir-modal-title" id="plugin-settings-title">⚙ Plugin Settings</div>
+        <button type="button" id="btn-close-plugin-settings" class="dir-modal-close" title="Close (Esc)">&times;</button>
+      </div>
+      <div class="plugin-settings-body">
+        <div class="plugin-settings-note">
+          ⚠️ <strong>Plaintext Storage:</strong> Stash stores plugin settings in PLAINTEXT in its config file — anyone with access to the Stash server or web interface can read them. Stash has no secret setting type.
+        </div>
+        <div id="plugin-settings-error" class="plugin-settings-error" style="display: none;" role="alert"></div>
+
+        <div class="plugin-settings-field">
+          <label for="setting-announce-url" class="plugin-settings-label">Empornium Announce URL</label>
+          <div class="plugin-settings-input-row">
+            <input type="password" id="setting-announce-url" class="form-input" placeholder="http://tracker.empornium.sx:2710/..." autocomplete="off">
+            <button type="button" id="btn-toggle-announce-url" class="btn btn-secondary btn-toggle-reveal" title="Toggle visibility" aria-label="Toggle announce URL visibility">👁️</button>
+          </div>
+          <div id="source-warning-announce" class="setting-source-warning" style="display: none;"></div>
+          <div class="setting-help-text">Leave blank to clear this setting.</div>
+        </div>
+
+        <div class="plugin-settings-field">
+          <label for="setting-hamster-key" class="plugin-settings-label">HamsterImg API Key</label>
+          <div class="plugin-settings-input-row">
+            <input type="password" id="setting-hamster-key" class="form-input" placeholder="HamsterImg API Key..." autocomplete="off">
+            <button type="button" id="btn-toggle-hamster-key" class="btn btn-secondary btn-toggle-reveal" title="Toggle visibility" aria-label="Toggle hamster key visibility">👁️</button>
+          </div>
+          <div id="source-warning-hamster" class="setting-source-warning" style="display: none;"></div>
+          <div class="setting-help-text">Leave blank to clear this setting.</div>
+        </div>
+      </div>
+      <div class="dir-modal-footer">
+        <div style="flex: 1;"></div>
+        <div style="display: flex; gap: 8px;">
+          <button type="button" id="btn-cancel-plugin-settings" class="btn btn-secondary">Cancel</button>
+          <button type="button" id="btn-save-plugin-settings" class="btn btn-primary">Save</button>
         </div>
       </div>
     </div>

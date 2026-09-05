@@ -155,7 +155,8 @@
   margin-left: 0;
 }
 
-#empornium-header-slot #btn-history {
+#empornium-header-slot #btn-history,
+#empornium-header-slot #btn-settings {
   padding: 2px 8px;
   font-size: 0.75rem;
   line-height: 1.2;

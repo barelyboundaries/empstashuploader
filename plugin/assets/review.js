@@ -5978,6 +5978,9 @@
   // Window exports for tests and integrations
   window.__emporniumTeardown = emporniumTeardown;
   window.initEmporniumReview = initEmporniumReview;
+  window.openPluginSettingsDialog = openPluginSettingsDialog;
+  window.closePluginSettingsDialog = closePluginSettingsDialog;
+  window.savePluginSettings = savePluginSettings;
   window.openHistoryView = openHistoryView;
   window.closeHistoryView = closeHistoryView;
   window._emporniumCanClose = emporniumCanClose;
@@ -6202,6 +6205,187 @@
         recheckBtn.textContent = "Recheck";
       }
     }
+  }
+
+  // Plugin Settings Modal Dialog Logic
+  const CONFIGURE_PLUGIN_MUTATION = "mutation ConfigurePlugin($plugin_id: ID!, $input: Map!) { configurePlugin(plugin_id: $plugin_id, input: $input) }";
+
+  let pluginSettingsInvoker = null;
+
+  function updateSourceWarning(warningEl, source, envVarName, tomlKey) {
+    if (!warningEl) return;
+    if (source === "env" || source === "config file") {
+      const removalTarget = source === "env" ? `the ${envVarName} environment variable` : `the ${tomlKey} entry in config.local.toml`;
+      warningEl.textContent = `⚠️ A higher-precedence source (${source}) is currently supplying this value. Saving here will store the value in Stash, but it will NOT take effect until ${removalTarget} is removed.`;
+      warningEl.style.display = "block";
+    } else {
+      warningEl.textContent = "";
+      warningEl.style.display = "none";
+    }
+  }
+
+  function handlePluginSettingsKeydown(e) {
+    if (e.key === "Escape") {
+      closePluginSettingsDialog();
+    }
+  }
+
+  async function openPluginSettingsDialog(invoker = null) {
+    const modal = document.getElementById("plugin-settings-modal");
+    if (!modal) return;
+
+    pluginSettingsInvoker = invoker || document.activeElement;
+
+    const errEl = document.getElementById("plugin-settings-error");
+    if (errEl) {
+      errEl.style.display = "none";
+      errEl.textContent = "";
+    }
+
+    const announceInput = document.getElementById("setting-announce-url");
+    const hamsterInput = document.getElementById("setting-hamster-key");
+    if (announceInput) announceInput.type = "password";
+    if (hamsterInput) hamsterInput.type = "password";
+
+    modal.style.display = "flex";
+    document.addEventListener("keydown", handlePluginSettingsKeydown);
+
+    if (announceInput) {
+      announceInput.focus();
+      setTimeout(() => {
+        if (modal.style.display !== "none") announceInput.focus();
+      }, 50);
+    }
+
+    try {
+      const data = await executeGraphQL("query { configuration { plugins } }");
+      const plugins = data?.configuration?.plugins || {};
+      const pkg = plugins["empornium-megapack"] || {};
+      if (announceInput) {
+        announceInput.value = pkg.announceUrl != null ? String(pkg.announceUrl) : "";
+      }
+      if (hamsterInput) {
+        hamsterInput.value = pkg.hamsterApiKey != null ? String(pkg.hamsterApiKey) : "";
+      }
+    } catch (err) {
+      if (errEl) {
+        errEl.textContent = `Failed to load current settings: ${err.message || err}`;
+        errEl.style.display = "block";
+      }
+    }
+
+    const announceWarning = document.getElementById("source-warning-announce");
+    const hamsterWarning = document.getElementById("source-warning-hamster");
+    try {
+      const endpoints = backendEndpoints("/health");
+      let healthData = null;
+      for (const url of endpoints) {
+        try {
+          const resp = await fetch(url, { cache: "no-store" });
+          if (!resp.ok) continue;
+          healthData = await resp.json();
+          break;
+        } catch (_) {}
+      }
+
+      if (healthData && typeof healthData === "object") {
+        updateSourceWarning(
+          announceWarning,
+          healthData.announce_source,
+          "EMPORNIUM_EMPORNIUM_ANNOUNCE_URL",
+          "empornium_announce_url"
+        );
+        updateSourceWarning(
+          hamsterWarning,
+          healthData.hamster_source,
+          "EMPORNIUM_HAMSTER_API_KEY",
+          "hamster_api_key"
+        );
+      } else {
+        updateSourceWarning(announceWarning, null);
+        updateSourceWarning(hamsterWarning, null);
+      }
+    } catch (_) {
+      updateSourceWarning(announceWarning, null);
+      updateSourceWarning(hamsterWarning, null);
+    }
+  }
+
+  function closePluginSettingsDialog() {
+    const modal = document.getElementById("plugin-settings-modal");
+    if (modal) {
+      modal.style.display = "none";
+    }
+    document.removeEventListener("keydown", handlePluginSettingsKeydown);
+
+    const announceInput = document.getElementById("setting-announce-url");
+    const hamsterInput = document.getElementById("setting-hamster-key");
+    if (announceInput) announceInput.type = "password";
+    if (hamsterInput) hamsterInput.type = "password";
+
+    if (pluginSettingsInvoker && typeof pluginSettingsInvoker.focus === "function") {
+      try {
+        pluginSettingsInvoker.focus();
+      } catch (_) {}
+      pluginSettingsInvoker = null;
+    }
+  }
+
+  async function savePluginSettings() {
+    const saveBtn = document.getElementById("btn-save-plugin-settings");
+    const errEl = document.getElementById("plugin-settings-error");
+    const announceInput = document.getElementById("setting-announce-url");
+    const hamsterInput = document.getElementById("setting-hamster-key");
+
+    if (errEl) {
+      errEl.style.display = "none";
+      errEl.textContent = "";
+    }
+
+    const announceVal = announceInput ? announceInput.value : "";
+    const hamsterVal = hamsterInput ? hamsterInput.value : "";
+
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.textContent = "Saving…";
+    }
+
+    try {
+      await executeGraphQL(CONFIGURE_PLUGIN_MUTATION, {
+        plugin_id: "empornium-megapack",
+        input: {
+          announceUrl: announceVal,
+          hamsterApiKey: hamsterVal
+        }
+      });
+
+      const endpoints = backendEndpoints("/api/config/refresh");
+      for (const url of endpoints) {
+        try {
+          const resp = await fetch(url, { method: "POST", cache: "no-store" });
+          if (resp.ok) break;
+        } catch (_) {}
+      }
+
+      await checkConfigGate();
+      closePluginSettingsDialog();
+    } catch (err) {
+      if (errEl) {
+        errEl.textContent = err.message || String(err);
+        errEl.style.display = "block";
+      }
+    } finally {
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = "Save";
+      }
+    }
+  }
+
+  function togglePasswordVisibility(inputId) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    input.type = input.type === "password" ? "text" : "password";
   }
 
   // Everything that becomes possible the moment the sidecar answers. Called
@@ -6518,6 +6702,7 @@
 
     const sidecarStatus = document.getElementById("sidecar-status");
     const btnSidecarStop = document.getElementById("btn-sidecar-stop");
+    const btnSettings = document.getElementById("btn-settings");
     const btnHistory = document.getElementById("btn-history");
 
     if (sidecarStatus && !slot.contains(sidecarStatus)) {
@@ -6525,6 +6710,9 @@
     }
     if (btnSidecarStop && !slot.contains(btnSidecarStop)) {
       slot.appendChild(btnSidecarStop);
+    }
+    if (btnSettings && !slot.contains(btnSettings)) {
+      slot.appendChild(btnSettings);
     }
     if (btnHistory && !slot.contains(btnHistory)) {
       slot.appendChild(btnHistory);
@@ -6727,6 +6915,74 @@
     if (configRecheckBtn && !configRecheckBtn.dataset.bound) {
       configRecheckBtn.dataset.bound = "true";
       configRecheckBtn.addEventListener("click", refreshConfigGate);
+    }
+
+    const settingsBtn = document.getElementById("btn-settings");
+    if (settingsBtn && !settingsBtn.dataset.bound) {
+      settingsBtn.dataset.bound = "true";
+      settingsBtn.addEventListener("click", () => openPluginSettingsDialog(settingsBtn));
+    }
+
+    const configSettingsBtn = document.getElementById("btn-config-settings");
+    if (configSettingsBtn && !configSettingsBtn.dataset.bound) {
+      configSettingsBtn.dataset.bound = "true";
+      configSettingsBtn.addEventListener("click", () => openPluginSettingsDialog(configSettingsBtn));
+    }
+
+    const closePluginSettingsBtn = document.getElementById("btn-close-plugin-settings");
+    if (closePluginSettingsBtn && !closePluginSettingsBtn.dataset.bound) {
+      closePluginSettingsBtn.dataset.bound = "true";
+      closePluginSettingsBtn.addEventListener("click", closePluginSettingsDialog);
+    }
+
+    const cancelPluginSettingsBtn = document.getElementById("btn-cancel-plugin-settings");
+    if (cancelPluginSettingsBtn && !cancelPluginSettingsBtn.dataset.bound) {
+      cancelPluginSettingsBtn.dataset.bound = "true";
+      cancelPluginSettingsBtn.addEventListener("click", closePluginSettingsDialog);
+    }
+
+    const savePluginSettingsBtn = document.getElementById("btn-save-plugin-settings");
+    if (savePluginSettingsBtn && !savePluginSettingsBtn.dataset.bound) {
+      savePluginSettingsBtn.dataset.bound = "true";
+      savePluginSettingsBtn.addEventListener("click", savePluginSettings);
+    }
+
+    const toggleAnnounceBtn = document.getElementById("btn-toggle-announce-url");
+    if (toggleAnnounceBtn && !toggleAnnounceBtn.dataset.bound) {
+      toggleAnnounceBtn.dataset.bound = "true";
+      toggleAnnounceBtn.addEventListener("click", () => togglePasswordVisibility("setting-announce-url"));
+    }
+
+    const toggleHamsterBtn = document.getElementById("btn-toggle-hamster-key");
+    if (toggleHamsterBtn && !toggleHamsterBtn.dataset.bound) {
+      toggleHamsterBtn.dataset.bound = "true";
+      toggleHamsterBtn.addEventListener("click", () => togglePasswordVisibility("setting-hamster-key"));
+    }
+
+    const pluginSettingsOverlay = document.getElementById("plugin-settings-modal");
+    if (pluginSettingsOverlay && !pluginSettingsOverlay.dataset.bound) {
+      pluginSettingsOverlay.dataset.bound = "true";
+      pluginSettingsOverlay.addEventListener("click", (e) => {
+        if (e.target === pluginSettingsOverlay) {
+          closePluginSettingsDialog();
+        }
+      });
+    }
+
+    const settingAnnounceInput = document.getElementById("setting-announce-url");
+    if (settingAnnounceInput && !settingAnnounceInput.dataset.boundKey) {
+      settingAnnounceInput.dataset.boundKey = "true";
+      settingAnnounceInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") savePluginSettings();
+      });
+    }
+
+    const settingHamsterInput = document.getElementById("setting-hamster-key");
+    if (settingHamsterInput && !settingHamsterInput.dataset.boundKey) {
+      settingHamsterInput.dataset.boundKey = "true";
+      settingHamsterInput.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") savePluginSettings();
+      });
     }
 
     const browseDirBtn = document.getElementById("btn-browse-dir");
