@@ -33,6 +33,7 @@
   let activeConsoleTaskType = null;
   let activeConsoleRunId = null;
   let consoleUserDetached = false;
+  let consoleLogUserToggled = false;
   const MAX_CONSOLE_LOG_LINES = 2000;
 
   const BUILD_CHECKLIST_PHASES = [
@@ -3705,6 +3706,45 @@
     }
   }
 
+  function setupConsoleToggleListener() {
+    const toggleBtn = document.getElementById("btn-console-toggle-log");
+    const logEl = document.getElementById("build-console-log");
+    if (!toggleBtn || !logEl) return;
+
+    toggleBtn.addEventListener("click", () => {
+      consoleLogUserToggled = true;
+      const isCollapsed = logEl.classList.contains("collapsed");
+      if (isCollapsed) {
+        logEl.classList.remove("collapsed");
+        if (logEl.parentElement) logEl.parentElement.classList.remove("collapsed");
+        toggleBtn.textContent = "▾ Collapse log";
+        toggleBtn.setAttribute("aria-expanded", "true");
+      } else {
+        logEl.classList.add("collapsed");
+        if (logEl.parentElement) logEl.parentElement.classList.add("collapsed");
+        toggleBtn.textContent = "▸ Show full log";
+        toggleBtn.setAttribute("aria-expanded", "false");
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+    });
+  }
+
+  function collapseConsoleLog() {
+    if (consoleLogUserToggled) return;
+    const logEl = document.getElementById("build-console-log");
+    const toggleBtn = document.getElementById("btn-console-toggle-log");
+    if (logEl) {
+      logEl.classList.add("collapsed");
+      if (logEl.parentElement) logEl.parentElement.classList.add("collapsed");
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+    if (toggleBtn) {
+      toggleBtn.style.display = "";
+      toggleBtn.textContent = "▸ Show full log";
+      toggleBtn.setAttribute("aria-expanded", "false");
+    }
+  }
+
   function setupConsoleMinimizeListeners() {
     const minimizeBtn = document.getElementById("btn-build-console-minimize");
     const overlay = document.getElementById("build-console");
@@ -3745,6 +3785,7 @@
     activeConsoleTaskType = taskType;
     activeConsoleRunId = runId;
     consoleUserDetached = false;
+    consoleLogUserToggled = false;
 
     const overlay = document.getElementById("build-console");
     const titleEl = document.getElementById("build-console-title");
@@ -3754,15 +3795,22 @@
     const jumpBtn = document.getElementById("btn-console-scroll-bottom") || document.getElementById("btn-console-jump-latest");
     const resultEl = document.getElementById("build-console-result");
     const busyShowBtn = document.getElementById("btn-busy-show-console");
+    const toggleBtn = document.getElementById("btn-console-toggle-log");
 
     if (overlay) overlay.hidden = false;
     if (resultEl) resultEl.hidden = true;
     if (noticeEl) noticeEl.style.display = "none";
     if (jumpBtn) jumpBtn.style.display = "none";
     if (busyShowBtn) busyShowBtn.style.display = "none";
+    if (toggleBtn) {
+      toggleBtn.style.display = "none";
+      toggleBtn.textContent = "▸ Show full log";
+      toggleBtn.setAttribute("aria-expanded", "false");
+    }
     if (logEl) {
       logEl.innerHTML = "";
       logEl.classList.remove("collapsed");
+      if (logEl.parentElement) logEl.parentElement.classList.remove("collapsed");
     }
     if (barEl) barEl.style.width = "0%";
 
@@ -3785,6 +3833,8 @@
     if (buildConsole) buildConsole.hidden = false;
     resultContainer.hidden = false;
     resultContainer.style.display = "flex";
+
+    collapseConsoleLog();
 
     const isSingle = options.isSingle ?? (currentMode === "single" || payload?.task === "BuildSingleScene" || payload?.mode === "single" || payload?.mode === "single_scene");
     const packTitle = payload?.pack_title || payload?.title || document.getElementById("pack-title")?.value || "";
@@ -5066,7 +5116,7 @@
       const consoleResult = document.getElementById("build-console-result");
       if (buildConsole) {
         buildConsole.hidden = false;
-        if (consoleLog) consoleLog.classList.add("collapsed");
+        collapseConsoleLog();
         if (consoleResult) {
           consoleResult.hidden = false;
           consoleResult.style.display = "flex";
@@ -6811,6 +6861,7 @@
     initBBCodeToolbar();
     setupConsoleScrollListeners();
     setupConsoleMinimizeListeners();
+    setupConsoleToggleListener();
   }
 
   if (document.readyState === "loading") {

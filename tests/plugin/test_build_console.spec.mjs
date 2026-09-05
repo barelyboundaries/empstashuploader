@@ -659,4 +659,94 @@ test.describe("Playwright Build Console Specifications (Change B)", () => {
     expect(copiedAll).toContain("tag.one");
     expect(copiedAll).toContain("[b]All In One Content[/b]");
   });
+
+  // Specification 11: Completion-time log collapse and manual toggle control
+  test("11. Log collapses on completion and manual toggle expands/collapses with aria-expanded", async ({ page }) => {
+    const state = await bootReviewHarness(page);
+
+    await page.locator("#btn-build").click();
+    await expect.poll(() => state.dispatchedRunId).not.toBeNull();
+    const activeRunId = state.dispatchedRunId;
+
+    const logEl = page.locator("#build-console-log");
+    const toggleBtn = page.locator("#btn-console-toggle-log");
+    const resultView = page.locator("#build-console-result");
+
+    // Deliver multiple log lines while build is in progress
+    const runningLogs = [];
+    for (let i = 1; i <= 20; i++) {
+      runningLogs.push({
+        time: `2026-09-04T12:00:${i.toString().padStart(2, "0")}Z`,
+        level: "Info",
+        message: `[emp:${activeRunId}] Processing step ${i} of megapack build...`
+      });
+    }
+    await deliverWsLogs(page, runningLogs);
+    await deliverWsJobProgress(page, { status: "RUNNING", progress: 0.5 });
+
+    // Assert: log is NOT collapsed while build is running, and toggle button is hidden
+    await expect(logEl).toBeVisible();
+    await expect(logEl).not.toHaveClass(/collapsed/);
+    await expect(toggleBtn).toBeHidden();
+    await expect(resultView).toBeHidden();
+
+    // Finish build with result sentinel
+    await deliverWsLogs(page, [{
+      time: "2026-09-04T12:01:00Z",
+      level: "Info",
+      message: `EMPORNIUM_TASK_RESULT ${activeRunId}: ` + JSON.stringify({
+        status: "success",
+        pack_title: "Collapse Test Pack",
+        bbcode: "[b]Completed Pack[/b]",
+        tracker_tags: ["test.tag"],
+        torrent_path: "C:\\Packs\\test.torrent",
+        ready: true,
+        preflight: { ready: true, checks: [] }
+      })
+    }]);
+    await deliverWsJobProgress(page, { status: "FINISHED", progress: 1.0 });
+
+    // Assert: result panel appears
+    await expect(resultView).toBeVisible();
+
+    // Assert: log IS collapsed once result panel appears
+    await expect(logEl).toHaveClass(/collapsed/);
+
+    // Assert: toggle button is visible, shows collapsed label, and has aria-expanded="false"
+    await expect(toggleBtn).toBeVisible();
+    await expect(toggleBtn).toHaveText("▸ Show full log");
+    await expect(toggleBtn).toHaveAttribute("aria-expanded", "false");
+
+    // Assert: log is scrolled to the bottom
+    const isScrolledToBottom = await page.evaluate(() => {
+      const el = document.getElementById("build-console-log");
+      if (!el) return false;
+      return el.scrollTop + el.clientHeight >= el.scrollHeight - 5;
+    });
+    expect(isScrolledToBottom).toBe(true);
+
+    // Click toggle to expand log
+    await toggleBtn.click();
+    await expect(logEl).not.toHaveClass(/collapsed/);
+    await expect(toggleBtn).toHaveText("▾ Collapse log");
+    await expect(toggleBtn).toHaveAttribute("aria-expanded", "true");
+
+    // Deliver a subsequent log append
+    await deliverWsLogs(page, [{
+      time: "2026-09-04T12:02:00Z",
+      level: "Info",
+      message: `[emp:${activeRunId}] Late post-build log line appended`
+    }]);
+
+    // Assert: manual expand is NOT undone by subsequent log append
+    await expect(logEl).not.toHaveClass(/collapsed/);
+    await expect(toggleBtn).toHaveText("▾ Collapse log");
+    await expect(toggleBtn).toHaveAttribute("aria-expanded", "true");
+
+    // Click toggle to re-collapse log
+    await toggleBtn.click();
+    await expect(logEl).toHaveClass(/collapsed/);
+    await expect(toggleBtn).toHaveText("▸ Show full log");
+    await expect(toggleBtn).toHaveAttribute("aria-expanded", "false");
+  });
 });

@@ -1479,9 +1479,16 @@
       word-break: break-word;
     }
 
+    .build-console-log-container.collapsed,
+    .build-console-log-container:has(.build-console-log.collapsed) {
+      flex: none;
+      min-height: 0;
+    }
+
     .build-console-log.collapsed {
-      max-height: 80px;
-      flex: 0 0 80px;
+      max-height: 7.5em;
+      flex: none;
+      overflow-y: auto;
     }
 
     .console-log-line {
@@ -2086,6 +2093,7 @@
         <span id="build-console-elapsed" class="build-console-elapsed">0:00</span>
       </div>
       <div class="build-console-header-right">
+        <button type="button" id="btn-console-toggle-log" data-testid="btn-console-toggle-log" class="btn btn-secondary build-console-btn" aria-expanded="false" aria-controls="build-console-log" style="display: none;">▸ Show full log</button>
         <button type="button" id="btn-build-console-minimize" class="btn btn-secondary build-console-btn" title="Return to wizard builder while task continues">— Back to builder</button>
       </div>
     </div>
